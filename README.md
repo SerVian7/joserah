@@ -42,7 +42,7 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | **Context that arrives on its own** | Open tasks and recent decisions are in the session before you type. |
 | **A workspace that explains itself** | Its `AGENTS.md` tells any assistant how to behave in it — routines included. Works with Claude Code today; the format is model-agnostic on purpose. |
 
-## The four skills
+## The six skills
 
 | | |
 |---|---|
@@ -50,6 +50,8 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | `/joserah:onboard` | Get interviewed; the workspace fills in. Stop and resume freely |
 | `/joserah:import` | Bring in existing notes, exports, document piles |
 | `/joserah:doctor` | Check a workspace is healthy, and repair it |
+| `/joserah:backup` | Write the workspace to a single ZIP any tool can open. Stays on your disk; credentials and `projects/` are left out |
+| `/joserah:sync` | Mirror the workspace to a **private** git repository so two machines share it. Opt-in and consequential: it puts your journal, your notes about the people around you, and everything in `personal/` on a third party's server. If you only want a safety copy, `/joserah:backup` is the local answer |
 
 ## How it works
 

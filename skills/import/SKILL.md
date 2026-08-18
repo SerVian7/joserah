@@ -48,7 +48,7 @@ For each source, decide what it produces and write it to its home:
 | What the source contains | Goes to |
 |---|---|
 | A person you can name, with context | `knowledge/people/firstname-lastname.md` |
-| An active piece of work with an owner and an end | `projects/{Company}/{Project}/docs/status.md` |
+| An active piece of work with an owner and an end | `projects/{Company}/{Project}/docs/status.md` — **ask first**, see below |
 | A commitment with a date | `desk/tasks/next.md` (or `now.md` if it is live) |
 | A stated preference about how to work | `.joserah/learned.md` |
 | Facts about the owner | `personal/profile.md` |
@@ -56,6 +56,21 @@ For each source, decide what it produces and write it to its home:
 | Anything you cannot classify | `desk/inbox/captures.md`, one line each |
 
 Every derived file cites its source: `Source: [raw/imports/…/file.md](…)`.
+
+### Anything under `projects/` is outside backup and sync
+
+`projects/` is excluded from the backup archive and gitignored in the
+workspace repo. That is right for a real code checkout, which carries its own
+git history — and wrong for a `docs/status.md` that Joserah itself just wrote
+there, which then exists on exactly one disk, covered by neither safety
+mechanism.
+
+So, before writing anything into `projects/`: **say that plainly and ask.**
+Offer the two honest alternatives — put the material in `knowledge/` instead,
+where backup and sync cover it, or keep it in `projects/` and give that
+project folder its own git repo. Do not decide for them, and never present the
+exclusion as harmless. The raw copy in `knowledge/raw/` is backed up either
+way; the derived status note is not.
 
 Merge rather than overwrite. If `knowledge/people/ali-veli.md` already exists, add to it
 and keep the existing content — never replace a file you did not create in
