@@ -46,11 +46,11 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ├── knowledge/     what you know
 │   ├── people/    one .md per person
 │   ├── raw/       immutable source material
-│   └── wiki/      AI-maintained synthesis
+│   ├── wiki/      AI-maintained synthesis
+│   └── archive/   cold storage
 │
 ├── personal/      private — read on demand only
 ├── projects/      {Company}/{ProjectName}/ — never tracked; each has its own git
-├── archive/       cold storage
 ├── keys/          SENSITIVE — never read or echo contents
 │
 └── .joserah/      config.json · conventions · learned · tools/verify-links.js

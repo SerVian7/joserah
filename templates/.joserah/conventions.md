@@ -36,7 +36,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | AI-maintained synthesis | `knowledge/wiki/` |
 | One file per person | `knowledge/people/firstname-lastname.md` |
 | Learned preferences and corrections | `.joserah/learned.md` |
-| Cold storage | `archive/` |
+| Cold storage | `knowledge/archive/` |
 
 ## Skill promotion
 
