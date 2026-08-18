@@ -10,8 +10,18 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
+// Directories whose markdown is never *scanned*. `projects/` and
+// `docker-stack/` hold the owner's own repositories and runtime state: their
+// links are their own business, and a broken one there must not turn this
+// workspace's health check red — nor invite an agent to edit files in a repo
+// Joserah does not own.
+//
+// This governs which files are read, not which link targets are resolved. A
+// workspace file linking into projects/ is still checked: the target is
+// resolved with existsSync regardless of which directory it lands in.
 const SKIP_DIRS = new Set([
   '.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build', 'keys',
+  'projects', 'docker-stack',
 ]);
 
 function* mdFiles(dir) {

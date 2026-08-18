@@ -27,7 +27,7 @@ for (const f of ['AGENTS.md', 'CLAUDE.md', 'desk/tasks/now.md', '.joserah/learne
 const leftover = spawnSync('node', ['-e', `
   const fs=require('fs'),path=require('path');let hits=0;
   (function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){
-    if(e.isDirectory()){if(!['.git','node_modules','.joserah'].includes(e.name))walk(path.join(d,e.name));}
+    if(e.isDirectory()){if(!['.git','node_modules','.joserah','projects','docker-stack','keys','.venv'].includes(e.name))walk(path.join(d,e.name));}
     else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(fs.readFileSync(path.join(d,e.name),'utf8')))hits++;}})(process.argv[1]);
   console.log(hits);`, root], { encoding: 'utf8' });
 check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
