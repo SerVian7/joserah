@@ -32,7 +32,7 @@ const leftover = spawnSync('node', ['-e', `
   console.log(hits);`, root], { encoding: 'utf8' });
 check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
 
-const links = spawnSync('node', [path.join(root, 'tools', 'verify-links.js'), root], { encoding: 'utf8' });
+const links = spawnSync('node', [path.join(root, '.joserah', 'tools', 'verify-links.js'), root], { encoding: 'utf8' });
 check('internal links resolve', links.status === 0, (links.stdout || '').trim().split('\n')[0]);
 
 let failed = 0;

@@ -130,9 +130,9 @@ fs.writeFileSync(path.join(root, '.gitignore'), [
 ].join('\n'), 'utf8');
 
 // Local copy of the link checker so the workspace can verify itself.
-fs.mkdirSync(path.join(root, 'tools'), { recursive: true });
+fs.mkdirSync(path.join(root, '.joserah', 'tools'), { recursive: true });
 fs.copyFileSync(path.join(PLUGIN_ROOT, 'tools', 'verify-links.js'),
-  path.join(root, 'tools', 'verify-links.js'));
+  path.join(root, '.joserah', 'tools', 'verify-links.js'));
 
 if (args.git) {
   const { spawnSync } = require('child_process');

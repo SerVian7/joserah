@@ -53,7 +53,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ├── archive/       cold storage
 ├── keys/          SENSITIVE — never read or echo contents
 │
-└── .joserah/      config.json · conventions · learned · tools/
+└── .joserah/      config.json · conventions · learned · tools/verify-links.js
 ```
 
 ## 5. Routines — do these without being asked
@@ -70,7 +70,7 @@ The owner should never have to name a command. These fire from conversation:
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Company}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal entries has accumulated | Offer a sweep: stale tasks, untriaged captures, project status drift. Offer — do not just do it. |
-| Anything is moved or renamed | Run `node tools/verify-links.js` and fix every break before finishing. |
+| Anything is moved or renamed | Run `node .joserah/tools/verify-links.js` and fix every break before finishing. |
 
 ## 6. Working method
 
@@ -115,7 +115,7 @@ restructuring conventions.
 3. No secrets in markdown. If a key or token is pasted, say it belongs in `keys/` and do not repeat it.
 4. Never write to `knowledge/raw/` — immutable source material. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
 5. Never read `keys/` content unless explicitly asked.
-6. After moving or renaming any file, run `node tools/verify-links.js` and fix every break.
+6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.
 
 ---
