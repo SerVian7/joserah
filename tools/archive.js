@@ -162,12 +162,17 @@ function extract(zipPath, target) {
   // halfway through must not leave a half-written tree behind.
   const planned = [];
   for (const e of entries) {
-    // Entries whose name ends in "/" are directories. Every ZIP produced by
-    // `zip -r`, Finder or Explorer contains them; writing one as a file
-    // creates a 0-byte file where a directory belongs and the next entry
-    // then fails EEXIST.
-    const isDir = e.name.endsWith('/');
-    const dest = path.resolve(root, e.name);
+    // Windows' own `Compress-Archive` (and some other tools) emit entry names
+    // with backslash separators, including for directory entries. Normalize
+    // to forward slashes before deciding directory-ness or resolving a
+    // destination, so a mixed-separator archive lands in the right place.
+    const name = e.name.split('\\').join('/');
+    // Entries whose (normalized) name ends in "/" are directories. Every ZIP
+    // produced by `zip -r`, Finder, Explorer or Compress-Archive contains
+    // them; writing one as a file creates a 0-byte file where a directory
+    // belongs and the next entry then fails EEXIST.
+    const isDir = name.endsWith('/');
+    const dest = path.resolve(root, name);
     if (!dest.startsWith(root + path.sep)) {
       // A directory entry naming the target itself ("./") is a no-op, not an
       // attack. Anything else outside the target is refused.

@@ -54,10 +54,16 @@ function writeSettings(dir, force) {
 
 // `--settings-only --target DIR`: write just .claude/settings.json. Used by
 // the restore path in the backup skill when an older archive has none.
+// Scoped to actual Joserah workspaces: a target that has never been
+// scaffolded (no `.joserah/config.json`) has no business getting a
+// `.claude/settings.json` written into it by this tool.
 if (args.settingsOnly) {
   if (!args.target) { console.error('scaffold: --settings-only needs --target DIR'); process.exit(1); }
   const dir = path.resolve(args.target);
-  if (!fs.existsSync(dir)) { console.error(`scaffold: ${dir} does not exist`); process.exit(1); }
+  if (!fs.existsSync(path.join(dir, '.joserah', 'config.json'))) {
+    console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found) — refusing to write settings`);
+    process.exit(1);
+  }
   console.log(JSON.stringify({ settings: writeSettings(dir, args.force), rules: PERMISSION_DENY.length }));
   process.exit(0);
 }
