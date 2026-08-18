@@ -44,14 +44,45 @@ function readStdin() {
   });
 }
 
+// captures.md is tracked by git, included in backups and pushed by sync, and
+// this hook runs before any agent can look at the text. So credential-shaped
+// substrings are masked here, mechanically. Best-effort, not a guarantee: a
+// secret that does not look like one still gets through, which is why the
+// entry is flagged when a redaction fired.
+const REDACTIONS = [
+  // key = value / key: value assignments
+  [/\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|auth[_-]?token|client[_-]?secret)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
+    '$1$2[redacted]'],
+  // Authorization headers
+  [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]'],
+  // vendor-prefixed keys
+  [/\b(?:sk|pk)[-_][A-Za-z0-9_-]{8,}/gi, '[redacted]'],
+  [/\b(?:AKIA|ASIA)[0-9A-Z]{8,}/g, '[redacted]'],
+  [/\bxox[baprs]-[A-Za-z0-9-]{8,}/gi, '[redacted]'],
+  [/\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{16,}/g, '[redacted]'],
+  [/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '[redacted]'],
+  [/\bAIza[A-Za-z0-9_-]{16,}/g, '[redacted]'],
+  // anything long and random-looking that survived the rules above
+  [/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted]'],
+];
+
+function redact(text) {
+  let out = text;
+  for (const [re, replacement] of REDACTIONS) out = out.replace(re, replacement);
+  return { text: out, redacted: out !== text };
+}
+
 function maybeCapture(prompt, now) {
   const low = prompt.toLowerCase();
   const hit = TRIGGERS.find((t) => low.includes(t));
   if (!hit) return null;
   fs.mkdirSync(path.dirname(INBOX), { recursive: true });
   const oneLine = prompt.replace(/\s+/g, ' ').trim();
-  const text = oneLine.length > 500 ? oneLine.slice(0, 497) + '...' : oneLine;
-  const entry = `- [ ] [${stamp(now)}] (trigger: ${hit}) ${text}\n`;
+  // Redact before truncating, so the whole prompt is examined.
+  const safe = redact(oneLine);
+  const text = safe.text.length > 500 ? safe.text.slice(0, 497) + '...' : safe.text;
+  const flag = safe.redacted ? `${hit}, redacted` : hit;
+  const entry = `- [ ] [${stamp(now)}] (trigger: ${flag}) ${text}\n`;
   fs.appendFileSync(INBOX, entry, 'utf8');
   return entry.trim();
 }
