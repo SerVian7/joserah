@@ -18,9 +18,17 @@ exist. Empty output means pass. If a check cannot be run at all (git missing,
 command errors), that counts as a **failed** check — never treat a check that
 did not run as a pass.
 
-1. `git -C <workspace> ls-files -- "keys/"` → must print nothing
-2. `git -C <workspace> ls-files -- "*.env" ".env"` → must print nothing
-3. `.gitignore` contains `keys/`, `.env`, `projects/*` and `docker-stack/*`
+1. `git -C <workspace> ls-files -- "keys/" ":(exclude)keys/AGENTS.md"` → must
+   print nothing. `keys/AGENTS.md` is tracked on purpose — it is the
+   documentation file that tells assistants never to read that folder — so it
+   is excluded from the check. **Anything else** printed under `keys/` is a
+   real violation: a credential is in git history.
+2. `git -C <workspace> ls-files -- "*.env" "*.env.*" "*.envrc" ":(exclude)*.env.example"`
+   → must print nothing. The wildcards match at any depth, so this covers
+   `.env`, `.env.local`, `.env.production`, `config/.envrc` and the rest;
+   `.env.example` and `*.env.example` are documentation and are allowed.
+3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `.envrc`,
+   `projects/*` and `docker-stack/*`
 4. The remote the owner names is **private**. Ask directly; if they are not
    sure, have them check before continuing. Do not guess from the URL.
 
@@ -63,6 +71,8 @@ Then `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>`.
 
 - Never add a remote the owner did not name.
 - Never push without the owner's agreement in that session.
-- Never sync a workspace whose `keys/` or `.env` files are tracked.
+- Never sync a workspace with tracked credentials — anything under `keys/`
+  other than `keys/AGENTS.md`, or any environment file (`.env`, `.env.local`,
+  `.env.production`, `.envrc`, …).
 - If the owner only wants a copy for safety, tell them `/joserah:backup` is the
   smaller, safer answer and let them choose.

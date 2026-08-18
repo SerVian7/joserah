@@ -7,7 +7,8 @@
  *   node archive.js extract <in.zip> <target-dir>
  *
  * Writes standard ZIP (deflate, no encryption) so any OS unzip tool can open
- * it. Excludes projects/, docker-stack/, keys/ and .env by default.
+ * it. Excludes projects/, docker-stack/, keys/ and every environment file
+ * (.env, .env.*, *.env, *.env.*, .envrc) by default.
  */
 'use strict';
 const fs = require('fs');
@@ -15,7 +16,17 @@ const path = require('path');
 const zlib = require('zlib');
 
 const EXCLUDE_DIRS = new Set(['projects', 'docker-stack', 'node_modules', '.git', '.venv']);
-const EXCLUDE_NAMES = [/^\.env$/, /\.env$/];
+
+// Environment files carry credentials. Matching the bare name `.env` is not
+// enough: `.env.local`, `.env.production` and `.envrc` hold the same secrets.
+// Covers .env, .env.*, *.env, *.env.* and .envrc — while keeping the
+// documentation files `.env.example` and `*.env.example`.
+const ENV_ALLOW = /(^|\.)env\.example$/i;
+const ENV_DENY = [/^\.envrc$/i, /^\.env$/i, /^\.env\./i, /\.env$/i, /\.env\./i];
+function isEnvFile(name) {
+  if (ENV_ALLOW.test(name)) return false;
+  return ENV_DENY.some((re) => re.test(name));
+}
 
 function crc32(buf) {
   let c, table = crc32.table;
@@ -50,7 +61,7 @@ function collect(root, includeKeys) {
         if (e.name === 'keys' && !includeKeys) continue;
         walk(abs);
       } else {
-        if (EXCLUDE_NAMES.some((re) => re.test(e.name)) && !/\.env\.example$/.test(e.name)) continue;
+        if (isEnvFile(e.name)) continue;
         out.push({ rel, abs });
       }
     }

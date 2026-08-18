@@ -20,9 +20,14 @@ single ZIP any tool can open, and puts one back on a new machine.
 3. Show the owner what went in:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" list <out.zip>` — report the
    file count and the top-level folders, not the full listing.
-4. Say plainly what was **excluded**: `keys/`, every `.env`, and everything
-   under `projects/` and `docker-stack/`. Projects carry their own git history;
-   credentials are deliberately left behind.
+4. Say plainly what was **excluded**: `keys/`, every environment file (`.env`,
+   `.env.local`, `.env.production`, `.envrc` and anything matching `*.env` or
+   `*.env.*`, except `.env.example` files), and everything under `projects/`
+   and `docker-stack/`. Credentials are deliberately left behind. Say the
+   `projects/` part precisely: a real code checkout there carries its own git
+   history, but **notes Joserah itself wrote** under `projects/` — a
+   `docs/status.md` from `/joserah:import`, for instance — are in no backup at
+   all. If they have any, say so plainly rather than reassuring them.
 
 ### If they ask for credentials to be included
 
