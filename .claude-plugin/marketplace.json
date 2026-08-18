@@ -1,17 +1,19 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "joserah",
-  "owner": { "name": "Serkan Adem Atay" },
+  "owner": {
+    "name": "Serkan Adem Atay"
+  },
   "metadata": {
     "description": "Joserah — a personal knowledge base that lives in your editor.",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "repository": "https://github.com/SerVian7/joserah"
   },
   "plugins": [
     {
       "name": "joserah",
       "source": "./",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Scaffold, populate and maintain a personal markdown knowledge base.",
       "license": "MIT"
     }

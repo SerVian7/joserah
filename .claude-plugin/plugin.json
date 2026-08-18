@@ -1,11 +1,19 @@
 {
   "name": "joserah",
   "description": "Personal markdown knowledge base for Claude Code: scaffolds a workspace, interviews you to fill it, and imports the data you already have. Journal, tasks, people, projects and learned preferences as plain files you own.",
-  "version": "0.1.0",
-  "author": { "name": "Serkan Adem Atay" },
+  "version": "0.1.1",
+  "author": {
+    "name": "Serkan Adem Atay"
+  },
   "homepage": "https://github.com/SerVian7/joserah",
   "repository": "https://github.com/SerVian7/joserah",
   "license": "MIT",
-  "keywords": ["knowledge-base", "notes", "journal", "memory", "workspace", "pkm"],
-  "dependencies": ["superpowers"]
+  "keywords": [
+    "knowledge-base",
+    "notes",
+    "journal",
+    "memory",
+    "workspace",
+    "pkm"
+  ]
 }

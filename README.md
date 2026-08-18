@@ -72,10 +72,14 @@ that quotes its own guesses back at you is worse than no knowledge base.
 - **On Windows: [Git for Windows](https://git-scm.com/download/win)**, which
   provides the `bash` the hooks are executed with. Without it the hooks do not
   run and the automatic parts of Joserah stay silent.
-- The [superpowers](https://github.com/obra/superpowers) plugin — declared as
-  a dependency, so it should arrive with Joserah. If it did not:
-  `/plugin marketplace add anthropics/claude-plugins-official`, then
-  `/plugin install superpowers@claude-plugins-official`
+- The [superpowers](https://github.com/obra/superpowers) plugin. Install it
+  first — Joserah deliberately does not declare it as a manifest dependency,
+  because Claude Code resolves bare dependency names inside the *same*
+  marketplace and superpowers lives in another one:
+  ```
+  /plugin marketplace add anthropics/claude-plugins-official
+  /plugin install superpowers@claude-plugins-official
+  ```
 
 Windows, macOS and Linux. Claude Code runs every hook command through a shell,
 so Joserah's hooks declare `"shell": "bash"` and give Node an absolute script
