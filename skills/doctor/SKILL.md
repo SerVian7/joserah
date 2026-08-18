@@ -23,8 +23,9 @@ block. If it is absent in a workspace that doctor says is healthy:
 
 - Confirm the plugin is enabled: `/plugin`
 - Confirm Node is on PATH *for the hook*, not just the shell: `node --version`
-- Windows only: hooks use exec form and need no shell, so a missing Git Bash
-  is not the cause — look at Node instead.
+- Windows only: hooks are run through **bash**, which on Windows comes from Git
+  for Windows. If `bash --version` fails, that is the cause — install Git for
+  Windows and restart Claude Code. Check Node second.
 
 ## 3. Report
 

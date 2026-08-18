@@ -28,8 +28,12 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
 - Skills keep trigger-shaped descriptions ("Use when …"), never workflow
   summaries — an agent that reads the description instead of the skill will
   follow the description.
-- Hooks stay in exec form (`"command": "node", "args": [...]`) so they behave
-  identically on Windows, macOS and Linux.
+- Hooks are a **single `command` string** with `"shell": "bash"`. There is no
+  exec form — Claude Code has no `args` field, and it runs every hook command
+  through a shell. Quote the script path
+  (`node "${CLAUDE_PLUGIN_ROOT}/hooks/x.js"`) and keep `shell` set to `bash`,
+  so `${CLAUDE_PLUGIN_ROOT}` expands the same way everywhere; in PowerShell
+  that syntax means something else entirely.
 - Nothing writes into `knowledge/raw/` except the import skill, and only ever
   verbatim copies of the owner's own material.
 - Every skill declares `name` in its frontmatter; installed plugin paths carry
