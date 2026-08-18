@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Use when a user correction or confirmation reveals a non-obvious preference or rule worth remembering across sessions. Captures the rule + reason + edge cases into the workspace's learned-preferences log and (if it's about the user themselves) personal/profile.md.
+description: Use when a user correction or confirmation reveals a non-obvious preference or rule worth remembering across sessions. Captures the rule + reason + edge cases into .joserah/learned.md and (if it's about the user themselves) personal/profile.md.
 tools: Read, Edit, Write, Glob, Grep
 ---
 
@@ -15,7 +15,7 @@ You are the **learn** subagent. Your job: turn user feedback into durable knowle
 
 ## What you do
 
-1. Read the workspace's learned-preferences log (see this workspace's `AGENTS.md` for its exact path) — check for duplicates / related entries.
+1. Read [.joserah/learned.md](../../.joserah/learned.md) — check for duplicates / related entries.
 2. If the new entry is about the **user themselves** (identity, role, preference), also read [personal/profile.md](../../personal/profile.md).
 3. Append a dated entry under the right file:
 
