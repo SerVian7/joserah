@@ -29,16 +29,22 @@ be interrupted.
 
 ## Topics, in this order
 
-1. **Identity** — who they are, what they do, where. → `personal/profile.md`
-2. **Current work** — what is actually on their plate right now. → `desk/tasks/now.md`, `projects/`
-3. **People** — who they work with and who matters. One file each. → `knowledge/people/`
-4. **Routines** — how their week runs, recurring commitments. → `.joserah/conventions.md`, `desk/tasks/next.md`
+1. **Identity** — who they are, what they do, where. → `.joserah/personal/profile.md`
+2. **Current work** — what is actually on their plate right now. → `.joserah/desk/tasks/now.md`, `projects/`
+3. **People** — who they work with and who matters. One file each. → `.joserah/knowledge/people/`
+4. **Routines** — how their week runs, recurring commitments. → `.joserah/conventions.md`, `.joserah/desk/tasks/next.md`
 5. **Preferences** — how they want you to behave: tone, when to ask, what to
    never do. → `.joserah/learned.md`
 6. **Integrations** — what tools they want connected later. → AGENTS.md §7
 
 ## How to ask
 
+- **Offer the drop folder as an alternative to answering.** Give its absolute
+  path — `<workspace>/.joserah/user/` — since a hidden folder is awkward to
+  drag files onto. A CV, a project brief, an org chart, a "who's who" export
+  can stand in for a whole topic of questions; if something is sitting there
+  already, read it before asking the topic's questions at all, and only ask
+  what it left out. Say the file can be deleted once it has been absorbed.
 - **Two or three questions at a time, never a wall.** Wait for the answer.
 - Ask in their dialogue language, from `.joserah/config.json`.
 - **Write as you go.** When an answer produces a fact, put it in its file in
@@ -71,5 +77,5 @@ workspace now holds — file counts per folder, not a recital of contents.
 
 - **Never invent a fact.** If you inferred something, ask before writing it.
 - Quote the owner's own words for anything that goes into `.joserah/learned.md`.
-- Nothing goes in `keys/` and no credential is ever written into markdown.
-- If the owner shares something sensitive, put it in `personal/` and say so.
+- Nothing goes in `.joserah/keys/` and no credential is ever written into markdown.
+- If the owner shares something sensitive, put it in `.joserah/personal/` and say so.

@@ -93,8 +93,19 @@ If those skills are not available, say so rather than working around them.
 
 ## 7. Integrations (MCP, external tools)
 
-None configured yet. When one is added, record here: what it reaches, where
-its config lives, and what must never pass through it.
+None configured yet. MCP servers are how this workspace reaches outside
+services — a cloud drive, a calendar, another app's API. Configuration lives
+in `.mcp.json` at the workspace root, never inside `.joserah/`.
+
+- **Propose, never configure unasked.** `/joserah:project` proposes specific
+  servers when a project needs outside data — naming candidates, what each
+  would reach, and what credentials or scopes it needs — and waits for the
+  owner's go-ahead before anything is added to `.mcp.json`.
+- **Record every decision here**, one entry per server, as it is added:
+  `- <server> — reaches <what> — config in .mcp.json — <what must never pass through it>`.
+- There is no separate "finder" skill for this — the agent already knows
+  what a project needs by reading its plan; a skill whose only job was
+  searching for connectors would just duplicate that.
 
 ## 8. Task capture
 

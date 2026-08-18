@@ -49,6 +49,7 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | `/joserah:install` | Create a workspace where you want it |
 | `/joserah:onboard` | Get interviewed; the workspace fills in. Stop and resume freely |
 | `/joserah:import` | Bring in existing notes, exports, document piles |
+| `/joserah:project` | Start new work: plans first, then a project folder, a drop folder, and optional containers or MCP servers |
 | `/joserah:doctor` | Check a workspace is healthy, and repair it |
 | `/joserah:backup` | Write the workspace to a ZIP, or mirror it to a **private** git repository so two machines share it. A ZIP stays on your disk; a repository puts your journal and notes about people on a third party's server, so it asks first |
 

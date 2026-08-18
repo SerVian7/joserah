@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 /**
  * Create a Joserah workspace from templates/.
- * Usage: node scaffold.js --target DIR --owner NAME --workspace NAME
- *                         --language LANG --role LINE [--git] [--force]
+ * Usage: node scaffold.js --target DIR --workspace NAME
+ *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
  *        node scaffold.js --settings-only --target DIR [--force]
+ *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG] [--role LINE]
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
+ *
+ * `--owner`, `--language` and `--role` are optional at creation time so a
+ * workspace can be created and verified (`doctor.js`) before its owner is
+ * interviewed — the `install` skill asks location first, creates and checks
+ * the workspace, then asks who the owner is. Omitted values are substituted
+ * as an empty string (never invented), and `--identity-only` fills them in
+ * afterwards by re-rendering the three files that carry them.
  */
 'use strict';
 const fs = require('fs');
@@ -22,6 +30,7 @@ function parseArgs(argv) {
     if (a === '--git') { out.git = true; continue; }
     if (a === '--force') { out.force = true; continue; }
     if (a === '--settings-only') { out.settingsOnly = true; continue; }
+    if (a === '--identity-only') { out.identityOnly = true; continue; }
     if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
   }
   return out;
@@ -77,12 +86,70 @@ if (args.settingsOnly) {
   process.exit(0);
 }
 
-for (const req of ['target', 'owner', 'workspace', 'language']) {
+// `--identity-only --target DIR [--owner --language --role]`: used by the
+// `install` skill after `doctor` has passed on a workspace created without
+// these three values. Re-renders exactly the files that carry them —
+// AGENTS.md, .joserah/personal/profile.md, .joserah/conventions.md — fresh
+// from templates/, using the workspace name and creation date already on
+// record in config.json. Safe only because nothing else has touched those
+// files yet at this point in the install flow; it is not a general-purpose
+// re-template command and must not be offered once onboarding has begun.
+if (args.identityOnly) {
+  if (!args.target) { console.error('scaffold: --identity-only needs --target DIR'); process.exit(1); }
+  const dir = path.resolve(args.target);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  if (!fs.existsSync(cfgPath)) {
+    console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found)`);
+    process.exit(1);
+  }
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const owner = args.owner || '';
+  const language = args.language || '';
+  const role = args.role || '';
+  const subs = {
+    '{{OWNER_NAME}}': owner,
+    '{{WORKSPACE_NAME}}': cfg.workspaceName || '',
+    '{{DIALOGUE_LANGUAGE}}': language,
+    '{{OWNER_ROLE_LINE}}': role,
+    '{{SETUP_DATE}}': cfg.created || '',
+  };
+  function sub(text) {
+    let out = text;
+    for (const [token, value] of Object.entries(subs)) out = out.split(token).join(value);
+    return out;
+  }
+  const rewritten = [
+    'AGENTS.md',
+    path.join('.joserah', 'personal', 'profile.md'),
+    path.join('.joserah', 'conventions.md'),
+  ];
+  const updated = [];
+  for (const rel of rewritten) {
+    const src = path.join(TEMPLATES, rel);
+    const dst = path.join(dir, rel);
+    if (!fs.existsSync(src)) continue;
+    fs.writeFileSync(dst, sub(fs.readFileSync(src, 'utf8')), 'utf8');
+    updated.push(rel.split(path.sep).join('/'));
+  }
+  cfg.ownerName = owner;
+  cfg.dialogueLanguage = language;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+  console.log(JSON.stringify({ updated }));
+  process.exit(0);
+}
+
+for (const req of ['target', 'workspace']) {
   if (!args[req]) {
     console.error(`scaffold: missing --${req}`);
     process.exit(1);
   }
 }
+// Owner, language and role are not required up front — see the file header.
+// Never invented: an omitted value is substituted as an empty string, filled
+// in later by --identity-only.
+args.owner = args.owner || '';
+args.language = args.language || '';
+args.role = args.role || '';
 
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
@@ -130,7 +197,7 @@ const SUBS = {
   '{{OWNER_NAME}}': args.owner,
   '{{WORKSPACE_NAME}}': args.workspace,
   '{{DIALOGUE_LANGUAGE}}': args.language,
-  '{{OWNER_ROLE_LINE}}': args.role || '',
+  '{{OWNER_ROLE_LINE}}': args.role,
   '{{SETUP_DATE}}': today,
 };
 

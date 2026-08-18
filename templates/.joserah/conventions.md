@@ -56,6 +56,24 @@ hook matches raw lines.
 Newest entries on top. Dates are `YYYY-MM-DD`. A rule that supersedes an older
 one marks the old entry `(superseded YYYY-MM-DD)` rather than deleting it.
 
+## Docker
+
+`docker-stack/` is absent from a fresh workspace — it is documented, not
+scaffolded, and appears only once a project actually needs it.
+
+- **Code** stays under `projects/{Owner}/{Project}/`, in that project's own
+  git history.
+- **Runtime state** — volumes, database files, anything a container writes —
+  goes to `docker-stack/{project}/` at the workspace root, never under
+  `projects/`.
+- **Nothing under `docker-stack/` is ever tracked.** The workspace
+  `.gitignore` ignores its contents by pattern, keeping only the file that
+  documents the convention.
+- Containers are offered, via `/joserah:project`, when a project would
+  otherwise need a language runtime, database, or service installed
+  system-wide — the point is a machine that does not accumulate every
+  project's dependencies permanently.
+
 ## Skill promotion
 
 A pattern that recurs in three or more separate sessions earns a skill at

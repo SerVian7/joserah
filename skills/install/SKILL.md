@@ -5,7 +5,9 @@ description: Use when someone wants to create a new Joserah knowledge-base works
 
 # Install a Joserah workspace
 
-Create a new workspace at a location the user picks, then hand off to onboarding.
+Create a new workspace where the user picks, get it verified, and only then
+ask who they are. Location and creation first, verification second, identity
+last — a working, checked workspace beats an interrogation.
 
 > **Running the plugin's tools.** The commands here use
 > `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
@@ -29,9 +31,9 @@ Create a new workspace at a location the user picks, then hand off to onboarding
   `/plugin marketplace add anthropics/claude-plugins-official`
   `/plugin install superpowers@claude-plugins-official`
 
-## 2. Ask where it goes
+## 2. Ask where it goes, and what to call it
 
-Offer these options and let the user pick one:
+Offer these location options and let the user pick one:
 
 | Option | Path |
 |---|---|
@@ -41,11 +43,13 @@ Offer these options and let the user pick one:
 | Somewhere else | ask for the absolute path |
 
 Detect the platform with `node -p "process.platform"` before showing paths, so
-what you show is what the user will actually get. Resolve `~` yourself — do not
-pass a literal `~` to the scaffold script.
+what you show is what the user will actually get. Resolve `~` yourself — do
+not pass a literal `~` to the scaffold script. The `<name>` in the path is the
+workspace name — ask for it here, as part of picking the location, not as a
+separate interview question.
 
-If the chosen directory already exists and is not empty, say what is in it and
-ask before continuing.
+If the chosen directory already exists and is not empty, say what is in it
+and ask before continuing.
 
 The scaffold checks every file it would write and **refuses, writing nothing
 and exiting 1, if any of them already exists** — it prints the conflicting
@@ -57,39 +61,73 @@ pick an empty directory, or move the conflicting files aside first. **Never
 add `--force` on your own initiative** — only when the user, having seen the
 list, asks for exactly that.
 
-## 3. Ask the four questions the scaffold needs
-
-Workspace name · owner name · dialogue language · one line about who they are.
-Ask in whatever language the user is writing to you in. If they decline the
-role line, pass an empty string — do not invent one.
-
-## 4. Create it
+## 3. Create it
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --owner <name> \
-  --workspace <name> --language <lang> --role <line> --git
+node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name> --git
 ```
 
-## 5. Verify before declaring success
+This deliberately runs without `--owner`, `--language` or `--role` — nothing
+about the owner is known yet, and the scaffold does not invent it. Those
+tokens are written as empty for now and filled in by step 5, after doctor has
+passed. Empty is correct; do not pass a placeholder guess.
+
+## 4. Verify before moving on
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>
 ```
 
-Every check must print `ok`. If any fails, fix it and re-run — do not report
-success on a failing doctor.
+Every check must print `ok`. If any fails, fix it and re-run — do not move on
+to identity questions on a failing doctor.
+
+## 5. Now ask who they are
+
+Three questions, once the workspace itself is proven to work: **owner name**,
+**dialogue language**, and **one line about who they are**. Ask in whatever
+language the user is writing to you in.
+
+Offer the alternative to answering out loud: they can instead drop a document
+— a CV, a short bio, an "about me" note — into the drop folder, and let
+Joserah read it from there. Either way works; do not insist on the interview
+if they would rather hand over a file.
+
+If they decline the role line, or want to skip identity for now, pass an
+empty string — do not invent one; they can fill it in later via
+`/joserah:onboard`.
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --identity-only --target <path> \
+  --owner <name> --language <lang> --role <line>
+```
+
+This rewrites `AGENTS.md`, `.joserah/personal/profile.md` and
+`.joserah/conventions.md` with the real values, and updates
+`.joserah/config.json`. Run it once, immediately after this step — running it
+again later, after the owner or an assistant has hand-edited any of those
+three files, would overwrite that editing. Re-run
+`node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm
+nothing broke.
 
 ## 6. Hand off
 
-Tell the user, in their language: where the workspace is, that today's journal
-and open tasks are injected into every session automatically, that capture
-words like "remind me" file themselves, and that their next two moves are
-`/joserah:onboard` to fill it in and `/joserah:import` if they already have
-notes to bring across.
+Tell the user, in their language:
+
+- Where the workspace is, that today's journal and open tasks are injected
+  into every session automatically, and that capture words like "remind me"
+  file themselves.
+- The drop folder's **absolute path** — `<path>/.joserah/user/` — a hidden
+  folder is awkward to drag files onto, so give the real, pasteable path, not
+  the relative one. Anything dropped there can be picked up with
+  `/joserah:import`, and deleted once it has been absorbed.
+- Their next two moves: `/joserah:onboard` to fill the workspace in further,
+  and `/joserah:import` for anything already sitting in the drop folder or
+  anywhere else.
 
 ## Rules
 
-- Never create content the user did not give you. Empty files are correct.
-- Never write anything into `keys/`.
-- Do not configure MCP servers — that is the user's own later step, recorded in
-  AGENTS.md §7.
+- Never create content the user did not give you. Empty values are correct
+  until the owner supplies something.
+- Never write anything into `.joserah/keys/`.
+- Do not configure MCP servers — that is the user's own later step, proposed
+  by `/joserah:project` and recorded in AGENTS.md §7.
