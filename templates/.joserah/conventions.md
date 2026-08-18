@@ -38,6 +38,24 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Learned preferences and corrections | `.joserah/learned.md` |
 | Cold storage | `knowledge/archive/` |
 
+## Learned-preference entries
+
+The format for `.joserah/learned.md`. It lives here, not there: the
+session-start hook injects the three most recent `##` sections of that file
+into every session, so a format example sitting in it would be read as a real
+learning — including from inside a code fence or an HTML comment, since the
+hook matches raw lines.
+
+```markdown
+## YYYY-MM-DD — short title
+**Rule:** what to do differently.
+**Reason:** the feedback that caused it.
+**Edge:** where it does not apply.
+```
+
+Newest entries on top. Dates are `YYYY-MM-DD`. A rule that supersedes an older
+one marks the old entry `(superseded YYYY-MM-DD)` rather than deleting it.
+
 ## Skill promotion
 
 A pattern that recurs in three or more separate sessions earns a skill at

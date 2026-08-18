@@ -1,12 +1,8 @@
 # Learned preferences
 
 Appended when a correction or confirmed preference emerges. Newest first.
-
-Format:
-
-## YYYY-MM-DD — short title
-**Rule:** what to do differently.
-**Reason:** the feedback that caused it.
-**Edge:** where it does not apply.
+One `##` heading per entry — the session-start hook reads the three most
+recent ones, so this file holds nothing but real entries. The entry format is
+in [conventions.md](conventions.md).
 
 ---
