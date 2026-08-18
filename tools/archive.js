@@ -155,21 +155,40 @@ function readEntries(zipPath) {
 
 function extract(zipPath, target) {
   const { buf, entries } = readEntries(zipPath);
+  const root = path.resolve(target);
+
+  // Pass 1 — resolve and validate every destination before a single byte is
+  // written. An archive is untrusted input, and a traversal attempt found
+  // halfway through must not leave a half-written tree behind.
+  const planned = [];
   for (const e of entries) {
+    // Entries whose name ends in "/" are directories. Every ZIP produced by
+    // `zip -r`, Finder or Explorer contains them; writing one as a file
+    // creates a 0-byte file where a directory belongs and the next entry
+    // then fails EEXIST.
+    const isDir = e.name.endsWith('/');
+    const dest = path.resolve(root, e.name);
+    if (!dest.startsWith(root + path.sep)) {
+      // A directory entry naming the target itself ("./") is a no-op, not an
+      // attack. Anything else outside the target is refused.
+      if (isDir && dest === root) continue;
+      throw new Error(`refusing unsafe path in archive: ${e.name}`);
+    }
+    planned.push({ e, dest, isDir });
+  }
+
+  // Pass 2 — write.
+  for (const { e, dest, isDir } of planned) {
+    if (isDir) { fs.mkdirSync(dest, { recursive: true }); continue; }
     const nameLen = buf.readUInt16LE(e.localOff + 26);
     const extraLen = buf.readUInt16LE(e.localOff + 28);
     const start = e.localOff + 30 + nameLen + extraLen;
     const raw = buf.subarray(start, start + e.compSize);
     const data = e.method === 8 ? zlib.inflateRawSync(raw) : raw;
-    // Refuse path traversal — an archive is untrusted input.
-    const dest = path.resolve(target, e.name);
-    if (!dest.startsWith(path.resolve(target) + path.sep)) {
-      throw new Error(`refusing unsafe path in archive: ${e.name}`);
-    }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, data);
   }
-  return entries.length;
+  return planned.length;
 }
 
 const [cmd, a, b] = process.argv.slice(2);
