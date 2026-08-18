@@ -89,9 +89,10 @@ Files copied: N (M MB)
 
 ## 5. Verify
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/tools/verify-links.js"` — every citation you
-just wrote must resolve. Then show the owner the report's summary and ask them
-to check the unclassified pile.
+Run `node tools/verify-links.js` from the workspace root — the workspace's own
+copy, the same one `doctor.js` uses — every citation you just wrote must
+resolve. Then show the owner the report's summary and ask them to check the
+unclassified pile.
 
 ## Rules
 

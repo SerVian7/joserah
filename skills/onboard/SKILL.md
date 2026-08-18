@@ -35,7 +35,7 @@ be interrupted.
 4. **Routines** — how their week runs, recurring commitments. → `.joserah/conventions.md`, `desk/tasks/next.md`
 5. **Preferences** — how they want you to behave: tone, when to ask, what to
    never do. → `.joserah/learned.md`
-6. **Integrations** — what tools they want connected later. → AGENTS.md §5
+6. **Integrations** — what tools they want connected later. → AGENTS.md §7
 
 ## How to ask
 

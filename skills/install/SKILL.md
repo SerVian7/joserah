@@ -71,4 +71,4 @@ notes to bring across.
 - Never create content the user did not give you. Empty files are correct.
 - Never write anything into `keys/`.
 - Do not configure MCP servers — that is the user's own later step, recorded in
-  AGENTS.md §5.
+  AGENTS.md §7.

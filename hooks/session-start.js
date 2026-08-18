@@ -65,11 +65,11 @@ const parts = [
 ];
 
 const tasks = firstNOpenTasks(path.join(ROOT, 'desk', 'tasks', 'now.md'), 5);
-if (tasks.length) parts.push('\n### Current focus (desk/desk/tasks/now.md)\n' + tasks.join('\n'));
+if (tasks.length) parts.push('\n### Current focus (desk/tasks/now.md)\n' + tasks.join('\n'));
 
 const dailyText = readText(dailyPath);
 if (dailyText.split(/\r?\n/).length > 5) {
-  parts.push(`\n### Today's journal (desk/desk/daily/${today.slice(0, 4)}/${today}.md)\n${dailyText}`);
+  parts.push(`\n### Today's journal (desk/daily/${today.slice(0, 4)}/${today}.md)\n${dailyText}`);
 }
 
 const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);

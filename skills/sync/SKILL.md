@@ -12,9 +12,14 @@ way.
 ## Before configuring anything — the safety gate
 
 Run every check. If any fails, stop and fix it first; do not proceed and warn.
+These use git's own pathspec matching — no external tool, so they behave
+identically everywhere, including plain PowerShell where `grep` does not
+exist. Empty output means pass. If a check cannot be run at all (git missing,
+command errors), that counts as a **failed** check — never treat a check that
+did not run as a pass.
 
-1. `git -C <workspace> ls-files | grep "^keys/"` → must be empty
-2. `git -C <workspace> ls-files | grep -iE "(^|/)\.env$"` → must be empty
+1. `git -C <workspace> ls-files -- "keys/"` → must print nothing
+2. `git -C <workspace> ls-files -- "*.env" ".env"` → must print nothing
 3. `.gitignore` contains `keys/`, `.env`, `projects/*` and `docker-stack/*`
 4. The remote the owner names is **private**. Ask directly; if they are not
    sure, have them check before continuing. Do not guess from the URL.

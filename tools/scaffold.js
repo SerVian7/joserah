@@ -70,7 +70,7 @@ function copyTree(from, to) {
 copyTree(TEMPLATES, root);
 
 // Journal year dir so the first session has somewhere to land.
-fs.mkdirSync(path.join(root, 'daily', String(new Date().getFullYear())), { recursive: true });
+fs.mkdirSync(path.join(root, 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });
 
 // Workspace marker.
 fs.mkdirSync(path.join(root, '.joserah'), { recursive: true });

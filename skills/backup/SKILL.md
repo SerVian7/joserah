@@ -13,6 +13,8 @@ single ZIP any tool can open, and puts one back on a new machine.
 1. Ask where the archive should go. Default: the owner's home directory, named
    `joserah-<workspace>-<YYYY-MM-DD>.zip`. Never write it *inside* the
    workspace — a backup that lives in the thing it backs up is not a backup.
+   Resolve `~` yourself — do not pass a literal `~` to the archive script; Node
+   does not expand it.
 2. Run:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" create <workspace> <out.zip>`
 3. Show the owner what went in:
