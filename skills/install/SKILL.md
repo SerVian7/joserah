@@ -7,6 +7,17 @@ description: Use when someone wants to create a new Joserah knowledge-base works
 
 Create a new workspace at a location the user picks, then hand off to onboarding.
 
+> **Running the plugin's tools.** The commands here use
+> `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
+> syntax, not an environment lookup, and expands to nothing — leaving you
+> running `node "/tools/…"`. Verify the path before relying on it:
+> `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
+> If it is empty or missing, locate the plugin under the user's Claude plugin
+> cache — `~/.claude/plugins/cache/<marketplace>/joserah/<version>/`, on
+> Windows `%USERPROFILE%\.claude\plugins\cache\…` — and use that absolute
+> path. A command that failed because the path was empty is a failure: say so
+> rather than reporting the step as done.
+
 ## 1. Check prerequisites
 
 - Node.js ≥ 18: run `node --version`. If it is missing or older, stop and say

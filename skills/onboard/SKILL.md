@@ -52,6 +52,17 @@ be interrupted.
 
 ## Finishing
 
+> **Running the plugin's tools.** The command below uses
+> `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
+> syntax, not an environment lookup, and expands to nothing — leaving you
+> running `node "/tools/…"`. Verify the path before relying on it:
+> `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
+> If it is empty or missing, locate the plugin under the user's Claude plugin
+> cache — `~/.claude/plugins/cache/<marketplace>/joserah/<version>/`, on
+> Windows `%USERPROFILE%\.claude\plugins\cache\…` — and use that absolute
+> path. A command that failed because the path was empty is a failure: say so
+> rather than reporting the step as done.
+
 When topics 1-6 are Covered or Declined, set `Status: complete`, run
 `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js"`, and show the owner what their
 workspace now holds — file counts per folder, not a recital of contents.
