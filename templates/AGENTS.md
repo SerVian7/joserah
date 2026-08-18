@@ -49,7 +49,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ├── AGENTS.md          this file — the router
 ├── CLAUDE.md          one line -> AGENTS.md
 ├── .gitignore
-├── projects/          {Company}/{ProjectName}/ — never tracked; each has its own git
+├── projects/          {Owner}/{ProjectName}/ — never tracked; each has its own git
 │
 └── .joserah/
     ├── config.json          workspace marker
@@ -72,7 +72,7 @@ The owner should never have to name a command. These fire from conversation:
 | The owner mentions something they did or decided today | Append it to today's journal under `## Done today` or `## Notes`. No announcement. |
 | A correction or preference surfaces ("hayır, şöyle yap", "bundan sonra…") | Append it to `.joserah/learned.md` in the rule / reason / edge format. Quote their words. |
 | A new person comes up by name | Create or update `.joserah/knowledge/people/firstname-lastname.md`. |
-| A piece of work grows past a couple of tasks | Propose a folder under `projects/{Company}/{Project}/` with `docs/status.md`. Ask first. |
+| A piece of work grows past a couple of tasks | Propose a folder under `projects/{Owner}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal entries has accumulated | Offer a sweep: stale tasks, untriaged captures, project status drift. Offer — do not just do it. |
 | Anything is moved or renamed | Run `node .joserah/tools/verify-links.js` and fix every break before finishing. |

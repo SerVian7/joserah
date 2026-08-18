@@ -48,7 +48,7 @@ For each source, decide what it produces and write it to its home:
 | What the source contains | Goes to |
 |---|---|
 | A person you can name, with context | `.joserah/knowledge/people/firstname-lastname.md` |
-| An active piece of work with an owner and an end | `projects/{Company}/{Project}/docs/status.md` — **ask first**, see below |
+| An active piece of work with an owner and an end | `projects/{Owner}/{Project}/docs/status.md` — **ask first**, see below |
 | A commitment with a date | `.joserah/desk/tasks/next.md` (or `now.md` if it is live) |
 | A stated preference about how to work | `.joserah/learned.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |

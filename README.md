@@ -66,6 +66,57 @@ assistant writes lives elsewhere and cites the source it came from. A
 knowledge base that quotes its own guesses back at you is worse than no
 knowledge base.
 
+## Layout
+
+```
+<workspace>/
+├── AGENTS.md          the router — read this first
+├── CLAUDE.md           one line -> AGENTS.md
+├── .gitignore
+├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
+│
+└── .joserah/
+    ├── config.json          workspace marker
+    ├── conventions.md · learned.md · skill-candidates.md
+    ├── tools/               verify-links.js
+    ├── desk/                daily/<year>/ · tasks/ · inbox/
+    ├── knowledge/           people/ · raw/ · wiki/ · archive/
+    ├── personal/            private — read on demand only
+    └── keys/                SENSITIVE — never read or echoed
+```
+
+Everything Joserah owns lives under the single hidden `.joserah/` folder, so
+the workspace root stays uncluttered for whatever else you keep there.
+
+## Docker
+
+Joserah does not scaffold containers — a `docker-stack/` folder is
+documented, never shipped. When a project actually needs one, the split is:
+code stays under `projects/{Owner}/{Project}/`, tracked in that project's own
+git history; runtime state (volumes, database files, anything the container
+writes) goes to `docker-stack/{project}/` at the **workspace root**, never
+under `projects/`. Neither `projects/` nor `docker-stack/` is ever tracked by
+the workspace repo. `/joserah:project` offers this only when it would
+otherwise mean installing a language runtime, database, or service
+system-wide.
+
+## MCP
+
+MCP server configuration lives in `.mcp.json` at the workspace root, outside
+`.joserah/` entirely. `/joserah:project` proposes specific servers when a
+project needs to reach outside data — naming candidates and what each would
+need — but it never configures one on its own initiative; the owner always
+decides.
+
+## Upgrading from 0.1.x
+
+0.2.0 moves everything Joserah owns under one hidden folder: `desk/`,
+`knowledge/`, `personal/` and `keys/` all move under `.joserah/`. An existing
+workspace is migrated by moving those four folders under a new `.joserah/`
+directory and repointing the relative links in `AGENTS.md` and anywhere else
+that referenced the old paths. Run `/joserah:doctor` afterwards to confirm
+the move is complete.
+
 ## Requirements
 
 - Claude Code

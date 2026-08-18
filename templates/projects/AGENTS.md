@@ -1,6 +1,6 @@
 # projects/
 
-Organized as `{Company}/{ProjectName}/`. Project-specific instructions live at
+Organized as `{Owner}/{ProjectName}/`. Project-specific instructions live at
 `{project}/docs/AGENTS.md`, with a one-line stub at `{project}/AGENTS.md`
 pointing there so other tools find it.
 
