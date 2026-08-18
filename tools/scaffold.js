@@ -34,20 +34,29 @@ const args = parseArgs(process.argv.slice(2));
 // a restore of an older backup can write exactly these rules again rather than
 // an agent inventing a plausible-looking set.
 const PERMISSION_DENY = [
-  'Read(./keys/**)',
-  'Bash(cat ./keys/**)', 'Bash(less ./keys/**)', 'Bash(head ./keys/**)',
-  'Bash(tail ./keys/**)', 'Bash(strings ./keys/**)',
-  'Bash(type ./keys/**)', 'Bash(Get-Content ./keys/**)', 'Bash(gc ./keys/**)',
+  'Read(./.joserah/keys/**)',
+  'Bash(cat ./.joserah/keys/**)', 'Bash(less ./.joserah/keys/**)', 'Bash(head ./.joserah/keys/**)',
+  'Bash(tail ./.joserah/keys/**)', 'Bash(strings ./.joserah/keys/**)',
+  'Bash(type ./.joserah/keys/**)', 'Bash(Get-Content ./.joserah/keys/**)', 'Bash(gc ./.joserah/keys/**)',
 ];
 
+// `.claude/` is not ours: Claude Code creates it on its own, so it is not
+// guaranteed to exist and must not become mandatory. Permission rules are
+// written into it only when the directory is already there; otherwise
+// nothing is written and the caller is told why.
 function writeSettings(dir, force) {
-  const file = path.join(dir, '.claude', 'settings.json');
+  const claudeDir = path.join(dir, '.claude');
+  if (!fs.existsSync(claudeDir)) {
+    console.error(`scaffold: ${claudeDir} does not exist — skipping .claude/settings.json (that folder is optional and not written by this tool)`);
+    return null;
+  }
+  const file = path.join(claudeDir, 'settings.json');
   if (fs.existsSync(file) && !force) {
     console.error(`scaffold: ${file} already exists — refusing to overwrite`);
     console.error('scaffold: read it first; re-run with --force only if the owner agreed to replace it.');
     process.exit(1);
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
   fs.writeFileSync(file, JSON.stringify({ permissions: { deny: PERMISSION_DENY } }, null, 2) + '\n', 'utf8');
   return file;
 }
@@ -151,7 +160,7 @@ function copyTree(from, to) {
 copyTree(TEMPLATES, root);
 
 // Journal year dir so the first session has somewhere to land.
-fs.mkdirSync(path.join(root, 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });
+fs.mkdirSync(path.join(root, '.joserah', 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });
 
 // Workspace marker.
 fs.mkdirSync(path.join(root, '.joserah'), { recursive: true });
@@ -175,8 +184,8 @@ writeSettings(root, true);
 // never an enumerated list, so it holds in anyone's workspace.
 fs.writeFileSync(path.join(root, '.gitignore'), [
   '# secrets — never in history',
-  'keys/*',
-  '!keys/AGENTS.md',
+  '.joserah/keys/*',
+  '!.joserah/keys/AGENTS.md',
   '.env',
   '.env.*',
   '*.env',
@@ -193,6 +202,9 @@ fs.writeFileSync(path.join(root, '.gitignore'), [
   '!projects/AGENTS.md',
   'docker-stack/*',
   '!docker-stack/README.md',
+  '',
+  '# scratch directories tools create unbidden',
+  '.superpowers/',
   '',
   '# machine-local',
   '.joserah/last-time-inject',

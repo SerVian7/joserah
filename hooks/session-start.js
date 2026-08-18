@@ -22,7 +22,7 @@ function weekday(d) {
 }
 
 function ensureDailyStub(today) {
-  const p = path.join(ROOT, 'desk', 'daily', today.slice(0, 4), `${today}.md`);
+  const p = path.join(ROOT, '.joserah', 'desk', 'daily', today.slice(0, 4), `${today}.md`);
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, `# ${today}\n\n## Top of mind\n-\n\n## Done today\n-\n\n## Notes\n`, 'utf8');
@@ -64,12 +64,12 @@ const parts = [
   `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
 ];
 
-const tasks = firstNOpenTasks(path.join(ROOT, 'desk', 'tasks', 'now.md'), 5);
-if (tasks.length) parts.push('\n### Current focus (desk/tasks/now.md)\n' + tasks.join('\n'));
+const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 5);
+if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));
 
 const dailyText = readText(dailyPath);
 if (dailyText.split(/\r?\n/).length > 5) {
-  parts.push(`\n### Today's journal (desk/daily/${today.slice(0, 4)}/${today}.md)\n${dailyText}`);
+  parts.push(`\n### Today's journal (.joserah/desk/daily/${today.slice(0, 4)}/${today}.md)\n${dailyText}`);
 }
 
 const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * UserPromptSubmit hook. Silent outside a Joserah workspace.
- * 1. Appends prompts containing a capture trigger to desk/inbox/captures.md.
+ * 1. Appends prompts containing a capture trigger to .joserah/desk/inbox/captures.md.
  * 2. Injects the current date/time on rollover or after 90 minutes.
  */
 'use strict';
@@ -24,7 +24,7 @@ const TRIGGERS = Array.isArray(cfg.captureTriggers) && cfg.captureTriggers.lengt
   : DEFAULT_TRIGGERS;
 
 const STATE_FILE = path.join(ROOT, '.joserah', 'last-time-inject');
-const INBOX = path.join(ROOT, 'desk', 'inbox', 'captures.md');
+const INBOX = path.join(ROOT, '.joserah', 'desk', 'inbox', 'captures.md');
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function stamp(d) {
@@ -44,7 +44,7 @@ function readStdin() {
   });
 }
 
-// captures.md is tracked by git, included in backups and pushed by sync, and
+// .joserah/desk/inbox/captures.md is tracked by git, included in backups and pushed by sync, and
 // this hook runs before any agent can look at the text. So credential-shaped
 // substrings are masked here, mechanically. Best-effort, not a guarantee: a
 // secret that does not look like one still gets through, which is why the
@@ -107,7 +107,7 @@ function shouldInjectTime(now) {
   const parts = [];
 
   const captured = maybeCapture(prompt, now);
-  if (captured) parts.push(`[capture] Appended to desk/inbox/captures.md:\n${captured}`);
+  if (captured) parts.push(`[capture] Appended to .joserah/desk/inbox/captures.md:\n${captured}`);
 
   if (shouldInjectTime(now)) {
     parts.push(`[time] Current: ${stamp(now)} ${weekday(now)}`);

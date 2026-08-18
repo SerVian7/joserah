@@ -7,8 +7,8 @@
  *   node archive.js extract <in.zip> <target-dir>
  *
  * Writes standard ZIP (deflate, no encryption) so any OS unzip tool can open
- * it. Excludes projects/, docker-stack/, keys/ and every environment file
- * (.env, .env.*, *.env, *.env.*, .envrc) by default.
+ * it. Excludes projects/, docker-stack/, .joserah/keys/ and every environment
+ * file (.env, .env.*, *.env, *.env.*, .envrc) by default.
  */
 'use strict';
 const fs = require('fs');
@@ -55,6 +55,17 @@ function dosDate(d) {
   return (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xffff;
 }
 
+// keys/ now lives nested at `.joserah/keys`, so excluding it by directory
+// *name* alone is no longer the right test — matched purely as a relative
+// path from the workspace root, prefix-based, so it is unambiguous which
+// directory this is regardless of what else in the tree happens to be named
+// "keys". A stale name-based test here would be a silent security
+// regression: it must be verified, not assumed correct.
+const KEYS_PREFIX = '.joserah/keys';
+function isKeysPath(rel) {
+  return rel === KEYS_PREFIX || rel.startsWith(KEYS_PREFIX + '/');
+}
+
 function collect(root, includeKeys) {
   const out = [];
   (function walk(dir) {
@@ -63,7 +74,7 @@ function collect(root, includeKeys) {
       const rel = path.relative(root, abs).split(path.sep).join('/');
       if (e.isDirectory()) {
         if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name === 'keys' && !includeKeys) continue;
+        if (isKeysPath(rel) && !includeKeys) continue;
         walk(abs);
       } else {
         if (isEnvFile(e.name)) continue;

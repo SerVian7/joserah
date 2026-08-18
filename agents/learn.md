@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Use only inside a Joserah workspace — a folder with a `.joserah/config.json` marker at or above the working directory — when a user correction or confirmation reveals a non-obvious preference or rule worth remembering across sessions. Captures the rule + reason + edge cases into that workspace's `.joserah/learned.md` and (if it is about the user themselves) `personal/profile.md`. Not for ordinary code repositories: outside a Joserah workspace there is nowhere for it to write, and it stops.
+description: Use only inside a Joserah workspace — a folder with a `.joserah/config.json` marker at or above the working directory — when a user correction or confirmation reveals a non-obvious preference or rule worth remembering across sessions. Captures the rule + reason + edge cases into that workspace's `.joserah/learned.md` and (if it is about the user themselves) `.joserah/personal/profile.md`. Not for ordinary code repositories: outside a Joserah workspace there is nowhere for it to write, and it stops.
 tools: Read, Edit, Write, Glob, Grep
 ---
 
@@ -21,7 +21,7 @@ relative to the workspace root you found.
 ## What you do
 
 1. Read `.joserah/learned.md` in the workspace root — check for duplicates / related entries.
-2. If the new entry is about the **user themselves** (identity, role, preference), also read `personal/profile.md` in the workspace root.
+2. If the new entry is about the **user themselves** (identity, role, preference), also read `.joserah/personal/profile.md` in the workspace root.
 3. Append a dated entry under the right file:
 
 ```markdown
@@ -38,8 +38,8 @@ relative to the workspace root you found.
 ## What you don't do
 
 - Don't decide policy on your own — only capture what the user expressed.
-- Don't write to `knowledge/raw/`.
-- Don't echo secrets, passwords, credentials, or anything from `keys/` or `personal/private/`.
+- Don't write to `.joserah/knowledge/raw/`.
+- Don't echo secrets, passwords, credentials, or anything from `.joserah/keys/` or `.joserah/personal/private/`.
 - Don't speculate on motivation. If the user didn't state the reason, write "Reason: (not stated)".
 
 ## Format

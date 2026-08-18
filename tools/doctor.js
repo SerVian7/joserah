@@ -19,15 +19,37 @@ const cfg = readConfig(root);
 check('workspace marker readable', !!cfg, root);
 check('node version >= 18', Number(process.versions.node.split('.')[0]) >= 18, process.version);
 
-for (const f of ['AGENTS.md', 'CLAUDE.md', 'desk/tasks/now.md', '.joserah/learned.md',
-                 'desk/inbox/captures.md', 'personal/profile.md', '.claude/settings.json']) {
+for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
+                 '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md']) {
   check(`exists: ${f}`, fs.existsSync(path.join(root, f)));
+}
+
+// `.claude/` is not ours — Claude Code creates it on its own, and it must not
+// be mandatory (owner: ".claude bu klasör otomatik oluşuyor ... zorunlu da
+// olmamalı"). Its absence is fine; it only fails when the file is present
+// and does not look like the deny rules scaffold.js writes.
+{
+  const settingsPath = path.join(root, '.claude', 'settings.json');
+  if (!fs.existsSync(settingsPath)) {
+    check('.claude/settings.json (optional)', true, 'absent — fine, .claude/ is not required');
+  } else {
+    let ok = false, detail = 'present but invalid';
+    try {
+      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const deny = (parsed.permissions && parsed.permissions.deny) || [];
+      ok = Array.isArray(deny) && deny.some((r) => typeof r === 'string' && r.includes('.joserah/keys'));
+      detail = ok ? 'present and covers .joserah/keys/**' : 'present but missing a .joserah/keys/** deny rule';
+    } catch (err) {
+      detail = `present but not valid JSON: ${err.message}`;
+    }
+    check('.claude/settings.json (present)', ok, detail);
+  }
 }
 
 const leftover = spawnSync('node', ['-e', `
   const fs=require('fs'),path=require('path');let hits=0;
   (function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){
-    if(e.isDirectory()){if(!['.git','node_modules','.joserah','projects','docker-stack','keys','.venv'].includes(e.name))walk(path.join(d,e.name));}
+    if(e.isDirectory()){if(!['.git','node_modules','projects','docker-stack','keys','.venv'].includes(e.name))walk(path.join(d,e.name));}
     else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(fs.readFileSync(path.join(d,e.name),'utf8')))hits++;}})(process.argv[1]);
   console.log(hits);`, root], { encoding: 'utf8' });
 check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
