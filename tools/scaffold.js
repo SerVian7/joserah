@@ -3,6 +3,7 @@
  * Create a Joserah workspace from templates/.
  * Usage: node scaffold.js --target DIR --owner NAME --workspace NAME
  *                         --language LANG --role LINE [--git] [--force]
+ *        node scaffold.js --settings-only --target DIR [--force]
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
@@ -20,12 +21,47 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--git') { out.git = true; continue; }
     if (a === '--force') { out.force = true; continue; }
+    if (a === '--settings-only') { out.settingsOnly = true; continue; }
     if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
   }
   return out;
 }
 
 const args = parseArgs(process.argv.slice(2));
+
+// Permission rules — plugins cannot ship these, so the workspace carries them.
+// This is the single source of truth for the set; `--settings-only` exists so
+// a restore of an older backup can write exactly these rules again rather than
+// an agent inventing a plausible-looking set.
+const PERMISSION_DENY = [
+  'Read(./keys/**)',
+  'Bash(cat ./keys/**)', 'Bash(less ./keys/**)', 'Bash(head ./keys/**)',
+  'Bash(tail ./keys/**)', 'Bash(strings ./keys/**)',
+  'Bash(type ./keys/**)', 'Bash(Get-Content ./keys/**)', 'Bash(gc ./keys/**)',
+];
+
+function writeSettings(dir, force) {
+  const file = path.join(dir, '.claude', 'settings.json');
+  if (fs.existsSync(file) && !force) {
+    console.error(`scaffold: ${file} already exists — refusing to overwrite`);
+    console.error('scaffold: read it first; re-run with --force only if the owner agreed to replace it.');
+    process.exit(1);
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ permissions: { deny: PERMISSION_DENY } }, null, 2) + '\n', 'utf8');
+  return file;
+}
+
+// `--settings-only --target DIR`: write just .claude/settings.json. Used by
+// the restore path in the backup skill when an older archive has none.
+if (args.settingsOnly) {
+  if (!args.target) { console.error('scaffold: --settings-only needs --target DIR'); process.exit(1); }
+  const dir = path.resolve(args.target);
+  if (!fs.existsSync(dir)) { console.error(`scaffold: ${dir} does not exist`); process.exit(1); }
+  console.log(JSON.stringify({ settings: writeSettings(dir, args.force), rules: PERMISSION_DENY.length }));
+  process.exit(0);
+}
+
 for (const req of ['target', 'owner', 'workspace', 'language']) {
   if (!args[req]) {
     console.error(`scaffold: missing --${req}`);
@@ -126,18 +162,8 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
 // the key by hand. Writing the defaults out would fork them into two places
 // that then drift.
 
-// Permission rules — plugins cannot ship these, so the workspace carries them.
-fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
-fs.writeFileSync(path.join(root, '.claude', 'settings.json'), JSON.stringify({
-  permissions: {
-    deny: [
-      'Read(./keys/**)',
-      'Bash(cat ./keys/**)', 'Bash(less ./keys/**)', 'Bash(head ./keys/**)',
-      'Bash(tail ./keys/**)', 'Bash(strings ./keys/**)',
-      'Bash(type ./keys/**)', 'Bash(Get-Content ./keys/**)', 'Bash(gc ./keys/**)',
-    ],
-  },
-}, null, 2) + '\n', 'utf8');
+// Permission rules (see PERMISSION_DENY above — the one source of truth).
+writeSettings(root, true);
 
 // Workspace .gitignore. The project/runtime rule is expressed as a pattern,
 // never an enumerated list, so it holds in anyone's workspace.

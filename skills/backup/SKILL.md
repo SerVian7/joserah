@@ -54,8 +54,18 @@ emailed or uploaded. If they still want it, do it.
 2. `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" extract <in.zip> <target>`
 3. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
-4. If `.claude/settings.json` is missing from the archive (older backup), write
-   the permission rules again — `install` has the exact set.
+4. If `.claude/settings.json` is missing from the archive (older backup), do
+   not write the permission rules by hand and do not copy them out of another
+   workspace — re-run the scaffold's own settings step, which is where the
+   rules actually live (`tools/scaffold.js`, `PERMISSION_DENY`):
+
+   ```
+   node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --settings-only --target <target>
+   ```
+
+   It writes nothing else, and refuses if a `settings.json` is already there.
+   Then re-run doctor: `exists: .claude/settings.json` must be `ok`, because
+   those rules are what keeps `keys/` unreadable.
 
 ## Rules
 
