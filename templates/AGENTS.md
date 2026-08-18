@@ -5,15 +5,22 @@
 
 ## 1. What this folder is
 
-{{OWNER_NAME}}'s persistent knowledge base. Markdown is the source of truth so
-the knowledge survives switching LLMs or tools.
+{{OWNER_NAME}}'s persistent knowledge base, created with
+[Joserah](https://github.com/SerVian7/joserah). Markdown is the source of
+truth so the knowledge survives switching LLMs or tools.
+
+- Quick captures land in [.joserah/desk/inbox/captures.md](.joserah/desk/inbox/captures.md).
+- Today's focus: [.joserah/desk/tasks/now.md](.joserah/desk/tasks/now.md) and [.joserah/desk/daily/](.joserah/desk/daily/).
+
+Run `/joserah:onboard` to fill this in, `/joserah:import` to bring existing
+notes in, `/joserah:doctor` to check everything still works.
 
 ## 2. Who the owner is
 
 {{OWNER_ROLE_LINE}}
 
-Details: [personal/profile.md](personal/profile.md). Read **only** when the
-task needs personal context.
+Details: [.joserah/personal/profile.md](.joserah/personal/profile.md). Read
+**only** when the task needs personal context.
 
 ## 3. How to talk and write
 
@@ -38,22 +45,20 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ## 4. Layout
 
 ```
-├── desk/          the moving parts — touched every day
-│   ├── daily/     <year>/YYYY-MM-DD.md journal
-│   ├── tasks/     now / next / someday / done
-│   └── inbox/     quick captures, triaged into desk/tasks/ or projects/
+<workspace>/
+├── AGENTS.md          this file — the router
+├── CLAUDE.md          one line -> AGENTS.md
+├── .gitignore
+├── projects/          {Company}/{ProjectName}/ — never tracked; each has its own git
 │
-├── knowledge/     what you know
-│   ├── people/    one .md per person
-│   ├── raw/       immutable source material
-│   ├── wiki/      AI-maintained synthesis
-│   └── archive/   cold storage
-│
-├── personal/      private — read on demand only
-├── projects/      {Company}/{ProjectName}/ — never tracked; each has its own git
-├── keys/          SENSITIVE — never read or echo contents
-│
-└── .joserah/      config.json · conventions · learned · tools/verify-links.js
+└── .joserah/
+    ├── config.json          workspace marker
+    ├── conventions.md · learned.md · skill-candidates.md
+    ├── tools/               verify-links.js
+    ├── desk/                daily/<year>/ · tasks/ · inbox/
+    ├── knowledge/           people/ · raw/ · wiki/ · archive/
+    ├── personal/            private — read on demand only
+    └── keys/                SENSITIVE — never read or echo contents
 ```
 
 ## 5. Routines — do these without being asked
@@ -63,12 +68,12 @@ The owner should never have to name a command. These fire from conversation:
 | When | Do this |
 |---|---|
 | Every session starts | The injected context block is your briefing — open tasks and today's journal. Do not re-read those files. |
-| The owner says "kaydet / hatırlat / remind me / add to my todos" | It is already in `desk/inbox/captures.md` (the hook did it). Route it to its real home — `desk/tasks/now.md`, a project, or a person — and say in one line where it went. |
+| The owner says "kaydet / hatırlat / remind me / add to my todos" | It is already in `.joserah/desk/inbox/captures.md` (the hook did it). Route it to its real home — `.joserah/desk/tasks/now.md`, a project, or a person — and say in one line where it went. |
 | The owner mentions something they did or decided today | Append it to today's journal under `## Done today` or `## Notes`. No announcement. |
 | A correction or preference surfaces ("hayır, şöyle yap", "bundan sonra…") | Append it to `.joserah/learned.md` in the rule / reason / edge format. Quote their words. |
-| A new person comes up by name | Create or update `knowledge/people/firstname-lastname.md`. |
+| A new person comes up by name | Create or update `.joserah/knowledge/people/firstname-lastname.md`. |
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Company}/{Project}/` with `docs/status.md`. Ask first. |
-| The owner asks "what's on my plate / ne var bugün" | Answer from `desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
+| The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal entries has accumulated | Offer a sweep: stale tasks, untriaged captures, project status drift. Offer — do not just do it. |
 | Anything is moved or renamed | Run `node .joserah/tools/verify-links.js` and fix every break before finishing. |
 
@@ -94,16 +99,18 @@ its config lives, and what must never pass through it.
 ## 8. Task capture
 
 When the owner says "kaydet / hatırlat / remind me / add to my todos" → append
-to [desk/tasks/now.md](desk/tasks/now.md), or [desk/inbox/captures.md](desk/inbox/captures.md) if
-the scope is unclear, with a `[YYYY-MM-DD HH:MM]` stamp. Just do it and say
-what you wrote. If you see a `[capture]` note, the hook already did it — do
-not duplicate.
+to [.joserah/desk/tasks/now.md](.joserah/desk/tasks/now.md), or
+[.joserah/desk/inbox/captures.md](.joserah/desk/inbox/captures.md) if the
+scope is unclear, with a `[YYYY-MM-DD HH:MM]` stamp. Just do it and say what
+you wrote. If you see a `[capture]` note, the hook already did it — do not
+duplicate.
 
 ## 9. Self-update protocol
 
 **Do without asking:** append captured tasks; log completions in
-`desk/tasks/done.md`; add owner facts to `personal/profile.md`; append preferences
-and corrections to `.joserah/learned.md`; fix typos in files you wrote.
+`.joserah/desk/tasks/done.md`; add owner facts to `.joserah/personal/profile.md`;
+append preferences and corrections to `.joserah/learned.md`; fix typos in
+files you wrote.
 
 **Ask before:** creating a top-level folder; moving or deleting files;
 restructuring conventions.
@@ -112,9 +119,9 @@ restructuring conventions.
 
 1. Read before writing.
 2. No silent deletions or moves — confirm first.
-3. No secrets in markdown. If a key or token is pasted, say it belongs in `keys/` and do not repeat it.
-4. Never write to `knowledge/raw/` — immutable source material. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
-5. Never read `keys/` content unless explicitly asked.
+3. No secrets in markdown. If a key or token is pasted, say it belongs in `.joserah/keys/` and do not repeat it.
+4. Never write to `.joserah/knowledge/raw/` — immutable source material. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
+5. Never read `.joserah/keys/` content unless explicitly asked.
 6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.
 

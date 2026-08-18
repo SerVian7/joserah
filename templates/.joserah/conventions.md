@@ -13,7 +13,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 
 ## File naming
 
-- ISO dates: `YYYY-MM-DD`. Journal entries live under `desk/daily/<year>/`.
+- ISO dates: `YYYY-MM-DD`. Journal entries live under `.joserah/desk/daily/<year>/`.
 - Per-project status: `status.md`. Per-project tasks: `docs/tasks.md`.
 - Decisions: `docs/decisions/NNNN-short-title.md`.
 
@@ -26,17 +26,17 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 
 | Content | Location |
 |---|---|
-| Today's plan | `desk/daily/<year>/YYYY-MM-DD.md` |
-| Active to-dos (3-5 max) | `desk/tasks/now.md` |
-| Queued / maybe / completed | `desk/tasks/next.md` / `desk/tasks/someday.md` / `desk/tasks/done.md` |
-| Quick unsorted capture | `desk/inbox/captures.md` |
-| Facts about the owner | `personal/profile.md` |
-| Credentials | `keys/` — never echoed |
-| Immutable source material | `knowledge/raw/` |
-| AI-maintained synthesis | `knowledge/wiki/` |
-| One file per person | `knowledge/people/firstname-lastname.md` |
+| Today's plan | `.joserah/desk/daily/<year>/YYYY-MM-DD.md` |
+| Active to-dos (3-5 max) | `.joserah/desk/tasks/now.md` |
+| Queued / maybe / completed | `.joserah/desk/tasks/next.md` / `.joserah/desk/tasks/someday.md` / `.joserah/desk/tasks/done.md` |
+| Quick unsorted capture | `.joserah/desk/inbox/captures.md` |
+| Facts about the owner | `.joserah/personal/profile.md` |
+| Credentials | `.joserah/keys/` — never echoed |
+| Immutable source material | `.joserah/knowledge/raw/` |
+| AI-maintained synthesis | `.joserah/knowledge/wiki/` |
+| One file per person | `.joserah/knowledge/people/firstname-lastname.md` |
 | Learned preferences and corrections | `.joserah/learned.md` |
-| Cold storage | `knowledge/archive/` |
+| Cold storage | `.joserah/knowledge/archive/` |
 
 ## Learned-preference entries
 
