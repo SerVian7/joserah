@@ -1,0 +1,23 @@
+# Line endings are load-bearing here. Claude Code clones this repo on the
+# user's machine; on Windows, git's autocrlf would rewrite checked-out files
+# to CRLF, and a SKILL.md whose frontmatter delimiter becomes "---\r" does not
+# parse — the skills silently fail to load. Force LF for everything textual.
+
+*.md   text eol=lf
+*.json text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.ts   text eol=lf
+*.sh   text eol=lf
+*.cmd  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+LICENSE text eol=lf
+
+# Binary assets must never be touched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text eol=lf
+.gitattributes text eol=lf

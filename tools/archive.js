@@ -15,7 +15,12 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const EXCLUDE_DIRS = new Set(['projects', 'docker-stack', 'node_modules', '.git', '.venv']);
+// '.superpowers' is disposable scratch written by the superpowers execution
+// harness (plan ledgers, briefs, review packages). It is regenerated on demand
+// and would otherwise dominate a backup's file count.
+const EXCLUDE_DIRS = new Set([
+  'projects', 'docker-stack', 'node_modules', '.git', '.venv', '.superpowers',
+]);
 
 // Environment files carry credentials. Matching the bare name `.env` is not
 // enough: `.env.local`, `.env.production` and `.envrc` hold the same secrets.
