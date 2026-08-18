@@ -34,7 +34,17 @@ what you show is what the user will actually get. Resolve `~` yourself — do no
 pass a literal `~` to the scaffold script.
 
 If the chosen directory already exists and is not empty, say what is in it and
-ask before continuing. The scaffold refuses to overwrite an existing workspace.
+ask before continuing.
+
+The scaffold checks every file it would write and **refuses, writing nothing
+and exiting 1, if any of them already exists** — it prints the conflicting
+paths. If that happens: show the user that exact list, in their language, and
+say what `--force` would do (overwrite those files in place, no backup — their
+own `README.md`, `.gitignore` or `.claude/settings.json` would be gone, and a
+lost `.gitignore` can expose what it was hiding). Then offer the alternatives:
+pick an empty directory, or move the conflicting files aside first. **Never
+add `--force` on your own initiative** — only when the user, having seen the
+list, asks for exactly that.
 
 ## 3. Ask the four questions the scaffold needs
 

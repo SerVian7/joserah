@@ -2,7 +2,10 @@
 /**
  * Create a Joserah workspace from templates/.
  * Usage: node scaffold.js --target DIR --owner NAME --workspace NAME
- *                         --language LANG --role LINE [--git]
+ *                         --language LANG --role LINE [--git] [--force]
+ *
+ * Refuses to touch a target where any file it would write already exists,
+ * unless --force is given. Nothing is written until that check has passed.
  */
 'use strict';
 const fs = require('fs');
@@ -12,10 +15,11 @@ const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const TEMPLATES = path.join(PLUGIN_ROOT, 'templates');
 
 function parseArgs(argv) {
-  const out = { git: false };
+  const out = { git: false, force: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--git') { out.git = true; continue; }
+    if (a === '--force') { out.force = true; continue; }
     if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
   }
   return out;
@@ -30,8 +34,43 @@ for (const req of ['target', 'owner', 'workspace', 'language']) {
 }
 
 const root = path.resolve(args.target);
-if (fs.existsSync(path.join(root, '.joserah', 'config.json'))) {
+if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
   console.error(`scaffold: ${root} is already a Joserah workspace — refusing to overwrite`);
+  console.error('scaffold: pass --force only if the owner has explicitly asked for it.');
+  process.exit(1);
+}
+
+// --- Collision check -------------------------------------------------------
+// Every file this run would write, computed before a single byte is written.
+// Scaffolding into a directory that already holds the owner's own README.md,
+// CLAUDE.md, .gitignore or .claude/settings.json must not silently destroy
+// them — losing a .gitignore can expose whatever it was hiding.
+function plannedTemplateFiles(from, to, acc) {
+  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    const src = path.join(from, e.name);
+    const dst = path.join(to, e.name);
+    if (e.isDirectory()) plannedTemplateFiles(src, dst, acc);
+    else acc.push(dst);
+  }
+  return acc;
+}
+
+const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
+  path.join(root, '.joserah', 'config.json'),
+  path.join(root, '.claude', 'settings.json'),
+  path.join(root, '.gitignore'),
+  path.join(root, '.joserah', 'tools', 'verify-links.js'),
+]);
+
+const conflicts = PLANNED.filter((p) => fs.existsSync(p))
+  .map((p) => path.relative(root, p).split(path.sep).join('/'))
+  .sort();
+
+if (conflicts.length && !args.force) {
+  console.error(`scaffold: ${root} already contains ${conflicts.length} file(s) this would overwrite — nothing was written:`);
+  for (const c of conflicts) console.error('  ' + c);
+  console.error('scaffold: choose an empty directory, move these aside, or re-run with --force');
+  console.error('scaffold: --force overwrites them in place, with no backup.');
   process.exit(1);
 }
 
