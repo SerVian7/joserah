@@ -2,7 +2,8 @@
 /**
  * SessionStart hook. Silent unless the working directory is inside a
  * Joserah workspace. Injects: date, open tasks, today's journal, recent
- * learnings. Creates today's journal stub if missing.
+ * learnings, and a backup-staleness line. Creates today's journal stub if
+ * missing.
  */
 'use strict';
 const fs = require('fs');
@@ -54,6 +55,57 @@ function lastLearnedEntries(p, n) {
   return sections.slice(0, n).join('\n\n');
 }
 
+// Local-only staleness signal: no git, no network, modification times only.
+// Every file's mtime under desk/, knowledge/ and personal/ is compared
+// against `lastBackup`. When there is no `lastBackup` yet, the workspace's
+// own `.joserah/config.json` mtime stands in for it — every template file
+// scaffold.js writes predates that file (it is written last in the initial
+// run), so a freshly scaffolded, untouched workspace naturally reports
+// nothing; only files touched after that point count as "changed".
+function allFileMtimes(dirs) {
+  const out = [];
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    (function walk(d) {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else {
+          try { out.push(fs.statSync(p).mtimeMs); } catch { /* raced deletion — skip */ }
+        }
+      }
+    })(dir);
+  }
+  return out;
+}
+
+function formatAgo(ms) {
+  const minutes = Math.max(1, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return `${days}d`;
+}
+
+function backupStalenessLine(root, cfg, now) {
+  const configPath = path.join(root, '.joserah', 'config.json');
+  let sinceMs = null;
+  let neverBackedUp = !cfg.lastBackup;
+  if (cfg.lastBackup) {
+    const parsed = new Date(cfg.lastBackup);
+    if (!isNaN(parsed.valueOf())) sinceMs = parsed.getTime();
+  }
+  if (sinceMs === null) {
+    try { sinceMs = fs.statSync(configPath).mtimeMs; } catch { return null; }
+  }
+  const dirs = ['desk', 'knowledge', 'personal'].map((d) => path.join(root, '.joserah', d));
+  const changed = allFileMtimes(dirs).filter((m) => m > sinceMs);
+  if (!changed.length) return null;
+  const agoLabel = neverBackedUp ? 'no backup taken yet' : `${formatAgo(now.getTime() - sinceMs)} ago`;
+  return `[backup] ${changed.length} file(s) changed since last backup (${agoLabel}).`;
+}
+
 const now = new Date();
 const today = isoDate(now);
 const cfg = readConfig(ROOT) || {};
@@ -74,6 +126,9 @@ if (dailyText.split(/\r?\n/).length > 5) {
 
 const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);
 if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);
+
+const staleness = backupStalenessLine(ROOT, cfg, now);
+if (staleness) parts.push('\n' + staleness);
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {

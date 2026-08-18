@@ -34,7 +34,7 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
   (`node "${CLAUDE_PLUGIN_ROOT}/hooks/x.js"`) and keep `shell` set to `bash`,
   so `${CLAUDE_PLUGIN_ROOT}` expands the same way everywhere; in PowerShell
   that syntax means something else entirely.
-- Nothing writes into `knowledge/raw/` except the import skill, and only ever
-  verbatim copies of the owner's own material.
+- Nothing writes into `.joserah/knowledge/raw/` except the import skill, and
+  only ever verbatim copies of the owner's own material.
 - Every skill declares `name` in its frontmatter; installed plugin paths carry
   the version and change on upgrade.

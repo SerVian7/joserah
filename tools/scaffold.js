@@ -170,6 +170,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   dialogueLanguage: args.language,
   created: today,
   createdByPluginVersion: require(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
+  lastBackup: null,
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in
 // this file. It is deliberately not written here — absent means "use the

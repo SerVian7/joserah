@@ -50,8 +50,7 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | `/joserah:onboard` | Get interviewed; the workspace fills in. Stop and resume freely |
 | `/joserah:import` | Bring in existing notes, exports, document piles |
 | `/joserah:doctor` | Check a workspace is healthy, and repair it |
-| `/joserah:backup` | Write the workspace to a single ZIP any tool can open. Stays on your disk; credentials and `projects/` are left out |
-| `/joserah:sync` | Mirror the workspace to a **private** git repository so two machines share it. Opt-in and consequential: it puts your journal, your notes about the people around you, and everything in `personal/` on a third party's server. If you only want a safety copy, `/joserah:backup` is the local answer |
+| `/joserah:backup` | Write the workspace to a ZIP, or mirror it to a **private** git repository so two machines share it. A ZIP stays on your disk; a repository puts your journal and notes about people on a third party's server, so it asks first |
 
 ## How it works
 
@@ -61,9 +60,10 @@ once, keep as many workspaces as you like, and updating the plugin updates all
 of them at once.
 
 Two rules keep the knowledge honest. Source material you bring in is copied
-**verbatim** into `knowledge/raw/` and never edited; anything the assistant
-writes lives elsewhere and cites the source it came from. A knowledge base
-that quotes its own guesses back at you is worse than no knowledge base.
+**verbatim** into `.joserah/knowledge/raw/` and never edited; anything the
+assistant writes lives elsewhere and cites the source it came from. A
+knowledge base that quotes its own guesses back at you is worse than no
+knowledge base.
 
 ## Requirements
 
