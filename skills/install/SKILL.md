@@ -24,10 +24,16 @@ last — a working, checked workspace beats an interrogation.
 
 - Node.js ≥ 18: run `node --version`. If it is missing or older, stop and say
   so — the hooks will not run without it.
-- Superpowers: it is declared as a dependency, but dependency resolution across
-  marketplaces is not guaranteed. If you cannot see skills named
-  `superpowers:brainstorming` or `superpowers:writing-plans`, tell the user to
-  run these two commands and come back:
+- On Windows only — bash: run `bash --version` (any shell). The plugin's
+  hooks are declared with `"shell": "bash"`; without Git for Windows they
+  will never fire and every automatic feature (journal injection, capture)
+  is silently dead. If it is missing, stop and say so.
+- Superpowers: Joserah deliberately does **not** declare it as a manifest
+  dependency (cross-marketplace resolution is unreliable and a failed
+  resolution would disable this plugin entirely — see README). It is a
+  documented prerequisite instead. If you cannot see skills named
+  `superpowers:brainstorming` or `superpowers:writing-plans`, tell the user
+  to run these two commands and come back:
   `/plugin marketplace add anthropics/claude-plugins-official`
   `/plugin install superpowers@claude-plugins-official`
 
@@ -55,7 +61,7 @@ The scaffold checks every file it would write and **refuses, writing nothing
 and exiting 1, if any of them already exists** — it prints the conflicting
 paths. If that happens: show the user that exact list, in their language, and
 say what `--force` would do (overwrite those files in place, no backup — their
-own `README.md`, `.gitignore` or `.claude/settings.json` would be gone, and a
+own `AGENTS.md`, `.gitignore` or `.claude/settings.json` would be gone, and a
 lost `.gitignore` can expose what it was hiding). Then offer the alternatives:
 pick an empty directory, or move the conflicting files aside first. **Never
 add `--force` on your own initiative** — only when the user, having seen the
@@ -88,7 +94,7 @@ Three questions, once the workspace itself is proven to work: **owner name**,
 language the user is writing to you in.
 
 Offer the alternative to answering out loud: they can instead drop a document
-— a CV, a short bio, an "about me" note — into the drop folder, and let
+— a CV, a short bio, an "about me" note — into the drop folder — `<path>/.joserah/user/`, give them the absolute path — and let
 Joserah read it from there. Either way works; do not insist on the interview
 if they would rather hand over a file.
 
@@ -113,9 +119,11 @@ nothing broke.
 
 Tell the user, in their language:
 
-- Where the workspace is, that today's journal and open tasks are injected
-  into every session automatically, and that capture words like "remind me"
-  file themselves.
+- Where the workspace is, and that **from the next session on** today's
+  journal and open tasks are injected automatically and capture words like
+  "remind me" file themselves — and that if none of that appears next
+  session, `/joserah:doctor` diagnoses it (the usual Windows cause is
+  missing Git Bash).
 - The drop folder's **absolute path** — `<path>/.joserah/user/` — a hidden
   folder is awkward to drag files onto, so give the real, pasteable path, not
   the relative one. Anything dropped there can be picked up with
