@@ -94,8 +94,9 @@ Three questions, once the workspace itself is proven to work: **owner name**,
 language the user is writing to you in.
 
 Offer the alternative to answering out loud: they can instead drop a document
-— a CV, a short bio, an "about me" note — into the drop folder — `<path>/.joserah/user/`, give them the absolute path — and let
-Joserah read it from there. Either way works; do not insist on the interview
+— a CV, a short bio, an "about me" note — into the drop folder, and let
+Joserah read it from there. Give them the drop folder's absolute path —
+`<path>/.joserah/user/`. Either way works; do not insist on the interview
 if they would rather hand over a file.
 
 If they decline the role line, or want to skip identity for now, pass an

@@ -56,8 +56,8 @@ permanently.
 The split, once containers are in play:
 
 - **Code** stays under `projects/{Owner}/{Project}/`, tracked in the
-  project's own git history — created in step 3 above, same as any other
-  project.
+  project's own git history — created by the `git init` step under §2
+  above, same as any other project.
 - **Runtime state** — volumes, database files, anything the container
   writes — goes to `docker-stack/{project}/` at the workspace root, **never**
   under `projects/`.
