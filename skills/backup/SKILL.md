@@ -161,9 +161,23 @@ one:
      content (today's date, the same counts) came out byte-identical to
      what's already recorded — the workspace is genuinely unchanged since
      the last backup. This is a legitimate outcome, not a failure: say so
-     plainly ("nothing has changed since the last backup") and move on.
-     There is nothing new to push, though pushing is harmless if the owner
-     wants to anyway — it will just report nothing to do.
+     plainly ("nothing has changed since the last backup"). That is a
+     statement about *content* only — whether anything still needs
+     **pushing** is a separate question, and it is answered by reading
+     git's actual state, never by inferring it from the commits just now
+     being empty (verified: an empty commit here is fully consistent with
+     an earlier commit — from a backup whose push was declined, or one
+     never attempted — still sitting unpushed):
+     `git -C <workspace> log --oneline @{u}..HEAD`.
+     - If this fails with `fatal: no upstream configured for branch
+       '<name>'`, that failure **is** the answer: no upstream means this
+       branch has never been pushed at all, so a push is still needed —
+       treat the error as information, not as a broken command.
+     - If it lists one or more commits, say so plainly: earlier snapshots
+       — this run's included — have never reached the remote, and pushing
+       still has to happen even though nothing new was just committed.
+     - Only an empty list with an upstream configured means there is
+       truly nothing left to push.
 
 ## 3a. Zip route
 
@@ -206,9 +220,10 @@ already passed them: new content goes in on every backup, so it needs
 checking on every backup. Nothing here relies on anything being *remembered*
 from an earlier session — every check either reads git's actual current
 state (which naturally degrades to a no-op when there's nothing to do, the
-same way `git init` does) or asks the owner fresh. Step 2.4 only has
-something to ask when no remote is configured yet; step 6 confirms the
-actual remote every single time regardless. There is no branch rename
+same way `git init` does) or asks the owner fresh. Step 2.4 is the **only**
+place a remote gets added, and it only has anything to ask or add when no
+remote is configured yet; step 6 never adds one — it only confirms the
+actual remote, fresh, every single time regardless. There is no branch rename
 anywhere in this flow — see the command block below for why, and for what
 replaced it. "Later use" below layers `pull --rebase` and conflict handling
 around this same gate — it does not replace it.
@@ -250,12 +265,16 @@ them twice — once cheaply before staging, and once for real, after.
       `.envrc`, `*.envrc`, `projects/*` and `docker-stack/*`.
    4. If no remote is configured yet
       (`git -C <workspace> remote get-url origin` prints nothing), ask the
-      owner which private remote to use and confirm directly that it is
-      **private** — do not guess from the URL. If a remote is already
-      configured, there is nothing to ask here: this step is naturally
-      moot on a repeat backup, not skipped by any remembered flag. Step 6
-      below is what confirms the actual remote, fresh, on every run (this
-      is step 2.4, referenced there by that name).
+      owner which private remote to use, confirm directly that it is
+      **private** — do not guess from the URL — and add it right here:
+      `git -C <workspace> remote add origin <private-remote>`. This is the
+      only step that ever adds a remote. If a remote is already configured,
+      there is nothing to ask or add here: this step is naturally moot on a
+      repeat backup, not skipped by any remembered flag. Step 6 below still
+      confirms the actual remote, fresh, on every run — but by the time it
+      runs, a remote is always already configured, either from an earlier
+      backup or from this step just now, so it never needs to add one
+      itself (this is step 2.4, referenced there by that name).
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
    to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
    needs the explicit `-f`, since `add -A` alone never reaches a gitignored
@@ -303,15 +322,12 @@ them twice — once cheaply before staging, and once for real, after.
    or commit separately, per section 2's rule for the state you're actually
    in. Never amend a commit that might already be on the remote.
 6. Confirm the remote before touching it: `git -C <workspace> remote
-   get-url origin`. If it prints a URL, show it to the owner and get a
-   fresh yes, right now, that it is their private remote — never rely on
-   what was said earlier in this session or a previous one. A value they
-   don't recognize, or any hesitation, means stop, never push there
-   silently. If it prints nothing, no remote has been configured yet
-   (normally step 2.4 above already handled this — treat reaching here
-   without one as a sign that step got skipped, not as expected): ask which
-   private remote to use and add it:
-   `git -C <workspace> remote add origin <private-remote>`.
+   get-url origin`. Step 2.4 above already added one if none existed, so
+   this always prints a URL by the time you reach it here — this step only
+   confirms, it never adds. Show the URL to the owner and get a fresh yes,
+   right now, that it is their private remote — never rely on what was
+   said earlier in this session or a previous one. A value they don't
+   recognize, or any hesitation, means stop, never push there silently.
 7. Say once more, plainly, and get an explicit yes right before the push:
    this puts the owner's journal, their notes about the people around them,
    and everything in `.joserah/personal/` on that remote, for good. Question
@@ -348,6 +364,26 @@ run it, or ask before running it yourself. Never push unprompted.
 ```
 git clone <private-remote> <target>
 ```
+
+Verify this actually checked out files before trusting it. Step 8's push
+sets up local tracking only — it never changes which branch a bare remote
+treats as its default, and that default keeps pointing at whatever `git
+init` picked on the remote side until something explicitly changes it. When
+that default names a branch the backup never pushed, a plain clone prints
+`warning: remote HEAD refers to nonexistent ref, unable to checkout` and
+leaves `<target>` holding only a `.git` directory, no files (verified
+against a real bare remote). Do not read an empty `<target>` as an empty
+workspace. Fix it by reading which branch the remote actually holds, never
+by guessing a name:
+
+```
+git ls-remote --heads <private-remote>
+```
+
+Exactly one line listed: re-clone naming that branch —
+`git clone -b <branch-name> <private-remote> <target>`. More than one line:
+ask the owner which branch the backup pushes to before re-cloning.
+
 Then `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>`.
 
 ### Later use
@@ -387,10 +423,12 @@ Measure-Object -Line).Lines`), or on the zip route
    Repository: there is no separate verify step — `git clone` fails outright
    on a corrupt remote, so skip to step 3.
 3. Zip: `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" extract <in.zip> <target>`.
-   Repository: `git clone <private-remote> <target>`. `extract` refuses to
-   overwrite existing files; that refusal is the tool backing up step 1
-   above — never add `--force` to a restore without the owner's explicit
-   say-so.
+   Repository: the same clone procedure as "Second machine" above — a plain
+   `git clone <private-remote> <target>` can silently produce an empty
+   working tree, so verify it and, if needed, re-clone with `-b <branch>`
+   exactly as described there. `extract` refuses to overwrite existing
+   files; that refusal is the tool backing up step 1 above — never add
+   `--force` to a restore without the owner's explicit say-so.
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
 5. If `.claude/settings.json` is missing from the restore (older backup), do

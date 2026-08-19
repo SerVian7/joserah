@@ -39,11 +39,12 @@ const EXCLUDE_ANY_DIRS = new Set(['node_modules', '.git', '.venv', '.superpowers
 const KEYS_PREFIXES = ['keys', '.joserah/keys'];
 
 // Environment files carry credentials. Matching the bare name `.env` is not
-// enough: `.env.local`, `.env.production` and `.envrc` hold the same secrets.
-// Covers .env, .env.*, *.env, *.env.* and .envrc — while keeping the
-// documentation files `.env.example` and `*.env.example`.
+// enough: `.env.local`, `.env.production` and a prefixed `root.envrc` hold
+// the same secrets. Covers .env, .env.*, *.env, *.env.* and *.envrc
+// (including the bare .envrc) — while keeping the documentation files
+// `.env.example` and `*.env.example`.
 const ENV_ALLOW = /(^|\.)env\.example$/i;
-const ENV_DENY = [/^\.envrc$/i, /^\.env$/i, /^\.env\./i, /\.env$/i, /\.env\./i];
+const ENV_DENY = [/\.envrc$/i, /^\.env$/i, /^\.env\./i, /\.env$/i, /\.env\./i];
 function isEnvFile(name) {
   if (ENV_ALLOW.test(name)) return false;
   return ENV_DENY.some((re) => re.test(name));

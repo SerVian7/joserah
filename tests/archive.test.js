@@ -28,6 +28,21 @@ test('K1: keys exclusion is case-insensitive and covers the legacy path', (t) =>
   assert.deepStrictEqual(names, ['note.md']);
 });
 
+test('E1: .envrc denial covers prefixed names, not just the bare file', (t) => {
+  const d = tmpdir(t);
+  const ws = path.join(d, 'ws');
+  make(ws, '.envrc', 'secret');
+  make(ws, 'root.envrc', 'secret');
+  make(ws, 'api.envrc', 'secret');
+  make(ws, '.env', 'secret');
+  make(ws, 'sub/deep.envrc', 'secret');
+  make(ws, '.env.example', 'documented');
+  const r = runTool('archive.js', ['create', ws, path.join(d, 'o.zip')]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const names = listZip(path.join(d, 'o.zip'));
+  assert.deepStrictEqual(names, ['.env.example']);
+});
+
 test('I4: nested dir named projects IS archived; root projects/ is not', (t) => {
   const d = tmpdir(t);
   const ws = path.join(d, 'ws');
