@@ -12,8 +12,13 @@ const path = require('path');
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
 
-// Junk that is junk at any depth — matched by name.
-const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build']);
+// Junk that is junk at any depth — matched by name. '.superpowers' is
+// disposable scratch written by the superpowers execution harness
+// (plan ledgers, briefs, review packages): it is regenerated on demand,
+// listed in the generated workspace .gitignore, and excluded from backups
+// by archive.js — so links inside it are not the workspace's health, and a
+// broken one there cannot be cleared by the owner.
+const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build', '.superpowers']);
 // Contracts about the workspace root — matched by workspace-relative path,
 // case-insensitively (Windows/macOS filesystems are). `raw/` holds imported
 // snapshots that are immutable by rule: their internal links are historical

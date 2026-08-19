@@ -46,3 +46,14 @@ test('backslash separators in a target are reported broken', (t) => {
   const d = ws(t, { 'a.md': '[n](.joserah\\note.md)\n', '.joserah/note.md': 'x\n' });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 1);
 });
+
+test('a broken link inside .superpowers/ scratch is skipped, but the same broken link in the workspace proper still fails', (t) => {
+  const d = ws(t, {
+    '.superpowers/2026-08-19-plan/review.md': '[gone](nope.md)\n',
+    'ok.md': 'hi\n',
+  });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0, '.superpowers/ scratch is not scanned');
+
+  const d2 = ws(t, { 'a.md': '[gone](nope.md)\n' });
+  assert.strictEqual(runTool('verify-links.js', [d2]).status, 1, 'a real broken link outside .superpowers/ still fails');
+});
