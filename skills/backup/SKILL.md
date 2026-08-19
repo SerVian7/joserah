@@ -49,13 +49,19 @@ Three questions, before touching anything:
    history on a third-party server for good. If they still want everything,
    take everything: zip route adds `--include-keys`; repository route stages
    them with `git add -f keys/` after the gate below has otherwise passed.
-   **Neither mechanism reaches an `.env`-family file, even one sitting
-   inside `keys/`** — `archive.js` strips those unconditionally, and
-   `.gitignore` blocks `git add -A` from picking one up regardless of
-   consent. Storing a credential as `keys/.env` is completely ordinary:
-   check for one before saying keys are IN, and say plainly if any such file
-   was left behind despite the yes. Their data, their call — but the
-   consequences, and this one limit, are said out loud first, every time.
+   **The two mechanisms do not behave the same way toward `.env`-family
+   files inside `keys/`, and that difference must be said out loud too:**
+   - Zip: `archive.js` strips `.env`-family files unconditionally, even
+     inside `keys/`, even with `--include-keys`. Storing a credential as
+     `keys/.env` is completely ordinary — check for one and say plainly if
+     it was left out of the zip despite the yes.
+   - Repository: `git add -f keys/` has no filename filter and **does**
+     stage a `keys/.env`, unlike the zip route. The gate's step 3 is where
+     this gets handled — see there for the "leave it in or `git rm --cached`
+     it" decision. Say plainly which one happened.
+
+   Their data, their call — but the consequences, and this route-specific
+   difference, are said out loud first, every time.
 
 Never produce an artifact before all three answers are in.
 
@@ -127,20 +133,30 @@ manifest must be *inside* the commit and the numbers are only real *after*
 one:
 
 1. Stage and commit once: `git -C <workspace> add -A`, then
-   `git -C <workspace> commit -m "workspace snapshot"`.
+   `git -C <workspace> commit -m "workspace snapshot"`. On a repeat backup
+   where nothing changed except what the manifest is about to record, this
+   can genuinely have nothing to commit — that is not a failure, it just
+   changes step 3 below.
 2. Read the real numbers: `git -C <workspace> ls-files | wc -l` (PowerShell:
    `(git -C <workspace> ls-files | Measure-Object -Line).Lines`) for the file
-   count, and `git -C <workspace> count-objects -vH` for the size — cite the
-   `size` field, not `size-pack`. A first commit has no pack yet, so
-   `size-pack` reads `0 bytes` even though real content exists; `size` (the
-   loose-object total) is the number that is actually true at this point.
-   Cite whichever commands you ran.
-3. Write the manifest with those real numbers, `git -C <workspace> add` it,
-   and fold it into the same snapshot with
-   `git -C <workspace> commit --amend --no-edit` — or a second
-   `git -C <workspace> commit -m "backup manifest"` if the owner would rather
-   see the manifest as its own entry in history. Either is fine; say which
-   one you did.
+   count, and `git -C <workspace> count-objects -vH` for the size — **cite
+   both the `size` and `size-pack` fields it prints** (or their sum), never
+   just one. Git packs objects opportunistically (a manual or auto `gc` can
+   run at any time), so whichever field is empty at a given moment is
+   `0 bytes` while the other holds the real number — citing only `size`
+   looks safe on a fresh commit and is just as wrong as `size-pack` alone
+   once the repository has been packed.
+3. Write the manifest with those real numbers and `git -C <workspace> add`
+   it, then commit it the way the state you're actually in calls for:
+   - If step 1 made a **new** commit in this same run,
+     `git -C <workspace> commit --amend --no-edit` folds the manifest into
+     it — safe here because that commit is guaranteed not pushed yet.
+   - If step 1 found nothing to commit, or the commit is one the owner may
+     already have pushed earlier in this session, commit the manifest on
+     its own instead: `git -C <workspace> commit -m "backup manifest"`.
+     **Never amend a commit that might already be on the remote** — that
+     turns the next push into a non-fast-forward, which invites a
+     `--force` the owner never asked for.
 
 ## 3a. Zip route
 
@@ -180,11 +196,16 @@ Runs in full **before every repository backup, not only the first** —
 `git init` is a no-op on a repo that already exists, and the content checks
 in steps 2 and 4 must never be skipped just because an earlier backup
 already passed them: new content goes in on every backup, so it needs
-checking on every backup. What is genuinely first-use-only is narrower than
-the section used to imply: adding the remote (step 6 no-ops once `origin`
-already points somewhere) and the one-time `.gitignore` authoring under
-scaffold. "Later use" below layers `pull --rebase` and conflict handling
-around this same gate — it does not replace it.
+checking on every backup. Two sub-steps are the genuine exceptions and stay
+scoped to first use, both to avoid destructive no-ops and to avoid nagging:
+step 2.4's *question* to the owner ("is the remote private?") is asked once
+and remembered — step 6 is what re-verifies the actual remote on every
+later run, without re-interrogating them — and the `git branch -M main` in
+the command block below only runs when there is not already a `main` to
+protect (see there). Adding the remote itself (step 6's `remote add`) is a
+natural no-op once `origin` already points somewhere. "Later use" below
+layers `pull --rebase` and conflict handling around this same gate — it
+does not replace it.
 
 Order matters: the repository must exist before git can be asked about it.
 And a check that inspects *content* — the one thing `.gitignore` can never
@@ -211,28 +232,47 @@ them twice — once cheaply before staging, and once for real, after.
       check for the pre-0.3.0 location, which has **no such exemption** —
       nothing should ever be tracked there, consent or not:
       `git -C <workspace> ls-files -- ".joserah/keys/" ":(exclude).joserah/keys/AGENTS.md"`.
-   2. `git -C <workspace> ls-files -- "*.env" "*.env.*" "*.envrc" ":(exclude)*.env.example"`
-      → must print nothing. Question 3's consent covers `keys/` only, never
-      the `.env` family, on either route — there is no flag or command that
-      lifts this one.
+   2. `git -C <workspace> ls-files -- "*.env" "*.env.*" "*.envrc" ":(exclude)*.env.example" ":(exclude)keys/**"`
+      → must print nothing, no exception, ever. An `.env`-family file
+      **outside** `keys/` is always a violation, consent or not. An `.env`
+      -family file **inside** `keys/` is a different, narrower question
+      that this check deliberately does not answer — step 3 below is where
+      it gets surfaced and decided, every time `keys/` is staged, including
+      on a repeat backup where one is already tracked from an earlier,
+      informed decision.
    3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `*.env.*`,
       `.envrc`, `*.envrc`, `projects/*` and `docker-stack/*`.
-   4. The remote the owner names is **private**. Ask directly; if they are
-      not sure, have them check before continuing. Do not guess from the
-      URL. Remember the answer — step 6 below confirms the actual remote
-      against it (this is step 2.4, referenced there by that name).
+   4. **First use only** — the remote the owner names is **private**. Ask
+      directly; if they are not sure, have them check before continuing. Do
+      not guess from the URL. Remember the answer; do not ask this question
+      again on a repeat backup. Step 6 below is what re-verifies the actual
+      remote on every run, without re-interrogating the owner (this is step
+      2.4, referenced there by that name).
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
-   to question 3, `git -C <workspace> add -f keys/`. `add -A` alone never
-   reaches a gitignored path — that is why `keys/` needs the explicit `-f`,
-   and, separately, why a stray `.env` inside `keys/` still won't be staged
-   by either command.
+   to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
+   needs the explicit `-f`, since `add -A` alone never reaches a gitignored
+   path. **`add -f keys/` has no filename filter, unlike the zip route's
+   `--include-keys`: it stages an `.env`-family file sitting in `keys/`
+   too.** Check for that right after staging:
+   `git -C <workspace> diff --cached --name-only -- "keys/*.env" "keys/*.env.*" "keys/**/*.env" "keys/**/*.envrc"`
+   (or read the `git status` output). If that lists anything, tell the
+   owner plainly which files are about to be pushed and ask: leave them in,
+   or run `git -C <workspace> rm --cached <path>` for each one they want
+   kept out — the file stays on disk in `keys/`, only unstaged. Do this
+   every time `keys/` is staged, not only the first backup: a new
+   `.env`-shaped file can land in `keys/` at any point, and a file already
+   tracked from an earlier, informed yes is not itself a new decision to
+   make, but a newly-appeared one is.
 4. Re-check what is now actually staged. This is the only moment the real
    content about to leave the machine is known, so it is not optional and
    not a repeat for form's sake:
    1. Re-run step 2.1 (the `keys/` check). A tracked `keys/` file is expected
       only if question 3 was answered yes; anything newly tracked beyond
       that must be investigated before continuing.
-   2. Re-run step 2.2 (the `.env` family check) — must still print nothing.
+   2. Re-run step 2.2 (the `.env` family check outside `keys/`) — must
+      still print nothing. Separately, confirm step 3's `keys/`-internal
+      `.env` decision still holds: nothing should be staged there that the
+      owner was not just shown and asked about.
    3. `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace>` → exit
       0. **A non-zero exit here means do not push.** Exit 1 lists
       file:line locations of credential-shaped text pasted into notes — move
@@ -242,11 +282,12 @@ them twice — once cheaply before staging, and once for real, after.
       that is a failed check to fix and re-run, not a hit to remedy by
       moving anything into `keys/`.
 5. Commit, then fold in the manifest exactly as section 2's repository-route
-   two-pass describes: `git -C <workspace> commit -m "workspace snapshot"`,
-   read the real numbers, write the manifest, `git -C <workspace> add
-   .joserah/backup-manifest.md`, then
-   `git -C <workspace> commit --amend --no-edit` (or a second commit —
-   section 2 covers the choice).
+   two-pass describes — including which of its two closing moves applies:
+   `git -C <workspace> commit -m "workspace snapshot"` (note if there was
+   nothing to commit), read the real numbers, write the manifest,
+   `git -C <workspace> add .joserah/backup-manifest.md`, then either amend
+   or commit separately, per section 2's rule for the state you're actually
+   in. Never amend a commit that might already be on the remote.
 6. Confirm the remote before touching it: `git -C <workspace> remote
    get-url origin`. If it prints a URL, show it to the owner and confirm it
    is the same private remote named in step 2.4 above — a different value
@@ -259,9 +300,21 @@ them twice — once cheaply before staging, and once for real, after.
    the actual moment the data leaves the machine.
 
 ```
-git -C <workspace> branch -M main
+git -C <workspace> rev-parse --verify -q main >/dev/null || git -C <workspace> branch -M main
 git -C <workspace> push -u origin main
 ```
+(PowerShell: `git -C <workspace> rev-parse --verify -q main 2>$null; if ($LASTEXITCODE -ne 0) { git -C <workspace> branch -M main }`)
+
+**Never run a bare `git branch -M main` here.** It force-renames whatever
+branch is currently checked out to `main`, silently overwriting any
+existing `main` ref — verified: on a repo with a `main` branch and a
+divergent `feature` branch checked out, `git branch -M main` from `feature`
+left `main` pointing at `feature`'s tip, with `main`'s own commit no longer
+reachable from any ref. The guard above only renames when there is no
+`main` yet (the case this step exists for — an older git defaulting the
+initial branch to `master`); once `main` exists, every later backup is a
+no-op here, which is what "First use only" now genuinely means for this
+line.
 
 **Pushing is the owner's decision every time.** Show the command and let them
 run it, or ask before running it yourself. Never push unprompted.
@@ -284,11 +337,13 @@ Measure-Object -Line).Lines`), or on the zip route
 `node -e "const fs=require('fs'),p=require('path');const since=new Date(process.argv[2]).getTime();let n=0;(function w(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()){if(!['.git','node_modules','projects','docker-stack','keys'].includes(e.name))w(f)}else if(fs.statSync(f).mtimeMs>since)n++}})(process.argv[1]);console.log(n)" <workspace> <lastBackup-ISO>`.
 
 - Before working: `git -C <workspace> pull --rebase`
-- After working: show the diff summary, then run **the safety gate above,
-  in full**, before committing and offering to push — steps 3 (stage)
-  through 7 (consent) apply exactly as written on a repeat backup; only
-  step 2's `.gitignore`/remote checks are cheap enough not to bother
-  skipping. The secret-scan re-check in step 4 is not a first-backup-only
+- After working: show the diff summary, then run **every step of the
+  safety gate above** before committing and offering to push — the whole
+  numbered sequence, not a subset. The only two things it does not ask
+  again are step 2.4's remote-is-private question (already answered, and
+  step 6 re-verifies the actual remote without re-asking it) and the
+  `main`-branch rename (a no-op once `main` exists). Everything else,
+  including the secret-scan re-check in step 4, is not a first-backup-only
   formality: whatever changed since `lastBackup` is content the owner has
   not had scanned before.
 - On conflict: markdown conflicts are resolved by reading both sides, never
@@ -358,14 +413,16 @@ node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.re
 - Never include `keys/` (other than `keys/AGENTS.md`) in a repository route
   unless the owner explicitly said yes to question 3 — and even then, only
   after the safety gate has otherwise passed and the consequences were said
-  out loud. This never extends to the `.env` family: no flag or command
-  reaches an `.env`-family file even when it sits inside `keys/`, on either
-  route, consent or not.
+  out loud. The `.env` family inside `keys/` is not automatically covered
+  by that yes: the zip route's `--include-keys` never takes it regardless;
+  the repository route's `git add -f keys/` does, and gate step 3 is where
+  that gets surfaced and decided every time — never assume either way.
 - Excluded by default, both routes: `keys/` (old and new location), the
   `.env` family, `projects/`, `docker-stack/`, `.superpowers/`. `keys/` can
   be included only by the owner's explicit answer to question 3, never by
-  default — and the `.env` family is never included, by consent or
-  otherwise.
+  default. The `.env` family stays excluded even then on the zip route; on
+  the repository route it rides along inside `keys/` unless the owner asks
+  for it to be stripped out (gate step 3) — never silently either way.
 - Never invent a project description or remote in the manifest — absence is
   reported, not papered over.
 - Report in the owner's dialogue language, from `.joserah/config.json`.
