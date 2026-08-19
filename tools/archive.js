@@ -7,20 +7,31 @@
  *   node archive.js extract <in.zip> <target-dir>
  *
  * Writes standard ZIP (deflate, no encryption) so any OS unzip tool can open
- * it. Excludes projects/, docker-stack/, .joserah/keys/ and every environment
- * file (.env, .env.*, *.env, *.env.*, .envrc) by default.
+ * it. Excludes root-level projects/ and docker-stack/, node_modules/.git/
+ * .venv/.superpowers/ at any depth, keys/ at the workspace root (plus the
+ * pre-0.3.0 legacy location .joserah/keys/) and every environment file
+ * (.env, .env.*, *.env, *.env.*, .envrc) by default. Directory symlinks and
+ * files that vanish mid-walk are skipped rather than aborting the run; `create`
+ * reports them back as workspace-relative paths in its `skipped` output.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-// '.superpowers' is disposable scratch written by the superpowers execution
-// harness (plan ledgers, briefs, review packages). It is regenerated on demand
-// and would otherwise dominate a backup's file count.
-const EXCLUDE_DIRS = new Set([
-  'projects', 'docker-stack', 'node_modules', '.git', '.venv', '.superpowers',
-]);
+// Root-anchored: these are contracts about the WORKSPACE ROOT layout, so a
+// nested folder that happens to share the name is still backed up. Matching
+// is case-insensitive because Windows and default-macOS filesystems are —
+// `.joserah/Keys` IS the credentials directory there.
+const EXCLUDE_ROOT_DIRS = ['projects', 'docker-stack'];
+// Any-depth: conventional junk that is junk wherever it appears. '.superpowers'
+// is disposable scratch written by the superpowers execution harness (plan
+// ledgers, briefs, review packages); it is regenerated on demand and would
+// otherwise dominate a backup's file count.
+const EXCLUDE_ANY_DIRS = new Set(['node_modules', '.git', '.venv', '.superpowers']);
+// Current layout plus the pre-0.3.0 layout — published workspaces still have
+// the old one, and a credential left behind there must never enter a backup.
+const KEYS_PREFIXES = ['keys', '.joserah/keys'];
 
 // Environment files carry credentials. Matching the bare name `.env` is not
 // enough: `.env.local`, `.env.production` and `.envrc` hold the same secrets.
@@ -55,92 +66,143 @@ function dosDate(d) {
   return (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xffff;
 }
 
-// keys/ now lives nested at `.joserah/keys`, so excluding it by directory
-// *name* alone is no longer the right test — matched purely as a relative
-// path from the workspace root, prefix-based, so it is unambiguous which
-// directory this is regardless of what else in the tree happens to be named
-// "keys". A stale name-based test here would be a silent security
-// regression: it must be verified, not assumed correct.
-const KEYS_PREFIX = '.joserah/keys';
+// Path-based, not name-based: matched against the relative path from the
+// workspace root so it is unambiguous which directory this is regardless of
+// what else in the tree happens to be named "keys". Case-insensitive because
+// Windows and default-macOS filesystems are — a stale case-sensitive test
+// here would be a silent security regression, so it must be verified, not
+// assumed correct (see the K1 test).
 function isKeysPath(rel) {
-  return rel === KEYS_PREFIX || rel.startsWith(KEYS_PREFIX + '/');
+  const low = rel.toLowerCase();
+  return KEYS_PREFIXES.some((p) => low === p || low.startsWith(p + '/'));
+}
+function isExcludedDir(rel, name) {
+  if (EXCLUDE_ANY_DIRS.has(name.toLowerCase())) return true;
+  const low = rel.toLowerCase();
+  return EXCLUDE_ROOT_DIRS.some((d) => low === d);
 }
 
 function collect(root, includeKeys) {
-  const out = [];
-  (function walk(dir) {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  const files = [];
+  const emptyDirs = [];
+  const skipped = [];
+  (function walk(dir, relBase) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
       const abs = path.join(dir, e.name);
-      const rel = path.relative(root, abs).split(path.sep).join('/');
+      const rel = relBase ? `${relBase}/${e.name}` : e.name;
+      // A directory symlink/junction makes readFileSync throw EISDIR further
+      // down; catching it here means the whole backup doesn't abort over one
+      // stray link, and the caller learns exactly which path was skipped.
+      if (e.isSymbolicLink()) { skipped.push(rel); continue; }
       if (e.isDirectory()) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
+        if (isExcludedDir(rel, e.name)) continue;
         if (isKeysPath(rel) && !includeKeys) continue;
-        walk(abs);
-      } else {
+        walk(abs, rel);
+      } else if (e.isFile()) {
         if (isEnvFile(e.name)) continue;
-        out.push({ rel, abs });
+        files.push({ rel, abs });
       }
     }
-  })(root);
-  return out.sort((a, b) => a.rel.localeCompare(b.rel));
+    // A directory needs its own zip entry only if it was genuinely empty on
+    // disk — that's what makes an authored empty note folder round-trip
+    // through extract. Judging this from what *survived filtering* instead
+    // would fabricate a placeholder for a directory that held nothing but an
+    // excluded credentials folder or .git: there was never any real content
+    // there to preserve, so no entry is written for it either.
+    if (entries.length === 0 && relBase) emptyDirs.push(relBase + '/');
+  })(root, '');
+  files.sort((a, b) => a.rel.localeCompare(b.rel));
+  emptyDirs.sort();
+  return { files, emptyDirs, skipped };
+}
+
+// A plain (non-ZIP64) archive caps both a single field's value and the total
+// entry count at 16/32 bits. Failing loudly here beats a silently truncated
+// zip that "works" until someone tries to open the file it clipped.
+function u32(n, what) {
+  if (n > 0xffffffff) {
+    throw new Error(`${what} exceeds 4 GB — this writer has no ZIP64 support; exclude the file or split the workspace`);
+  }
+  return n;
 }
 
 function create(root, outPath, includeKeys) {
-  const files = collect(path.resolve(root), includeKeys);
+  const { files, emptyDirs, skipped } = collect(path.resolve(root), includeKeys);
+  const totalEntries = files.length + emptyDirs.length;
+  if (totalEntries > 0xffff) {
+    throw new Error(`${totalEntries} entries — a plain ZIP holds at most 65535; this writer has no ZIP64 support`);
+  }
   const chunks = [];
   const central = [];
   let offset = 0;
 
-  for (const f of files) {
-    const data = fs.readFileSync(f.abs);
-    const comp = zlib.deflateRawSync(data, { level: 9 });
-    const name = Buffer.from(f.rel, 'utf8');
-    const st = fs.statSync(f.abs);
-    const crc = crc32(data);
-    const t = dosTime(st.mtime), d = dosDate(st.mtime);
+  function pushEntry(relName, data, comp, mtime) {
+    const name = Buffer.from(relName, 'utf8');
+    const crc = data.length ? crc32(data) : 0;
+    const t = dosTime(mtime), d = dosDate(mtime);
+    const method = comp === null ? 0 : 8;
+    const compLen = comp === null ? 0 : u32(comp.length, `compressed ${relName}`);
+    const rawLen = u32(data.length, relName);
 
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);            // version needed
     local.writeUInt16LE(0x0800, 6);        // UTF-8 filename flag
-    local.writeUInt16LE(8, 8);             // deflate
+    local.writeUInt16LE(method, 8);
     local.writeUInt16LE(t, 10);
     local.writeUInt16LE(d, 12);
     local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(comp.length, 18);
-    local.writeUInt32LE(data.length, 22);
+    local.writeUInt32LE(compLen, 18);
+    local.writeUInt32LE(rawLen, 22);
     local.writeUInt16LE(name.length, 26);
     local.writeUInt16LE(0, 28);
-    chunks.push(local, name, comp);
+    chunks.push(local, name);
+    if (comp !== null) chunks.push(comp);
 
     const cen = Buffer.alloc(46);
     cen.writeUInt32LE(0x02014b50, 0);
     cen.writeUInt16LE(20, 4);
     cen.writeUInt16LE(20, 6);
     cen.writeUInt16LE(0x0800, 8);
-    cen.writeUInt16LE(8, 10);
+    cen.writeUInt16LE(method, 10);
     cen.writeUInt16LE(t, 12);
     cen.writeUInt16LE(d, 14);
     cen.writeUInt32LE(crc, 16);
-    cen.writeUInt32LE(comp.length, 20);
-    cen.writeUInt32LE(data.length, 24);
+    cen.writeUInt32LE(compLen, 20);
+    cen.writeUInt32LE(rawLen, 24);
     cen.writeUInt16LE(name.length, 28);
-    cen.writeUInt32LE(offset, 42);
+    cen.writeUInt32LE(u32(offset, 'archive offset'), 42);
     central.push(cen, name);
-
-    offset += local.length + name.length + comp.length;
+    offset += 30 + name.length + (comp === null ? 0 : comp.length);
   }
 
+  let written = 0;
+  for (const f of files) {
+    let data, st;
+    try {
+      data = fs.readFileSync(f.abs);
+      st = fs.statSync(f.abs);
+    } catch {
+      skipped.push(f.rel); // vanished between walk and read — skip, don't abort
+      continue;
+    }
+    pushEntry(f.rel, data, zlib.deflateRawSync(data, { level: 9 }), st.mtime);
+    written++;
+  }
+  for (const d of emptyDirs) pushEntry(d, Buffer.alloc(0), null, new Date());
+
   const centralBuf = Buffer.concat(central);
+  const count = written + emptyDirs.length;
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
+  end.writeUInt16LE(count, 8);
+  end.writeUInt16LE(count, 10);
   end.writeUInt32LE(centralBuf.length, 12);
   end.writeUInt32LE(offset, 16);
 
   fs.writeFileSync(outPath, Buffer.concat([...chunks, centralBuf, end]));
-  return files.length;
+  return { files: written, skipped };
 }
 
 function readEntries(zipPath) {
@@ -215,7 +277,7 @@ function extract(zipPath, target) {
 const [cmd, a, b] = process.argv.slice(2);
 const includeKeys = process.argv.includes('--include-keys');
 try {
-  if (cmd === 'create') console.log(JSON.stringify({ files: create(a, b, includeKeys), out: b }));
+  if (cmd === 'create') { const r = create(a, b, includeKeys); console.log(JSON.stringify({ files: r.files, skipped: r.skipped, out: b })); }
   else if (cmd === 'list') console.log(readEntries(a).entries.map((e) => e.name).join('\n'));
   else if (cmd === 'extract') console.log(JSON.stringify({ files: extract(a, b), target: b }));
   else { console.error('usage: archive.js create|list|extract'); process.exit(1); }
