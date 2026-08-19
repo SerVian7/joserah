@@ -21,17 +21,21 @@ explain why five minutes of brainstorming saves the rework.
 
 ## 2. Place it
 
-Once there is a plan, create `projects/{Owner}/{Project}/`.
-
-The folder is named for **who owns and will reuse the software, not who
-asked for it or who it currently serves.** Software the owner wrote once and
-can reuse in other work of theirs lives under their own name; a piece of work
-that only ever serves one client or one context lives under that client's
-name instead. Ask if it is not obvious which applies. Give the project its
-own `docs/status.md` and `docs/tasks.md`, and a tiny `AGENTS.md` stub at the
-project root pointing at `docs/AGENTS.md` if the project is big enough to
-need its own instructions — see `projects/AGENTS.md` for the convention in
-full.
+1. Once there is a plan, create `projects/{Owner}/{Project}/`.
+2. Name the folder for **who owns and will reuse the software, not who
+   asked for it or who it currently serves.** Software the owner wrote once
+   and can reuse in other work of theirs lives under their own name; a piece
+   of work that only ever serves one client or one context lives under that
+   client's name instead. Ask if it is not obvious which applies. Give the
+   project its own `docs/status.md` and `docs/tasks.md`, and a tiny
+   `AGENTS.md` stub at the project root pointing at `docs/AGENTS.md` if the
+   project is big enough to need its own instructions — see
+   `projects/AGENTS.md` for the convention in full.
+3. Run `git -C projects/<name> init` and make the first commit as soon as
+   `docs/status.md` exists. This is not optional: the workspace's
+   `.gitignore` excludes `projects/*` and every backup route skips it — a
+   project folder's own git history is its **only** safety net. Saying
+   "tracked in the project's own git history" is a promise this step keeps.
 
 ## 3. Offer a drop folder
 
@@ -52,7 +56,8 @@ permanently.
 The split, once containers are in play:
 
 - **Code** stays under `projects/{Owner}/{Project}/`, tracked in the
-  project's own git history, same as any other project.
+  project's own git history — created in step 3 above, same as any other
+  project.
 - **Runtime state** — volumes, database files, anything the container
   writes — goes to `docker-stack/{project}/` at the workspace root, **never**
   under `projects/`.
