@@ -277,6 +277,15 @@ function inflateEntry(buf, e) {
   return data;
 }
 
+function verify(zipPath) {
+  const { buf, entries } = readEntries(zipPath);
+  for (const e of entries) {
+    if (e.name.endsWith('/') || e.name.endsWith('\\')) continue;
+    inflateEntry(buf, e); // throws with the entry name on any mismatch
+  }
+  return entries.length;
+}
+
 function extract(zipPath, target, force) {
   const { buf, entries } = readEntries(zipPath);
   const root = path.resolve(target);
@@ -351,6 +360,7 @@ try {
   if (cmd === 'create') { const r = create(a, b, includeKeys); console.log(JSON.stringify({ files: r.files, skipped: r.skipped, out: b })); }
   else if (cmd === 'list') console.log(readEntries(a).entries.map((e) => e.name).join('\n'));
   else if (cmd === 'extract') console.log(JSON.stringify({ files: extract(a, b, force), target: b }));
+  else if (cmd === 'verify') console.log(JSON.stringify({ ok: true, entries: verify(a) }));
   else { console.error('usage: archive.js create|list|extract|verify'); process.exit(1); }
 } catch (err) {
   console.error(String(err.message || err));

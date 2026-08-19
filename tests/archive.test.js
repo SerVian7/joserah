@@ -194,3 +194,14 @@ test('extract refuses case-colliding entry names on win32', { skip: process.plat
   assert.match(r.stderr, /notes\.md/);
   assert.ok(!fs.existsSync(target), 'nothing written to target on collision');
 });
+
+test('verify passes a good archive and fails a corrupt one', (t) => {
+  const d = tmpdir(t);
+  const good = path.join(d, 'g.zip'), bad = path.join(d, 'b.zip');
+  fs.writeFileSync(good, buildZip([{ name: 'a.md', data: Buffer.from('hello') }]));
+  fs.writeFileSync(bad, buildZip([{ name: 'a.md', data: Buffer.from('hello'), crc: 1 }]));
+  assert.strictEqual(runTool('archive.js', ['verify', good]).status, 0);
+  const r = runTool('archive.js', ['verify', bad]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /a\.md/);
+});
