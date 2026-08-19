@@ -149,9 +149,11 @@ in the same sitting rather than the first one alone.**
 populates it by hand, so it now lives where hands can find it. Existing
 workspaces keep working, but `/joserah:doctor` will flag the old location
 and walk you through the move (its "Migrate a pre-0.3.0 workspace" section).
-Backups exclude both locations by default and now **ask** whether keys
-should be included. `archive.js extract` refuses to overwrite existing files
-without `--force`, and a new `verify` command checks an archive's integrity.
+Backups exclude both locations by default (except `keys/AGENTS.md`, which
+carries no credential and is always kept in so a restored workspace still
+passes doctor) and now **ask** whether keys should be included.
+`archive.js extract` refuses to overwrite existing files without `--force`,
+and a new `verify` command checks an archive's integrity.
 
 ## Requirements
 

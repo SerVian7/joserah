@@ -199,15 +199,20 @@ one:
 4. Show the owner what went in:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" list <out.zip>` — report the
    file count and the top-level folders, not the full listing.
-5. Say plainly what was **excluded**: `keys/`, every environment file
-   (`.env`, `.env.local`, `.env.production`, `.envrc` and anything matching
-   `*.env`, `*.env.*` or `*.envrc`, except `.env.example` files), everything under
-   `projects/` and `docker-stack/`, and `.superpowers/` scratch, unless the
-   owner chose to include keys in question 3, in which case say plainly that
-   they are IN — **and check separately for any `.env`-family file inside
-   `keys/`**, because `--include-keys` never takes those; name it if one was
-   left behind. Point at the manifest (section 2) for exactly what the
-   `projects/`/`docker-stack/` exclusion left out by name.
+5. Say plainly what was **excluded**: `keys/` (except `keys/AGENTS.md` — that
+   one file is always carried through because it is the plugin's own
+   documentation explaining that the folder must never be read, not a
+   credential; if the listing in step 4 shows a `keys/AGENTS.md` entry, say
+   so and say why, so the owner isn't left wondering what from `keys/` made
+   it in), every environment file (`.env`, `.env.local`, `.env.production`,
+   `.envrc` and anything matching `*.env`, `*.env.*` or `*.envrc`, except
+   `.env.example` files), everything under `projects/` and `docker-stack/`,
+   and `.superpowers/` scratch, unless the owner chose to include keys in
+   question 3, in which case say plainly that they are IN — **and check
+   separately for any `.env`-family file inside `keys/`**, because
+   `--include-keys` never takes those; name it if one was left behind. Point
+   at the manifest (section 2) for exactly what the `projects/`/`docker-stack/`
+   exclusion left out by name.
 
 ## 3b. Repository route
 

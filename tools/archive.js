@@ -116,6 +116,19 @@ function collect(root, includeKeys) {
           // silently restores to a workspace doctor.js fails. Look for the
           // file directly rather than walking the rest of this (possibly
           // credential-filled) directory.
+          //
+          // The name check below is case-insensitive, matching isKeysPath.
+          // For isKeysPath that's safe because case-insensitivity only ever
+          // excludes more. Here it's the opposite: it includes more. On a
+          // case-sensitive filesystem, a credential an owner stored as
+          // literally `keys/agents.md` would get swept into a default backup
+          // by this branch. That requires colliding with the plugin's own
+          // reserved filename, and the entry keeps the original name's exact
+          // case (`ke.name`, not a normalized `AGENTS.md`), so a restore of
+          // that archive still lands as `keys/agents.md` — doctor.js checks
+          // for `keys/AGENTS.md` by exact case, so on a case-sensitive
+          // filesystem that restore would still fail doctor. Not fixed here,
+          // just flagged for whoever reads this next.
           let siblings;
           try { siblings = fs.readdirSync(abs, { withFileTypes: true }); } catch { siblings = []; }
           for (const ke of siblings) {
