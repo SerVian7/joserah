@@ -16,6 +16,27 @@ function listZip(zip) {
   return r.stdout.trim().split('\n').filter(Boolean);
 }
 
+test('K-critical: a default zip backup restores to a doctor-passing workspace', (t) => {
+  const d = tmpdir(t);
+  const ws = path.join(d, 'ws');
+  const scaffolded = runTool('scaffold.js',
+    ['--target', ws, '--workspace', 'w', '--owner', 'O', '--language', 'en', '--role', 'r']);
+  assert.strictEqual(scaffolded.status, 0, scaffolded.stderr);
+
+  const zip = path.join(d, 'o.zip');
+  // Default create — no --include-keys — is the common, unattended path an
+  // owner takes for a plain safety copy.
+  const created = runTool('archive.js', ['create', ws, zip]);
+  assert.strictEqual(created.status, 0, created.stderr);
+
+  const target = path.join(d, 'restored');
+  const extracted = runTool('archive.js', ['extract', zip, target]);
+  assert.strictEqual(extracted.status, 0, extracted.stderr);
+
+  const doctored = runTool('doctor.js', [target]);
+  assert.strictEqual(doctored.status, 0, doctored.stdout + doctored.stderr);
+});
+
 test('K1: keys exclusion is case-insensitive and covers the legacy path', (t) => {
   const d = tmpdir(t);
   const ws = path.join(d, 'ws');
@@ -26,6 +47,18 @@ test('K1: keys exclusion is case-insensitive and covers the legacy path', (t) =>
   assert.strictEqual(r.status, 0, r.stderr);
   const names = listZip(path.join(d, 'o.zip'));
   assert.deepStrictEqual(names, ['note.md']);
+});
+
+test('I-include-keys: --include-keys carries keys/live.txt in but still strips keys/.env', (t) => {
+  const d = tmpdir(t);
+  const ws = path.join(d, 'ws');
+  make(ws, 'keys/live.txt', 'secret');
+  make(ws, 'keys/.env', 'secret');
+  const r = runTool('archive.js', ['create', ws, path.join(d, 'o.zip'), '--include-keys']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const names = listZip(path.join(d, 'o.zip'));
+  assert.ok(names.includes('keys/live.txt'), 'keys/live.txt is included');
+  assert.ok(!names.includes('keys/.env'), 'keys/.env is stripped regardless of --include-keys');
 });
 
 test('E1: .envrc denial covers prefixed names, not just the bare file', (t) => {
@@ -54,12 +87,15 @@ test('I4: nested dir named projects IS archived; root projects/ is not', (t) => 
   assert.ok(!names.some((n) => n.startsWith('projects/')));
 });
 
-test('I5+M5: symlinks are skipped and reported, not fatal', { skip: process.platform !== 'win32' && 'symlink test tuned for win32 junctions' }, (t) => {
+test('I5+M5: symlinks are skipped and reported, not fatal', (t) => {
   const d = tmpdir(t);
   const ws = path.join(d, 'ws');
   make(ws, 'real/file.md');
   fs.mkdirSync(path.join(d, 'outside'));
-  fs.symlinkSync(path.join(d, 'outside'), path.join(ws, 'link'), 'junction');
+  // 'junction' is Windows-only (and the type fs.symlinkSync needs there for a
+  // directory target); on POSIX a plain directory symlink needs no type arg
+  // at all, so this is genuinely portable, unlike the NTFS-only tests below.
+  fs.symlinkSync(path.join(d, 'outside'), path.join(ws, 'link'), process.platform === 'win32' ? 'junction' : undefined);
   const r = runTool('archive.js', ['create', ws, path.join(d, 'o.zip')]);
   assert.strictEqual(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout);
@@ -213,9 +249,18 @@ test('extract refuses case-colliding entry names on win32', { skip: process.plat
 test('verify passes a good archive and fails a corrupt one', (t) => {
   const d = tmpdir(t);
   const good = path.join(d, 'g.zip'), bad = path.join(d, 'b.zip');
-  fs.writeFileSync(good, buildZip([{ name: 'a.md', data: Buffer.from('hello') }]));
+  fs.writeFileSync(good, buildZip([
+    { name: 'a.md', data: Buffer.from('hello') },
+    { name: 'b.md', data: Buffer.from('world') },
+  ]));
   fs.writeFileSync(bad, buildZip([{ name: 'a.md', data: Buffer.from('hello'), crc: 1 }]));
-  assert.strictEqual(runTool('archive.js', ['verify', good]).status, 0);
+  const good_r = runTool('archive.js', ['verify', good]);
+  assert.strictEqual(good_r.status, 0, good_r.stderr);
+  // The restore procedure (skills/backup/SKILL.md) reads this JSON shape to
+  // decide the archive is trustworthy — a `verify` that exits 0 while
+  // silently misreporting `entries` would defeat that check, so pin the body
+  // too, not just the exit code.
+  assert.deepStrictEqual(JSON.parse(good_r.stdout), { ok: true, entries: 2 });
   const r = runTool('archive.js', ['verify', bad]);
   assert.strictEqual(r.status, 1);
   assert.match(r.stderr, /a\.md/);

@@ -10,9 +10,12 @@
  * it. Excludes root-level projects/ and docker-stack/, node_modules/.git/
  * .venv/.superpowers/ at any depth, keys/ at the workspace root (plus the
  * pre-0.3.0 legacy location .joserah/keys/) and every environment file
- * (.env, .env.*, *.env, *.env.*, .envrc) by default. Directory symlinks and
- * files that vanish mid-walk are skipped rather than aborting the run; `create`
- * reports them back as workspace-relative paths in its `skipped` output.
+ * (.env, .env.*, *.env, *.env.*, *.envrc) by default — except keys/AGENTS.md
+ * (and its legacy twin .joserah/keys/AGENTS.md), which is documentation, not
+ * a credential, and is always carried through so a default archive restores
+ * to a doctor-passing workspace. Directory symlinks and files that vanish
+ * mid-walk are skipped rather than aborting the run; `create` reports them
+ * back as workspace-relative paths in its `skipped` output.
  *
  * `extract` verifies every entry's CRC-32 before writing it and refuses an
  * entry name that isn't writable on Windows (illegal characters, reserved
@@ -103,7 +106,26 @@ function collect(root, includeKeys) {
       if (e.isSymbolicLink()) { skipped.push(rel); continue; }
       if (e.isDirectory()) {
         if (isExcludedDir(rel, e.name)) continue;
-        if (isKeysPath(rel) && !includeKeys) continue;
+        if (isKeysPath(rel) && !includeKeys) {
+          // Even a default (no --include-keys) backup must carry keys/AGENTS.md
+          // (and its pre-0.3.0 legacy twin, .joserah/keys/AGENTS.md) through:
+          // it is the plugin's own "never read this folder" documentation
+          // file, not a credential, and scaffold.js's generated .gitignore
+          // already whitelists it with `!keys/AGENTS.md`. Without this, the
+          // default archive is the one the owner takes for granted, and it
+          // silently restores to a workspace doctor.js fails. Look for the
+          // file directly rather than walking the rest of this (possibly
+          // credential-filled) directory.
+          let siblings;
+          try { siblings = fs.readdirSync(abs, { withFileTypes: true }); } catch { siblings = []; }
+          for (const ke of siblings) {
+            if (ke.isFile() && ke.name.toLowerCase() === 'agents.md') {
+              files.push({ rel: `${rel}/${ke.name}`, abs: path.join(abs, ke.name) });
+              break;
+            }
+          }
+          continue;
+        }
         walk(abs, rel);
       } else if (e.isFile()) {
         if (isEnvFile(e.name)) continue;
@@ -205,7 +227,7 @@ function create(root, outPath, includeKeys) {
   end.writeUInt16LE(count, 8);
   end.writeUInt16LE(count, 10);
   end.writeUInt32LE(centralBuf.length, 12);
-  end.writeUInt32LE(offset, 16);
+  end.writeUInt32LE(u32(offset, 'archive offset'), 16);
 
   fs.writeFileSync(outPath, Buffer.concat([...chunks, centralBuf, end]));
   return { files: written, skipped };
