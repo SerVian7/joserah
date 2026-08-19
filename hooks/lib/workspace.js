@@ -17,7 +17,7 @@ function findWorkspace(startDir) {
 
 function readConfig(root) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, MARKER), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(root, MARKER), 'utf8').replace(/^﻿/, ''));
   } catch {
     return null;
   }

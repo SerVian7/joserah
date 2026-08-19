@@ -61,7 +61,10 @@ function lastLearnedEntries(p, n) {
 // own `.joserah/config.json` mtime stands in for it — every template file
 // scaffold.js writes predates that file (it is written last in the initial
 // run), so a freshly scaffolded, untouched workspace naturally reports
-// nothing; only files touched after that point count as "changed".
+// nothing; only files touched after that point count as "changed". This
+// depends on the caller computing staleness BEFORE calling ensureDailyStub:
+// that call creates a new file under desk/, and if it ran first its own
+// stub would be walked and counted as a change the hook just invented.
 function allFileMtimes(dirs) {
   const out = [];
   for (const dir of dirs) {
@@ -109,6 +112,9 @@ function backupStalenessLine(root, cfg, now) {
 const now = new Date();
 const today = isoDate(now);
 const cfg = readConfig(ROOT) || {};
+// Staleness is computed BEFORE the daily stub is written, so the file this
+// hook itself creates never counts as "changed since last backup".
+const staleness = backupStalenessLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
 const parts = [
@@ -127,7 +133,6 @@ if (dailyText.split(/\r?\n/).length > 5) {
 const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);
 if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);
 
-const staleness = backupStalenessLine(ROOT, cfg, now);
 if (staleness) parts.push('\n' + staleness);
 
 process.stdout.write(JSON.stringify({
