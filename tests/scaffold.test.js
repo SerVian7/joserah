@@ -43,7 +43,7 @@ test('M15: config.json with a BOM is still readable by identity-only', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
-  fs.writeFileSync(cfgPath, '﻿' + fs.readFileSync(cfgPath, 'utf8'));
+  fs.writeFileSync(cfgPath, '\uFEFF' + fs.readFileSync(cfgPath, 'utf8'));
   const r = runTool('scaffold.js', ['--identity-only', '--target', dir, '--owner', 'O', '--language', 'en']);
   assert.strictEqual(r.status, 0, r.stderr);
 });

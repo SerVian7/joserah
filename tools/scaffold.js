@@ -63,7 +63,7 @@ function writeSettings(dir, force) {
 // Strips a leading UTF-8 BOM before parsing — PowerShell redirection and some
 // Windows editors write one, and JSON.parse rejects it outright otherwise.
 function readJson(p) {
-  return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, ''));
+  return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, ''));
 }
 
 function localISODate() {

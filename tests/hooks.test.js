@@ -30,6 +30,17 @@ test('M11: trigger inside a longer word does not capture', (t) => {
   assert.match(r2.stdout, /\[capture\]/);
 });
 
+test('M11: trigger glued to a Turkish capital dotted I does not capture', (t) => {
+  // toLowerCase() is not locale-aware: 'İ' (U+0130) lowercases to 'i' plus a
+  // COMBINING DOT ABOVE (U+0307), not a single 'i'. A trigger glued directly
+  // to an 'İ'-prefixed word must still be treated as embedded, not boundary-hit.
+  const ws = hookWs(t);
+  const r = runHook('user-prompt-submit.js', ws, JSON.stringify({ prompt: 'İkaydet bunu' }));
+  assert.doesNotMatch(r.stdout, /\[capture\]/);
+  const r2 = runHook('user-prompt-submit.js', ws, JSON.stringify({ prompt: 'kaydet bunu' }));
+  assert.match(r2.stdout, /\[capture\]/);
+});
+
 test('M10: a git SHA survives redaction; an sk- key does not', () => {
   const { redact } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'redactions'));
   const sha = 'a'.repeat(39) + 'b';
@@ -40,7 +51,7 @@ test('M10: a git SHA survives redaction; an sk- key does not', () => {
 test('M15: BOM in config.json does not blank the config', (t) => {
   const ws = hookWs(t);
   const cfgPath = path.join(ws, '.joserah', 'config.json');
-  fs.writeFileSync(cfgPath, '﻿' + fs.readFileSync(cfgPath, 'utf8'));
+  fs.writeFileSync(cfgPath, '\uFEFF' + fs.readFileSync(cfgPath, 'utf8'));
   const { readConfig } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'workspace'));
   assert.strictEqual(readConfig(ws).workspaceName, 'w');
 });

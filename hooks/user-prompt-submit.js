@@ -48,7 +48,12 @@ function readStdin(idleMs = 1000) {
 
 // Trigger matching is boundary-aware: a trigger must not be embedded inside a
 // longer word (e.g. Turkish "kaydettim" must not fire the "kaydet" trigger).
-const WORD_CHAR = /[a-z0-9çğıöşü]/i;
+// \u0300-\u036f (combining diacritics) is included because JS's locale-blind
+// toLowerCase() turns Turkish "İ" (U+0130, capital dotted I) into "i" plus a
+// COMBINING DOT ABOVE (U+0307), not a single precomposed "i" — without this
+// range, that leftover combining mark reads as a non-word boundary and a
+// trigger glued to an "İ"-prefixed word (e.g. "İkaydet") would wrongly fire.
+const WORD_CHAR = /[a-z0-9çğıöşü\u0300-\u036f]/i;
 function findTrigger(low) {
   for (const t of TRIGGERS) {
     let i = low.indexOf(t);

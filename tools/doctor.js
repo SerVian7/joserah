@@ -69,7 +69,7 @@ for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joser
 // and some Windows editors write a leading BOM that JSON.parse rejects.
 const pluginVersion = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8')
-    .replace(/^﻿/, '')).version;
+    .replace(/^\uFEFF/, '')).version;
 check('workspace/plugin version', true,
   `workspace created by ${cfg && cfg.createdByPluginVersion || 'unknown'}, plugin is ${pluginVersion}`);
 
