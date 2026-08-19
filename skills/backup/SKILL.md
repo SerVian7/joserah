@@ -157,6 +157,13 @@ one:
      **Never amend a commit that might already be on the remote** — that
      turns the next push into a non-fast-forward, which invites a
      `--force` the owner never asked for.
+   - If *that* commit also finds nothing to commit — the manifest's
+     content (today's date, the same counts) came out byte-identical to
+     what's already recorded — the workspace is genuinely unchanged since
+     the last backup. This is a legitimate outcome, not a failure: say so
+     plainly ("nothing has changed since the last backup") and move on.
+     There is nothing new to push, though pushing is harmless if the owner
+     wants to anyway — it will just report nothing to do.
 
 ## 3a. Zip route
 
@@ -196,16 +203,15 @@ Runs in full **before every repository backup, not only the first** —
 `git init` is a no-op on a repo that already exists, and the content checks
 in steps 2 and 4 must never be skipped just because an earlier backup
 already passed them: new content goes in on every backup, so it needs
-checking on every backup. Two sub-steps are the genuine exceptions and stay
-scoped to first use, both to avoid destructive no-ops and to avoid nagging:
-step 2.4's *question* to the owner ("is the remote private?") is asked once
-and remembered — step 6 is what re-verifies the actual remote on every
-later run, without re-interrogating them — and the `git branch -M main` in
-the command block below only runs when there is not already a `main` to
-protect (see there). Adding the remote itself (step 6's `remote add`) is a
-natural no-op once `origin` already points somewhere. "Later use" below
-layers `pull --rebase` and conflict handling around this same gate — it
-does not replace it.
+checking on every backup. Nothing here relies on anything being *remembered*
+from an earlier session — every check either reads git's actual current
+state (which naturally degrades to a no-op when there's nothing to do, the
+same way `git init` does) or asks the owner fresh. Step 2.4 only has
+something to ask when no remote is configured yet; step 6 confirms the
+actual remote every single time regardless. There is no branch rename
+anywhere in this flow — see the command block below for why, and for what
+replaced it. "Later use" below layers `pull --rebase` and conflict handling
+around this same gate — it does not replace it.
 
 Order matters: the repository must exist before git can be asked about it.
 And a check that inspects *content* — the one thing `.gitignore` can never
@@ -242,27 +248,35 @@ them twice — once cheaply before staging, and once for real, after.
       informed decision.
    3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `*.env.*`,
       `.envrc`, `*.envrc`, `projects/*` and `docker-stack/*`.
-   4. **First use only** — the remote the owner names is **private**. Ask
-      directly; if they are not sure, have them check before continuing. Do
-      not guess from the URL. Remember the answer; do not ask this question
-      again on a repeat backup. Step 6 below is what re-verifies the actual
-      remote on every run, without re-interrogating the owner (this is step
-      2.4, referenced there by that name).
+   4. If no remote is configured yet
+      (`git -C <workspace> remote get-url origin` prints nothing), ask the
+      owner which private remote to use and confirm directly that it is
+      **private** — do not guess from the URL. If a remote is already
+      configured, there is nothing to ask here: this step is naturally
+      moot on a repeat backup, not skipped by any remembered flag. Step 6
+      below is what confirms the actual remote, fresh, on every run (this
+      is step 2.4, referenced there by that name).
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
    to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
    needs the explicit `-f`, since `add -A` alone never reaches a gitignored
-   path. **`add -f keys/` has no filename filter, unlike the zip route's
-   `--include-keys`: it stages an `.env`-family file sitting in `keys/`
-   too.** Check for that right after staging:
-   `git -C <workspace> diff --cached --name-only -- "keys/*.env" "keys/*.env.*" "keys/**/*.env" "keys/**/*.envrc"`
-   (or read the `git status` output). If that lists anything, tell the
-   owner plainly which files are about to be pushed and ask: leave them in,
-   or run `git -C <workspace> rm --cached <path>` for each one they want
-   kept out — the file stays on disk in `keys/`, only unstaged. Do this
-   every time `keys/` is staged, not only the first backup: a new
-   `.env`-shaped file can land in `keys/` at any point, and a file already
-   tracked from an earlier, informed yes is not itself a new decision to
-   make, but a newly-appeared one is.
+   path. `add -f keys/` has no filename filter, unlike the zip route's
+   `--include-keys`, so it stages whatever is actually in `keys/`.
+   **Read what got staged instead of guessing at it with a filename
+   pattern** — a hand-written pathspec missed a plain `keys/.envrc` in
+   testing, and the fix is to stop predicting and just ask git:
+   `git -C <workspace> diff --cached --name-only -- keys/`. This lists
+   every path under `keys/` now staged, whatever it's named, so no pattern
+   anyone forgot to write can let something through silently. Name the
+   whole list to the owner. `keys/AGENTS.md` is the one entry that's always
+   expected and never worth a second look. For anything in that list
+   shaped like the `.env` family (`.env`, `.env.*`, `*.env`, `*.env.*`,
+   `.envrc`, `*.envrc`) — call it out specifically and ask: leave it in, or
+   run `git -C <workspace> rm --cached <path>` for each one the owner wants
+   kept out (the file stays on disk in `keys/`, only unstaged). Do this
+   every time `keys/` is staged, not only the first backup: a new file can
+   land in `keys/` at any point, while a file already accepted and
+   unchanged since an earlier, informed yes produces no entry in this list
+   at all — `git diff --cached` only shows what actually changed.
 4. Re-check what is now actually staged. This is the only moment the real
    content about to leave the machine is known, so it is not optional and
    not a repeat for form's sake:
@@ -270,9 +284,9 @@ them twice — once cheaply before staging, and once for real, after.
       only if question 3 was answered yes; anything newly tracked beyond
       that must be investigated before continuing.
    2. Re-run step 2.2 (the `.env` family check outside `keys/`) — must
-      still print nothing. Separately, confirm step 3's `keys/`-internal
-      `.env` decision still holds: nothing should be staged there that the
-      owner was not just shown and asked about.
+      still print nothing. What's inside `keys/` was already read
+      completely, by name, in step 3 — there is no second pattern to guess
+      at here.
    3. `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace>` → exit
       0. **A non-zero exit here means do not push.** Exit 1 lists
       file:line locations of credential-shaped text pasted into notes — move
@@ -289,32 +303,42 @@ them twice — once cheaply before staging, and once for real, after.
    or commit separately, per section 2's rule for the state you're actually
    in. Never amend a commit that might already be on the remote.
 6. Confirm the remote before touching it: `git -C <workspace> remote
-   get-url origin`. If it prints a URL, show it to the owner and confirm it
-   is the same private remote named in step 2.4 above — a different value
-   means stop, never push there silently. If it prints nothing, add the one
-   the owner named: `git -C <workspace> remote add origin <private-remote>`.
+   get-url origin`. If it prints a URL, show it to the owner and get a
+   fresh yes, right now, that it is their private remote — never rely on
+   what was said earlier in this session or a previous one. A value they
+   don't recognize, or any hesitation, means stop, never push there
+   silently. If it prints nothing, no remote has been configured yet
+   (normally step 2.4 above already handled this — treat reaching here
+   without one as a sign that step got skipped, not as expected): ask which
+   private remote to use and add it:
+   `git -C <workspace> remote add origin <private-remote>`.
 7. Say once more, plainly, and get an explicit yes right before the push:
    this puts the owner's journal, their notes about the people around them,
    and everything in `.joserah/personal/` on that remote, for good. Question
    1 in section 1 was the route choice; this is the consent that belongs to
    the actual moment the data leaves the machine.
+8. Push **the branch that actually holds the commit you just made** — do
+   not assume its name. Ask git, don't predict:
 
-```
-git -C <workspace> rev-parse --verify -q main >/dev/null || git -C <workspace> branch -M main
-git -C <workspace> push -u origin main
-```
-(PowerShell: `git -C <workspace> rev-parse --verify -q main 2>$null; if ($LASTEXITCODE -ne 0) { git -C <workspace> branch -M main }`)
+   ```
+   BRANCH=$(git -C <workspace> rev-parse --abbrev-ref HEAD)
+   git -C <workspace> push -u origin "$BRANCH"
+   ```
+   (PowerShell: `$branch = git -C <workspace> rev-parse --abbrev-ref HEAD; git -C <workspace> push -u origin $branch`)
 
-**Never run a bare `git branch -M main` here.** It force-renames whatever
-branch is currently checked out to `main`, silently overwriting any
-existing `main` ref — verified: on a repo with a `main` branch and a
-divergent `feature` branch checked out, `git branch -M main` from `feature`
-left `main` pointing at `feature`'s tip, with `main`'s own commit no longer
-reachable from any ref. The guard above only renames when there is no
-`main` yet (the case this step exists for — an older git defaulting the
-initial branch to `master`); once `main` exists, every later backup is a
-no-op here, which is what "First use only" now genuinely means for this
-line.
+   **This document does not rename branches, and never runs
+   `git branch -M main`.** A rename-then-push can silently push the wrong
+   content: verified — on a repo where `master` holds a brand-new snapshot
+   commit and an older, unrelated `main` branch already exists, a guard
+   that only renames "if `main` doesn't already exist" correctly declines
+   to rename, but the *next* line still pushes `origin main` — which is
+   the stale branch, not the one just committed to. The owner is told the
+   backup succeeded while the actual snapshot never left the machine.
+   Determining and pushing the current branch by name has no such failure
+   mode: whatever `git init` produced — `main` on current git, `master` on
+   older git, or a name from `init.defaultBranch` — is what holds the
+   commit, so it's what gets pushed, every time, first backup or
+   thousandth.
 
 **Pushing is the owner's decision every time.** Show the command and let them
 run it, or ask before running it yourself. Never push unprompted.
@@ -339,13 +363,13 @@ Measure-Object -Line).Lines`), or on the zip route
 - Before working: `git -C <workspace> pull --rebase`
 - After working: show the diff summary, then run **every step of the
   safety gate above** before committing and offering to push — the whole
-  numbered sequence, not a subset. The only two things it does not ask
-  again are step 2.4's remote-is-private question (already answered, and
-  step 6 re-verifies the actual remote without re-asking it) and the
-  `main`-branch rename (a no-op once `main` exists). Everything else,
-  including the secret-scan re-check in step 4, is not a first-backup-only
-  formality: whatever changed since `lastBackup` is content the owner has
-  not had scanned before.
+  numbered sequence, not a subset. Step 2.4 naturally has nothing to ask
+  once a remote is configured (it isn't skipped by a remembered flag, it's
+  just moot). Everything else — the `keys/` listing in step 3, the
+  secret-scan re-check in step 4, step 6's fresh remote confirmation, step
+  8's push-the-current-branch — runs the same way on every backup: whatever
+  changed since `lastBackup` is content the owner has not had scanned,
+  listed, or confirmed before.
 - On conflict: markdown conflicts are resolved by reading both sides, never
   by taking one wholesale. Journal entries for the same day append; task
   lists merge line by line. Never resolve a conflict in `.joserah/personal/`
