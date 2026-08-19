@@ -3,7 +3,10 @@
  * secret-scan.js — find credential-shaped content in a workspace's text files
  * before it is committed or pushed. Filename-level exclusions (keys/, .env)
  * keep credential FILES out of git; this catches credentials pasted INTO
- * notes. Exit 0 clean, 1 hits found, 2 could not scan.
+ * notes. Exit 0 clean (every file readable, no hits), 1 hits found, 2 could
+ * not scan — either the file list itself couldn't be built, or one or more
+ * files could not be read. A file that couldn't be read must never be
+ * reported as clean: exit 2 wins over exit 0 whenever any file was skipped.
  * Output masks every match: first 4 chars + "…[masked]".
  */
 'use strict';
@@ -49,23 +52,41 @@ try {
 }
 
 let hits = 0;
+const unreadable = [];
 for (const rel of files) {
   let text;
-  try { text = fs.readFileSync(path.join(root, rel), 'utf8'); } catch { continue; }
+  try {
+    text = fs.readFileSync(path.join(root, rel), 'utf8');
+  } catch {
+    unreadable.push(rel);
+    continue;
+  }
   text.split(/\r?\n/).forEach((line, i) => {
     for (const [re] of SPECIFIC) {
       re.lastIndex = 0;
-      const m = re.exec(line);
-      if (m) {
+      let m;
+      while ((m = re.exec(line)) !== null) {
         hits++;
         const shown = m[0].slice(0, 4) + '…[masked]';
         console.log(`${rel}:${i + 1}: ${shown}`);
+        // A zero-length match would spin forever; none of SPECIFIC's
+        // patterns can match empty, but advance defensively anyway.
+        if (m[0].length === 0) re.lastIndex++;
       }
     }
   });
 }
+
+for (const rel of unreadable) {
+  console.error(`secret-scan: could not read ${rel} — treating the workspace as unscanned, not clean.`);
+}
+
 if (hits) {
-  console.log(`\n${hits} credential-shaped string(s) found. Move them to keys/ before any repository backup.`);
+  const noun = hits === 1 ? 'string' : 'strings';
+  console.log(`\n${hits} credential-shaped ${noun} found. Move them to keys/ before any repository backup.`);
   process.exit(1);
+}
+if (unreadable.length) {
+  process.exit(2);
 }
 console.log('No credential-shaped content found.');
