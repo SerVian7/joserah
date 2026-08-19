@@ -49,6 +49,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ├── AGENTS.md          this file — the router
 ├── CLAUDE.md          one line -> AGENTS.md
 ├── .gitignore
+├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/          {Owner}/{ProjectName}/ — never tracked; each has its own git
 ├── keys/              SENSITIVE — never read or echo contents
 │

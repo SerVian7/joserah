@@ -73,6 +73,7 @@ knowledge base.
 ├── AGENTS.md          the router — read this first
 ├── CLAUDE.md           one line -> AGENTS.md
 ├── .gitignore
+├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
 ├── keys/               SENSITIVE — never read or echoed
 │
@@ -88,6 +89,8 @@ knowledge base.
 
 Everything Joserah owns lives under the single hidden `.joserah/` folder, so
 the workspace root stays uncluttered for whatever else you keep there.
+
+## Security
 
 `keys/` is protected in layers, not by one wall. The deny rules catch common
 accidental reads; pattern rules cannot make Bash access impossible. The
