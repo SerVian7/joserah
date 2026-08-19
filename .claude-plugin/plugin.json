@@ -1,7 +1,7 @@
 {
   "name": "joserah",
   "description": "Personal markdown knowledge base for Claude Code: scaffolds a workspace, interviews you to fill it, and imports the data you already have. Journal, tasks, people, projects and learned preferences as plain files you own.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Serkan Adem Atay"
   },

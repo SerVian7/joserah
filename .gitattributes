@@ -3,13 +3,15 @@
 # to CRLF, and a SKILL.md whose frontmatter delimiter becomes "---\r" does not
 # parse — the skills silently fail to load. Force LF for everything textual.
 
+* text=auto eol=lf
+
 *.md   text eol=lf
 *.json text eol=lf
 *.js   text eol=lf
 *.mjs  text eol=lf
 *.ts   text eol=lf
 *.sh   text eol=lf
-*.cmd  text eol=lf
+*.cmd  text eol=crlf
 *.yml  text eol=lf
 *.yaml text eol=lf
 LICENSE text eol=lf

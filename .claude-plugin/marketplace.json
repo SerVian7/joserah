@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Joserah — a personal knowledge base that lives in your editor.",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "repository": "https://github.com/SerVian7/joserah"
   },
   "plugins": [
     {
       "name": "joserah",
       "source": "./",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Scaffold, populate and maintain a personal markdown knowledge base.",
       "license": "MIT"
     }

@@ -82,11 +82,18 @@ knowledge base.
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · raw/ · wiki/ · archive/
-    └── personal/            private — read on demand only
+    ├── personal/            private — read on demand only
+    └── user/                drop folder — files the owner leaves for import
 ```
 
 Everything Joserah owns lives under the single hidden `.joserah/` folder, so
 the workspace root stays uncluttered for whatever else you keep there.
+
+`keys/` is protected in layers, not by one wall. The deny rules catch common
+accidental reads; pattern rules cannot make Bash access impossible. The
+layers are: the `Read()` deny rule, the workspace AGENTS.md instruction,
+backups excluding keys by default, and the secret scan on the repository
+route.
 
 ## Docker
 
@@ -116,6 +123,16 @@ workspace is migrated by moving those four folders under a new `.joserah/`
 directory and repointing the relative links in `AGENTS.md` and anywhere else
 that referenced the old paths. Run `/joserah:doctor` afterwards to confirm
 the move is complete.
+
+### Upgrading to 0.3.0
+
+`keys/` moves from `.joserah/keys/` to the workspace root — the owner
+populates it by hand, so it now lives where hands can find it. Existing
+workspaces keep working, but `/joserah:doctor` will flag the old location
+and walk you through the move (its "Migrate a pre-0.3.0 workspace" section).
+Backups exclude both locations by default and now **ask** whether keys
+should be included. `archive.js extract` refuses to overwrite existing files
+without `--force`, and a new `verify` command checks an archive's integrity.
 
 ## Requirements
 

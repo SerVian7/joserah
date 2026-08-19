@@ -58,7 +58,8 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · raw/ · wiki/ · archive/
-    └── personal/            private — read on demand only
+    ├── personal/            private — read on demand only
+    └── user/                drop folder — files the owner leaves for import
 ```
 
 ## 5. Routines — do these without being asked

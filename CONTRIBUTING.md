@@ -21,6 +21,9 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
    - `node tools/scaffold.js --target /tmp/check --owner "A B" --workspace Check --language English --role ""`
    - `node tools/doctor.js /tmp/check` — must exit 0
    - `grep -rn "{{" templates/` — only the five documented placeholders may appear
+
+   (These commands assume Git Bash — on Windows run them there, not in
+   PowerShell, where `/tmp` and `grep` do not exist.)
 4. Say in the pull request what changed and what you ran.
 
 ## What we are careful about
