@@ -14,6 +14,29 @@ function freshWs(t) {
 test('doctor passes a fresh scaffold', (t) => {
   const r = runTool('doctor.js', [freshWs(t)]);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  // A passing check must not read like an active problem report: the legacy-
+  // keys line on a healthy workspace carries no detail text at all.
+  assert.match(r.stdout, /^ok\s+no legacy \.joserah\/keys directory\s*$/m);
+});
+
+test('placeholder scan ignores {{...}} inside fenced/inline code but still catches a bare one', (t) => {
+  const dir = freshWs(t);
+  const p = path.join(dir, '.joserah', 'desk', 'discusses-templating.md');
+  fs.writeFileSync(p, [
+    'This doc legitimately discusses the templating mechanism:',
+    '```js',
+    "'{{OWNER_NAME}}': owner,",
+    '```',
+    'and inline `{{OWNER_ROLE_LINE}}` in prose.',
+    '',
+  ].join('\n'));
+  const safe = runTool('doctor.js', [dir]);
+  assert.strictEqual(safe.status, 0, safe.stdout + safe.stderr);
+
+  fs.appendFileSync(p, '\nA bare {{UNFILLED}} outside any code block.\n');
+  const bare = runTool('doctor.js', [dir]);
+  assert.strictEqual(bare.status, 1);
+  assert.match(bare.stdout, /no unfilled \{\{placeholders\}\}.*1 file/i);
 });
 
 test('I14: doctor fails when a legacy .joserah/keys directory exists', (t) => {

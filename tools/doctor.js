@@ -52,17 +52,24 @@ for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joser
 // I14: .joserah/keys was the pre-0.3.0 credentials location. Unlike the
 // archive and link-check tools — which merely exclude it forever — doctor
 // must fail here: this is the migration signal that tells an owner to move
-// their credentials to keys/ at the workspace root.
-check('no legacy .joserah/keys directory',
-  !fs.existsSync(path.join(root, '.joserah', 'keys')),
-  'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section');
+// their credentials to keys/ at the workspace root. The detail is gated on
+// the same boolean the check uses, so a healthy workspace's passing line
+// carries no text — a passing check must not read like an active problem.
+{
+  const legacy = fs.existsSync(path.join(root, '.joserah', 'keys'));
+  check('no legacy .joserah/keys directory', !legacy,
+    legacy ? 'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section' : '');
+}
 
 // Informational only: a workspace merely created by an older plugin version
 // is not itself unhealthy. The behavioral drift that version could cause is
 // caught by the two checks around this one (legacy keys dir, verify-links.js
 // drift), not by this one.
+// BOM-tolerant read, matching scaffold.js's readJson — PowerShell redirection
+// and some Windows editors write a leading BOM that JSON.parse rejects.
 const pluginVersion = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8')).version;
+  fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8')
+    .replace(/^﻿/, '')).version;
 check('workspace/plugin version', true,
   `workspace created by ${cfg && cfg.createdByPluginVersion || 'unknown'}, plugin is ${pluginVersion}`);
 
@@ -82,11 +89,22 @@ check('workspace/plugin version', true,
   check('local verify-links.js current', ok, detail);
 }
 
+// The scan must ignore {{PLACEHOLDER}}-shaped text inside fenced/inline code —
+// plan and design docs legitimately *discuss* the templating mechanism (e.g.
+// a ```js block showing '{{OWNER_NAME}}': owner, or backticked
+// `{{OWNER_ROLE_LINE}}` in prose), and an owner cannot "fix" their own
+// documentation to clear a false alarm. stripCode below is duplicated from
+// verify-links.js rather than shared: scaffold.js copies verify-links.js
+// standalone into every workspace (not tools/lib/), and the drift check above
+// compares that copy byte-for-byte against the plugin's — a require() of a
+// shared helper would fail to resolve in every workspace and break both the
+// link check and the drift check.
 const leftover = spawnSync('node', ['-e', `
   const fs=require('fs'),path=require('path');let hits=0;
+  function stripCode(t){return t.replace(/\`\`\`[\\s\\S]*?\`\`\`/g,m=>m.replace(/[^\\n]/g,' ')).replace(/\`[^\`\\n]*\`/g,m=>' '.repeat(m.length));}
   (function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){
     if(e.isDirectory()){if(!['.git','node_modules','projects','docker-stack','keys','.venv','.superpowers'].includes(e.name))walk(path.join(d,e.name));}
-    else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(fs.readFileSync(path.join(d,e.name),'utf8')))hits++;}})(process.argv[1]);
+    else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(stripCode(fs.readFileSync(path.join(d,e.name),'utf8'))))hits++;}})(process.argv[1]);
   console.log(hits);`, root], { encoding: 'utf8' });
 check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
 
