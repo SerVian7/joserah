@@ -98,6 +98,19 @@ layers are: the `Read()` deny rule, the workspace AGENTS.md instruction,
 backups excluding keys by default, and the secret scan on the repository
 route.
 
+**The `Read(./keys/**)` deny rule matches a `keys/` directory at any depth,
+not only the workspace root** — the `./` prefix does not anchor it. If a
+project checked out under `projects/` (or anywhere else in the workspace)
+happens to contain its own `keys/` directory — a common name — that
+project's `keys/` becomes unreadable too, denied the same way, with no
+message explaining why. This is a known limitation of Claude Code's
+permission-rule matching, not something Joserah's config can turn off; if
+you hit it, the fix is to know the cause rather than to expect a syntax that
+anchors the rule to the workspace root. It also means the plugin's own
+`templates/keys/AGENTS.md` cannot be read by an agent (see the doctor
+skill's repair table), which is why that one repair uses a copy command
+instead of read-then-write.
+
 ## Docker
 
 Joserah does not scaffold containers — a `docker-stack/` folder is
@@ -125,7 +138,10 @@ decides.
 workspace is migrated by moving those four folders under a new `.joserah/`
 directory and repointing the relative links in `AGENTS.md` and anywhere else
 that referenced the old paths. Run `/joserah:doctor` afterwards to confirm
-the move is complete.
+the move is complete. **If you're catching up from 0.1.x straight to the
+current release, `keys/` does not stay under `.joserah/` for long — the very
+next section moves it back out to the workspace root in 0.3.0. Do both moves
+in the same sitting rather than the first one alone.**
 
 ### Upgrading to 0.3.0
 

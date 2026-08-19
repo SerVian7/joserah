@@ -112,8 +112,10 @@ Files copied: N (M MB)
 ## 5. Verify
 
 Run `node .joserah/tools/verify-links.js` from the workspace root — the workspace's own
-copy, the same one `doctor.js` uses — every citation you just wrote must
-resolve. `verify-links` deliberately does not scan `.joserah/knowledge/raw/`
+copy. (`doctor.js` runs the plugin's own copy of this script, not the
+workspace's, precisely so a stale or missing workspace copy can never blind
+that check — see its `local verify-links.js current` check.) Every citation
+you just wrote must resolve. `verify-links` deliberately does not scan `.joserah/knowledge/raw/`
 — imported snapshots keep their broken internal links as historical fact.
 Only links **you wrote** in derived files count. Then show the owner the
 report's summary and ask them to check the unclassified pile.

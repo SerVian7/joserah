@@ -201,7 +201,7 @@ one:
    file count and the top-level folders, not the full listing.
 5. Say plainly what was **excluded**: `keys/`, every environment file
    (`.env`, `.env.local`, `.env.production`, `.envrc` and anything matching
-   `*.env` or `*.env.*`, except `.env.example` files), everything under
+   `*.env`, `*.env.*` or `*.envrc`, except `.env.example` files), everything under
    `projects/` and `docker-stack/`, and `.superpowers/` scratch, unless the
    owner chose to include keys in question 3, in which case say plainly that
    they are IN — **and check separately for any `.env`-family file inside
@@ -428,7 +428,15 @@ Measure-Object -Line).Lines`), or on the zip route
    working tree, so verify it and, if needed, re-clone with `-b <branch>`
    exactly as described there. `extract` refuses to overwrite existing
    files; that refusal is the tool backing up step 1 above — never add
-   `--force` to a restore without the owner's explicit say-so.
+   `--force` to a restore without the owner's explicit say-so. If a corrupt
+   archive somehow reaches this step despite step 2's `verify` — or `extract`
+   otherwise fails partway — the target directory now holds a partial tree
+   from the entries written before the failure. Re-running `extract` on that
+   same target then hits the overwrite-refusal above and looks like it wants
+   `--force`; it does not. **Delete the target directory and start over**
+   from step 1 instead — `--force` on a half-written target papers over the
+   failure rather than fixing it, and this section elsewhere warns against
+   reaching for it.
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
 5. If `.claude/settings.json` is missing from the restore (older backup), do
