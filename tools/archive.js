@@ -4,7 +4,7 @@
  *
  *   node archive.js create <workspace> <out.zip> [--include-keys]
  *   node archive.js list   <in.zip>
- *   node archive.js extract <in.zip> <target-dir>
+ *   node archive.js extract <in.zip> <target-dir> [--force]
  *
  * Writes standard ZIP (deflate, no encryption) so any OS unzip tool can open
  * it. Excludes root-level projects/ and docker-stack/, node_modules/.git/
@@ -13,6 +13,11 @@
  * (.env, .env.*, *.env, *.env.*, .envrc) by default. Directory symlinks and
  * files that vanish mid-walk are skipped rather than aborting the run; `create`
  * reports them back as workspace-relative paths in its `skipped` output.
+ *
+ * `extract` verifies every entry's CRC-32 before writing it and refuses an
+ * entry name that isn't writable on Windows (illegal characters, reserved
+ * device names) rather than silently truncating it. It also refuses to
+ * overwrite an existing file unless `--force` is given.
  */
 'use strict';
 const fs = require('fs');
@@ -224,20 +229,52 @@ function readEntries(zipPath) {
     const extraLen = buf.readUInt16LE(p + 30);
     const commentLen = buf.readUInt16LE(p + 32);
     const localOff = buf.readUInt32LE(p + 42);
+    const crc = buf.readUInt32LE(p + 16);
     const name = buf.toString('utf8', p + 46, p + 46 + nameLen);
-    entries.push({ name, method, compSize, rawSize, localOff });
+    entries.push({ name, method, compSize, rawSize, localOff, crc });
     p += 46 + nameLen + extraLen + commentLen;
   }
   return { buf, entries };
 }
 
-function extract(zipPath, target) {
+// Characters ZIP permits but NTFS/Windows Explorer do not, plus the DOS
+// device names that are reserved regardless of extension. Without this
+// guard, `fs.writeFileSync` on e.g. "notes: draft.md" silently creates a
+// 0-byte file named "notes" and diverts the content into an NTFS alternate
+// data stream — extract reports success and the note is gone.
+const WIN_BAD_CHARS = /[<>:"|?*\x00-\x1f]/;
+const WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+function inflateEntry(buf, e) {
+  const nameLen = buf.readUInt16LE(e.localOff + 26);
+  const extraLen = buf.readUInt16LE(e.localOff + 28);
+  const start = e.localOff + 30 + nameLen + extraLen;
+  const raw = buf.subarray(start, start + e.compSize);
+  // maxOutputLength caps decompression so a hostile archive cannot balloon
+  // memory (zip bomb); 1 GiB is far beyond any real workspace file.
+  const data = e.method === 8
+    ? zlib.inflateRawSync(raw, { maxOutputLength: 1 << 30 })
+    : raw;
+  if (data.length !== e.rawSize) {
+    throw new Error(`size mismatch for ${e.name}: expected ${e.rawSize}, got ${data.length} — archive is corrupt`);
+  }
+  if (crc32(data) !== e.crc) {
+    throw new Error(`CRC mismatch for ${e.name} — archive is corrupt; do not trust this backup`);
+  }
+  return data;
+}
+
+function extract(zipPath, target, force) {
   const { buf, entries } = readEntries(zipPath);
   const root = path.resolve(target);
+  // A filesystem root ("D:\" or "/") already ends in path.sep; appending
+  // another would double it, so every entry's resolved path would fail the
+  // startsWith prefix check below and be wrongly refused as unsafe.
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
 
   // Pass 1 — resolve and validate every destination before a single byte is
-  // written. An archive is untrusted input, and a traversal attempt found
-  // halfway through must not leave a half-written tree behind.
+  // written. An archive is untrusted input, and a traversal attempt or bad
+  // name found halfway through must not leave a half-written tree behind.
   const planned = [];
   for (const e of entries) {
     // Windows' own `Compress-Archive` (and some other tools) emit entry names
@@ -250,12 +287,22 @@ function extract(zipPath, target) {
     // them; writing one as a file creates a 0-byte file where a directory
     // belongs and the next entry then fails EEXIST.
     const isDir = name.endsWith('/');
+    if (process.platform === 'win32') {
+      for (const seg of name.split('/').filter(Boolean)) {
+        if (WIN_BAD_CHARS.test(seg) || WIN_RESERVED.test(seg)) {
+          throw new Error(`entry name is not writable on Windows: ${e.name} — extract on macOS/Linux or repack with a safe name`);
+        }
+      }
+    }
     const dest = path.resolve(root, name);
-    if (!dest.startsWith(root + path.sep)) {
+    if (!dest.startsWith(rootWithSep)) {
       // A directory entry naming the target itself ("./") is a no-op, not an
       // attack. Anything else outside the target is refused.
       if (isDir && dest === root) continue;
       throw new Error(`refusing unsafe path in archive: ${e.name}`);
+    }
+    if (!isDir && !force && fs.existsSync(dest)) {
+      throw new Error(`refusing to overwrite existing file: ${name} (pass --force to overwrite)`);
     }
     planned.push({ e, dest, isDir });
   }
@@ -263,11 +310,7 @@ function extract(zipPath, target) {
   // Pass 2 — write.
   for (const { e, dest, isDir } of planned) {
     if (isDir) { fs.mkdirSync(dest, { recursive: true }); continue; }
-    const nameLen = buf.readUInt16LE(e.localOff + 26);
-    const extraLen = buf.readUInt16LE(e.localOff + 28);
-    const start = e.localOff + 30 + nameLen + extraLen;
-    const raw = buf.subarray(start, start + e.compSize);
-    const data = e.method === 8 ? zlib.inflateRawSync(raw) : raw;
+    const data = inflateEntry(buf, e);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, data);
   }
@@ -276,11 +319,12 @@ function extract(zipPath, target) {
 
 const [cmd, a, b] = process.argv.slice(2);
 const includeKeys = process.argv.includes('--include-keys');
+const force = process.argv.includes('--force');
 try {
   if (cmd === 'create') { const r = create(a, b, includeKeys); console.log(JSON.stringify({ files: r.files, skipped: r.skipped, out: b })); }
   else if (cmd === 'list') console.log(readEntries(a).entries.map((e) => e.name).join('\n'));
-  else if (cmd === 'extract') console.log(JSON.stringify({ files: extract(a, b), target: b }));
-  else { console.error('usage: archive.js create|list|extract'); process.exit(1); }
+  else if (cmd === 'extract') console.log(JSON.stringify({ files: extract(a, b, force), target: b }));
+  else { console.error('usage: archive.js create|list|extract|verify'); process.exit(1); }
 } catch (err) {
   console.error(String(err.message || err));
   process.exit(1);
