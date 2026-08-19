@@ -24,10 +24,18 @@ function isSkipped(rel) {
   return SKIP.some((p) => low === p || low.startsWith(p + '/'));
 }
 
+// Returns null — not an empty array — whenever the tracked-file list would
+// otherwise be empty, so the caller's `trackedFiles() || walkedFiles()` falls
+// back to a real filesystem walk. `git ls-files` succeeds with empty stdout
+// on a freshly `git init`-ed repository (nothing staged yet), and an empty
+// array is truthy: without this, `files` would stop at `[]`, the scan loop
+// never runs, and a workspace full of untracked secrets is reported clean.
+// A scan that examined zero files must never report clean.
 function trackedFiles() {
   const r = spawnSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8' });
   if (r.status !== 0) return null;
-  return r.stdout.split('\0').filter(Boolean);
+  const files = r.stdout.split('\0').filter(Boolean);
+  return files.length ? files : null;
 }
 function walkedFiles() {
   const out = [];
