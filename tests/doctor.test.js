@@ -66,6 +66,26 @@ test('I3: doctor fails when the deny set is a subset', (t) => {
   assert.match(r.stdout, /missing \d+ deny rule/);
 });
 
+test('I-K3: a 0.3.0-created workspace with .claude/ removed fails doctor', (t) => {
+  const dir = freshWs(t);
+  fs.rmSync(path.join(dir, '.claude'), { recursive: true });
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /FAIL\s+\.claude\/settings\.json \(absent\).*0\.3\.0/);
+});
+
+test('I-K3: a workspace recorded as created by an older plugin version still passes with .claude/ removed', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.createdByPluginVersion = '0.2.0';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  fs.rmSync(path.join(dir, '.claude'), { recursive: true });
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /ok\s+\.claude\/settings\.json \(absent\)/);
+});
+
 test('M3: a missing local checker is named, not reported as broken links', (t) => {
   const dir = freshWs(t);
   fs.rmSync(path.join(dir, '.joserah', 'tools', 'verify-links.js'));

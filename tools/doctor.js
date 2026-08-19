@@ -26,13 +26,35 @@ for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joser
 }
 
 // `.claude/` is not ours — Claude Code creates it on its own, and it must not
-// be mandatory (owner: ".claude bu klasör otomatik oluşuyor ... zorunlu da
-// olmamalı"). Its absence is fine; it only fails when the file is present
-// and does not look like the deny rules scaffold.js writes.
+// be mandatory in general (owner: ".claude bu klasör otomatik oluşuyor ...
+// zorunlu da olmamalı"). That stands for workspaces predating 0.3.0, and for
+// an owner who deliberately removed it. But scaffold.js has ALWAYS written
+// this file since 0.3.0 — so on a workspace `.joserah/config.json` records as
+// created by 0.3.0 or later, absence means deleted, or restored from a
+// pre-0.3.0 backup missing the K3 fix, not a legitimate "never had one".
+// Failing only in that case keeps older workspaces and deliberate removals
+// working while catching the case the rest of this branch exists to catch:
+// "never claim clean if you did not look".
+function versionAtLeast(version, min) {
+  const parse = (v) => String(v || '').split('.').map((n) => parseInt(n, 10) || 0);
+  const a = parse(version), b = parse(min);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const av = a[i] || 0, bv = b[i] || 0;
+    if (av !== bv) return av > bv;
+  }
+  return true; // equal counts as "at least"
+}
 {
   const settingsPath = path.join(root, '.claude', 'settings.json');
+  const createdBy = cfg && cfg.createdByPluginVersion;
+  const mandatory = versionAtLeast(createdBy, '0.3.0');
   if (!fs.existsSync(settingsPath)) {
-    check('.claude/settings.json (optional)', true, 'absent — fine, .claude/ is not required');
+    // Distinct check name (not "(present)") so the skill text that quotes
+    // the present-case name verbatim (skills/backup/SKILL.md) stays accurate.
+    check('.claude/settings.json (absent)', !mandatory,
+      mandatory
+        ? `missing, but this workspace was created by plugin ${createdBy} (>= 0.3.0), which always writes this file — run: scaffold.js --settings-only --target <dir>`
+        : `absent — fine, this workspace predates 0.3.0 (created by ${createdBy || 'unknown'}), when .claude/ was not always written`);
   } else {
     let ok = false, detail = 'present but invalid';
     try {
