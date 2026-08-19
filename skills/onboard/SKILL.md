@@ -70,7 +70,8 @@ be interrupted.
 > rather than reporting the step as done.
 
 When topics 1-6 are Covered or Declined, set `Status: complete`, run
-`node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js"`, and show the owner what their
+`node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` — pass the workspace
+path explicitly, since cwd may be anywhere — and show the owner what their
 workspace now holds — file counts per folder, not a recital of contents.
 
 ## Rules
