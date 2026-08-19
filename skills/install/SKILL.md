@@ -128,6 +128,6 @@ Tell the user, in their language:
 
 - Never create content the user did not give you. Empty values are correct
   until the owner supplies something.
-- Never write anything into `.joserah/keys/`.
+- Never write anything into `keys/`.
 - Do not configure MCP servers — that is the user's own later step, proposed
   by `/joserah:project` and recorded in AGENTS.md §7.

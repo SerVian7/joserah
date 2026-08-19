@@ -50,6 +50,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 ├── CLAUDE.md          one line -> AGENTS.md
 ├── .gitignore
 ├── projects/          {Owner}/{ProjectName}/ — never tracked; each has its own git
+├── keys/              SENSITIVE — never read or echo contents
 │
 └── .joserah/
     ├── config.json          workspace marker
@@ -57,8 +58,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · raw/ · wiki/ · archive/
-    ├── personal/            private — read on demand only
-    └── keys/                SENSITIVE — never read or echo contents
+    └── personal/            private — read on demand only
 ```
 
 ## 5. Routines — do these without being asked
@@ -130,9 +130,9 @@ restructuring conventions.
 
 1. Read before writing.
 2. No silent deletions or moves — confirm first.
-3. No secrets in markdown. If a key or token is pasted, say it belongs in `.joserah/keys/` and do not repeat it.
+3. No secrets in markdown. If a key or token is pasted, say it belongs in `keys/` and do not repeat it.
 4. Never write to `.joserah/knowledge/raw/` — immutable source material. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
-5. Never read `.joserah/keys/` content unless explicitly asked.
+5. Never read `keys/` content unless explicitly asked.
 6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.
 

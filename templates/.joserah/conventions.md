@@ -31,7 +31,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Queued / maybe / completed | `.joserah/desk/tasks/next.md` / `.joserah/desk/tasks/someday.md` / `.joserah/desk/tasks/done.md` |
 | Quick unsorted capture | `.joserah/desk/inbox/captures.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |
-| Credentials | `.joserah/keys/` — never echoed |
+| Credentials | `keys/` — never echoed |
 | Immutable source material | `.joserah/knowledge/raw/` |
 | AI-maintained synthesis | `.joserah/knowledge/wiki/` |
 | One file per person | `.joserah/knowledge/people/firstname-lastname.md` |

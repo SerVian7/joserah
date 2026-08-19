@@ -74,6 +74,7 @@ knowledge base.
 ├── CLAUDE.md           one line -> AGENTS.md
 ├── .gitignore
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
+├── keys/               SENSITIVE — never read or echoed
 │
 └── .joserah/
     ├── config.json          workspace marker
@@ -81,8 +82,7 @@ knowledge base.
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · raw/ · wiki/ · archive/
-    ├── personal/            private — read on demand only
-    └── keys/                SENSITIVE — never read or echoed
+    └── personal/            private — read on demand only
 ```
 
 Everything Joserah owns lives under the single hidden `.joserah/` folder, so

@@ -104,7 +104,7 @@ those numbers are known.
 3. Show the owner what went in:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" list <out.zip>` — report the
    file count and the top-level folders, not the full listing.
-4. Say plainly what was **excluded**: `.joserah/keys/`, every environment file
+4. Say plainly what was **excluded**: `keys/`, every environment file
    (`.env`, `.env.local`, `.env.production`, `.envrc` and anything matching
    `*.env` or `*.env.*`, except `.env.example` files), everything under
    `projects/` and `docker-stack/`, and `.superpowers/` scratch. Credentials
@@ -131,16 +131,16 @@ not exist. Empty output means pass. If a check cannot be run at all (git
 missing, command errors), that counts as a **failed** check — never treat a
 check that did not run as a pass.
 
-1. `git -C <workspace> ls-files -- ".joserah/keys/" ":(exclude).joserah/keys/AGENTS.md"`
-   → must print nothing. `.joserah/keys/AGENTS.md` is tracked on purpose — it
+1. `git -C <workspace> ls-files -- "keys/" ":(exclude)keys/AGENTS.md"`
+   → must print nothing. `keys/AGENTS.md` is tracked on purpose — it
    is the documentation file that tells assistants never to read that folder
    — so it is excluded from the check. **Anything else** printed under
-   `.joserah/keys/` is a real violation: a credential is in git history.
+   `keys/` is a real violation: a credential is in git history.
 2. `git -C <workspace> ls-files -- "*.env" "*.env.*" "*.envrc" ":(exclude)*.env.example"`
    → must print nothing. The wildcards match at any depth, so this covers
    `.env`, `.env.local`, `.env.production`, `config/.envrc` and the rest;
    `.env.example` and `*.env.example` are documentation and are allowed.
-3. `.gitignore` contains `.joserah/keys/*`, `.env`, `.env.*`, `*.env`,
+3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`,
    `.envrc`, `projects/*` and `docker-stack/*`.
 4. The remote the owner names is **private**. Ask directly; if they are not
    sure, have them check before continuing. Do not guess from the URL.
@@ -199,7 +199,7 @@ count and a size, then ask before pushing:
 
    It writes nothing else, and refuses if a `settings.json` is already there.
    Then re-run doctor: `exists: .claude/settings.json` must be `ok`, because
-   those rules are what keeps `.joserah/keys/` unreadable.
+   those rules are what keeps `keys/` unreadable.
 
 ## 5. Record the backup
 
@@ -217,9 +217,9 @@ node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.re
 - Never restore over an existing workspace without explicit confirmation.
 - Never add a repository remote the owner did not name, and never push
   without their agreement in that session.
-- Never include `.joserah/keys/` (other than `.joserah/keys/AGENTS.md`) or any
+- Never include `keys/` (other than `keys/AGENTS.md`) or any
   environment file in a repository route, under any circumstance.
-- Always excluded, both routes: `.joserah/keys/`, the `.env` family,
+- Always excluded, both routes: `keys/`, the `.env` family,
   `projects/`, `docker-stack/`, `.superpowers/`.
 - Never invent a project description or remote in the manifest — absence is
   reported, not papered over.

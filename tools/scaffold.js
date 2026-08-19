@@ -39,15 +39,10 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 
 // Permission rules — plugins cannot ship these, so the workspace carries them.
-// This is the single source of truth for the set; `--settings-only` exists so
-// a restore of an older backup can write exactly these rules again rather than
-// an agent inventing a plausible-looking set.
-const PERMISSION_DENY = [
-  'Read(./.joserah/keys/**)',
-  'Bash(cat ./.joserah/keys/**)', 'Bash(less ./.joserah/keys/**)', 'Bash(head ./.joserah/keys/**)',
-  'Bash(tail ./.joserah/keys/**)', 'Bash(strings ./.joserah/keys/**)',
-  'Bash(type ./.joserah/keys/**)', 'Bash(Get-Content ./.joserah/keys/**)', 'Bash(gc ./.joserah/keys/**)',
-];
+// tools/lib/permission-deny.js is the single source of truth for the set;
+// `--settings-only` exists so a restore of an older backup can write exactly
+// these rules again rather than an agent inventing a plausible-looking set.
+const { PERMISSION_DENY } = require('./lib/permission-deny');
 
 // `.claude/` is not ours: Claude Code creates it on its own, so it is not
 // guaranteed to exist and must not become mandatory. Permission rules are
@@ -252,8 +247,8 @@ writeSettings(root, true);
 // never an enumerated list, so it holds in anyone's workspace.
 fs.writeFileSync(path.join(root, '.gitignore'), [
   '# secrets — never in history',
-  '.joserah/keys/*',
-  '!.joserah/keys/AGENTS.md',
+  'keys/*',
+  '!keys/AGENTS.md',
   '.env',
   '.env.*',
   '*.env',
@@ -269,6 +264,7 @@ fs.writeFileSync(path.join(root, '.gitignore'), [
   'projects/*',
   '!projects/AGENTS.md',
   'docker-stack/*',
+  '# docker-stack/README.md is created by the owner if they adopt that convention',
   '!docker-stack/README.md',
   '',
   '# scratch directories tools create unbidden',

@@ -115,6 +115,6 @@ unclassified pile.
 - **Never invent** a name, date, or fact that is not in the source. If a
   document is unreadable, say so and leave it raw.
 - Credentials found in the material: do not copy them into markdown. Tell the
-  owner they are in the source and belong in `.joserah/keys/`.
+  owner they are in the source and belong in `keys/`.
 - If the owner asks you to import from a cloud service, that needs an MCP
   connection they set up — say so rather than guessing at file paths.

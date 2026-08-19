@@ -77,5 +77,5 @@ workspace now holds — file counts per folder, not a recital of contents.
 
 - **Never invent a fact.** If you inferred something, ask before writing it.
 - Quote the owner's own words for anything that goes into `.joserah/learned.md`.
-- Nothing goes in `.joserah/keys/` and no credential is ever written into markdown.
+- Nothing goes in `keys/` and no credential is ever written into markdown.
 - If the owner shares something sensitive, put it in `.joserah/personal/` and say so.
