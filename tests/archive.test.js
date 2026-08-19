@@ -148,3 +148,49 @@ test('M7: extract refuses to overwrite without --force', (t) => {
   assert.strictEqual(r2.status, 0, r2.stderr);
   assert.strictEqual(fs.readFileSync(path.join(target, 'a.md'), 'utf8'), 'new');
 });
+
+test('inflate failure on a corrupt deflate stream names the offending entry', (t) => {
+  const d = tmpdir(t);
+  const zip = path.join(d, 'corrupt.zip');
+  const name = 'broken.md';
+  const data = Buffer.from('hello world, this is a test payload for corruption'.repeat(5));
+  const zipBuf = buildZip([{ name, data }]);
+  const nb = Buffer.byteLength(name, 'utf8');
+  const localCompOff = 30 + nb; // where the compressed payload begins
+  const origCompLen = zipBuf.readUInt32LE(18); // local header compSize field
+  const cut = 4;
+  const newCompLen = origCompLen - cut;
+  // Drop the last few bytes of the compressed payload, then patch every
+  // length/offset field that must agree (local header, central directory,
+  // EOCD) so the only thing wrong is the deflate bitstream itself being
+  // truncated mid-block — not some structural error archive.js would catch
+  // some other way before ever calling zlib.
+  const truncated = Buffer.concat([
+    zipBuf.subarray(0, localCompOff + newCompLen),
+    zipBuf.subarray(localCompOff + origCompLen),
+  ]);
+  truncated.writeUInt32LE(newCompLen, 18); // local header compSize
+  const centralStart = localCompOff + newCompLen;
+  truncated.writeUInt32LE(newCompLen, centralStart + 20); // central dir compSize
+  const eocdOff = truncated.length - 22;
+  truncated.writeUInt32LE(centralStart, eocdOff + 16); // central dir offset
+  fs.writeFileSync(zip, truncated);
+  const r = runTool('archive.js', ['extract', zip, path.join(d, 'out')]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /broken\.md/);
+});
+
+test('extract refuses case-colliding entry names on win32', { skip: process.platform !== 'win32' }, (t) => {
+  const d = tmpdir(t);
+  const zip = path.join(d, 'case.zip');
+  fs.writeFileSync(zip, buildZip([
+    { name: 'Notes.md', data: Buffer.from('first') },
+    { name: 'notes.md', data: Buffer.from('second') },
+  ]));
+  const target = path.join(d, 'out');
+  const r = runTool('archive.js', ['extract', zip, target]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /Notes\.md/);
+  assert.match(r.stderr, /notes\.md/);
+  assert.ok(!fs.existsSync(target), 'nothing written to target on collision');
+});

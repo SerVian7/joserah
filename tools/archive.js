@@ -250,11 +250,24 @@ function inflateEntry(buf, e) {
   const extraLen = buf.readUInt16LE(e.localOff + 28);
   const start = e.localOff + 30 + nameLen + extraLen;
   const raw = buf.subarray(start, start + e.compSize);
-  // maxOutputLength caps decompression so a hostile archive cannot balloon
-  // memory (zip bomb); 1 GiB is far beyond any real workspace file.
-  const data = e.method === 8
-    ? zlib.inflateRawSync(raw, { maxOutputLength: 1 << 30 })
-    : raw;
+  let data;
+  if (e.method === 8) {
+    try {
+      // maxOutputLength caps decompression so a hostile archive cannot
+      // balloon memory (zip bomb); 1 GiB is far beyond any real workspace
+      // file.
+      data = zlib.inflateRawSync(raw, { maxOutputLength: 1 << 30 });
+    } catch (err) {
+      // zlib's own errors — a corrupt stream throws "unexpected end of
+      // file", exceeding maxOutputLength throws ERR_BUFFER_TOO_LARGE —
+      // never mention which entry failed. Rethrow naming it: this is
+      // exactly what a caller diagnosing a corrupt archive or a zip bomb
+      // needs to know, and it's what `verify` (Task 5) reports per entry.
+      throw new Error(`failed to inflate ${e.name}: ${err.message}`);
+    }
+  } else {
+    data = raw;
+  }
   if (data.length !== e.rawSize) {
     throw new Error(`size mismatch for ${e.name}: expected ${e.rawSize}, got ${data.length} — archive is corrupt`);
   }
@@ -276,6 +289,12 @@ function extract(zipPath, target, force) {
   // written. An archive is untrusted input, and a traversal attempt or bad
   // name found halfway through must not leave a half-written tree behind.
   const planned = [];
+  // Tracks destinations already claimed by an earlier entry in this same
+  // archive, so two distinct, individually legal entries that collide once
+  // written — e.g. "Notes.md" and "notes.md" on case-insensitive NTFS — are
+  // caught here instead of the second silently overwriting the first in
+  // pass 2 while extract still reports success.
+  const seenDest = new Map();
   for (const e of entries) {
     // Windows' own `Compress-Archive` (and some other tools) emit entry names
     // with backslash separators, including for directory entries. Normalize
@@ -301,8 +320,16 @@ function extract(zipPath, target, force) {
       if (isDir && dest === root) continue;
       throw new Error(`refusing unsafe path in archive: ${e.name}`);
     }
-    if (!isDir && !force && fs.existsSync(dest)) {
-      throw new Error(`refusing to overwrite existing file: ${name} (pass --force to overwrite)`);
+    if (!isDir) {
+      const key = process.platform === 'win32' ? dest.toLowerCase() : dest;
+      const prior = seenDest.get(key);
+      if (prior !== undefined) {
+        throw new Error(`refusing case-colliding entries: ${prior} and ${e.name}`);
+      }
+      seenDest.set(key, e.name);
+      if (!force && fs.existsSync(dest)) {
+        throw new Error(`refusing to overwrite existing file: ${name} (pass --force to overwrite)`);
+      }
     }
     planned.push({ e, dest, isDir });
   }
