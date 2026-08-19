@@ -44,16 +44,11 @@ const args = parseArgs(process.argv.slice(2));
 // these rules again rather than an agent inventing a plausible-looking set.
 const { PERMISSION_DENY } = require('./lib/permission-deny');
 
-// `.claude/` is not ours: Claude Code creates it on its own, so it is not
-// guaranteed to exist and must not become mandatory. Permission rules are
-// written into it only when the directory is already there; otherwise
-// nothing is written and the caller is told why.
+// Permission rules are the workspace's guard on keys/ — they must exist from
+// the first minute, so scaffold creates .claude/ itself. (Claude Code also
+// creates that directory on its own; the two coexist fine.)
 function writeSettings(dir, force) {
   const claudeDir = path.join(dir, '.claude');
-  if (!fs.existsSync(claudeDir)) {
-    console.error(`scaffold: ${claudeDir} does not exist — skipping .claude/settings.json (that folder is optional and not written by this tool)`);
-    return null;
-  }
   const file = path.join(claudeDir, 'settings.json');
   if (fs.existsSync(file) && !force) {
     console.error(`scaffold: ${file} already exists — refusing to overwrite`);
@@ -65,8 +60,19 @@ function writeSettings(dir, force) {
   return file;
 }
 
-// `--settings-only --target DIR`: write just .claude/settings.json. Used by
-// the restore path in the backup skill when an older archive has none.
+// Strips a leading UTF-8 BOM before parsing — PowerShell redirection and some
+// Windows editors write one, and JSON.parse rejects it outright otherwise.
+function readJson(p) {
+  return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, ''));
+}
+
+function localISODate() {
+  const d = new Date(); const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// `--settings-only --target DIR`: writes just .claude/settings.json; used by
+// the backup skill's restore path.
 // Scoped to actual Joserah workspaces: a target that has never been
 // scaffolded (no `.joserah/config.json`) has no business getting a
 // `.claude/settings.json` written into it by this tool.
@@ -97,7 +103,7 @@ if (args.identityOnly) {
     console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found)`);
     process.exit(1);
   }
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const cfg = readJson(cfgPath);
   const owner = args.owner || '';
   const language = args.language || '';
   const role = args.role || '';
@@ -187,7 +193,7 @@ if (conflicts.length && !args.force) {
   process.exit(1);
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localISODate();
 const SUBS = {
   '{{OWNER_NAME}}': args.owner,
   '{{WORKSPACE_NAME}}': args.workspace,
@@ -231,7 +237,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   ownerName: args.owner,
   dialogueLanguage: args.language,
   created: today,
-  createdByPluginVersion: require(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
+  createdByPluginVersion: readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
   lastBackup: null,
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in
