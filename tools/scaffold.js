@@ -255,6 +255,8 @@ fs.writeFileSync(path.join(root, '.gitignore'), [
   '# secrets — never in history',
   'keys/*',
   '!keys/AGENTS.md',
+  '# pre-0.3.0 legacy location — excluded forever, belt-and-braces',
+  '.joserah/keys/*',
   '.env',
   '.env.*',
   '*.env',

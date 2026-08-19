@@ -16,7 +16,8 @@ const { spawnSync } = require('child_process');
 const { SPECIFIC } = require('../hooks/lib/redactions');
 
 const root = path.resolve(process.argv[2] || process.cwd());
-const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'node_modules', '.git'];
+const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'node_modules', '.git',
+  '.venv', '.superpowers', 'dist', 'build'];
 const TEXT_EXT = new Set(['.md', '.json', '.txt', '.yml', '.yaml', '.toml']);
 
 function isSkipped(rel) {
