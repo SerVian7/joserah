@@ -26,6 +26,9 @@ Ask what they are pointing you at and how big it is. Then look:
 node -e "const fs=require('fs'),p=require('path');let n=0,b=0;(function w(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory())w(f);else{n++;b+=fs.statSync(f).size;}}})(process.argv[1]);console.log(n+' files, '+(b/1048576).toFixed(1)+' MB')" "<source path>"
 ```
 
+If the source is a single file rather than a directory, skip the listing —
+read the one file and continue from step 2 with it.
+
 Report the count and size, and list the file types you found. **If it is more
 than a few hundred files, propose doing it in batches by folder or type and
 get agreement first.** Do not silently truncate — if you decide to skip
@@ -55,7 +58,11 @@ For each source, decide what it produces and write it to its home:
 | Reference worth keeping but not actionable | leave in `.joserah/knowledge/raw/`, add a `.joserah/knowledge/wiki/` page pointing at it |
 | Anything you cannot classify | `.joserah/desk/inbox/captures.md`, one line each |
 
-Every derived file cites its source: `Source: [raw/imports/…/file.md](…)`.
+Every derived file cites its source: `Source: [text](path)`. Write the source
+link relative to the file you are writing it into — from
+`.joserah/knowledge/people/<name>.md` the raw import is
+`../raw/imports/<date>/<file>.md`, not `raw/imports/…`. Step 5's link check
+is the referee.
 
 ### Anything under `projects/` is outside backup
 
@@ -106,8 +113,10 @@ Files copied: N (M MB)
 
 Run `node .joserah/tools/verify-links.js` from the workspace root — the workspace's own
 copy, the same one `doctor.js` uses — every citation you just wrote must
-resolve. Then show the owner the report's summary and ask them to check the
-unclassified pile.
+resolve. `verify-links` deliberately does not scan `.joserah/knowledge/raw/`
+— imported snapshots keep their broken internal links as historical fact.
+Only links **you wrote** in derived files count. Then show the owner the
+report's summary and ask them to check the unclassified pile.
 
 ## Rules
 
