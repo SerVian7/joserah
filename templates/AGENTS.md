@@ -2,6 +2,9 @@
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic.
 > **Read this first.** It is a router — it points to detail files.
+> **Then read [.joserah/directives.md](.joserah/directives.md)** — the workspace's own standing
+> directives. On conflict, directives win. Plugin updates may replace this file; they never
+> touch directives.
 
 ## 1. What this folder is
 
@@ -55,6 +58,7 @@ Full details: [.joserah/conventions.md](.joserah/conventions.md).
 │
 └── .joserah/
     ├── config.json          workspace marker
+    ├── directives.md        this workspace's own rules — overrides AGENTS.md, survives updates
     ├── conventions.md · learned.md · skill-candidates.md
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
