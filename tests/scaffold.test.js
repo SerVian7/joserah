@@ -89,3 +89,39 @@ test('scaffold .gitignore excludes raw/ from the repository route', (t) => {
   const gi = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8');
   assert.match(gi, /^raw\/$/m);
 });
+
+test('--root-shell-only regenerates missing root files from a .joserah-only restore', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  // simulate a .joserah-only clone: root shell files are gone
+  fs.rmSync(path.join(dir, 'AGENTS.md'));
+  fs.rmSync(path.join(dir, 'JOSERAH-ROLE.md'));
+  fs.rmSync(path.join(dir, '.gitignore'));
+  fs.rmSync(path.join(dir, '.claude'), { recursive: true });
+  const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  for (const f of ['AGENTS.md', 'JOSERAH-ROLE.md', '.gitignore', path.join('.claude', 'settings.json')]) {
+    assert.ok(fs.existsSync(path.join(dir, f)), `${f} regenerated`);
+  }
+  // AGENTS.md is the template byte-for-byte (modulo EOL):
+  const tpl = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
+  const got = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
+  assert.strictEqual(got, tpl);
+});
+
+test('--root-shell-only never overwrites files that exist', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.writeFileSync(path.join(dir, '.gitignore'), '# owner-edited\n');
+  const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), '# owner-edited\n');
+  assert.match(r.stdout, /kept \.gitignore/);
+});
+
+test('--root-shell-only without a workspace marker exits 1', (t) => {
+  const dir = path.join(tmpdir(t), 'empty');
+  fs.mkdirSync(dir, { recursive: true });
+  const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
+  assert.strictEqual(r.status, 1);
+});

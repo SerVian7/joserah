@@ -506,22 +506,22 @@ Measure-Object -Line).Lines`), or on the zip route
    reaching for it.
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
-5. If `.claude/settings.json` is missing from the restore (older backup), do
-   not write the permission rules by hand and do not copy them out of another
-   workspace — re-run the scaffold's own settings step, which is where the
-   rules actually live (`tools/scaffold.js`, `PERMISSION_DENY`):
+5. A `.joserah`-only backup restores no root shell: `AGENTS.md`,
+   `JOSERAH-ROLE.md`, `.gitignore` and `.claude/settings.json` are not in it
+   by design. Regenerate them — never by hand, never copied from another
+   workspace:
 
    ```
-   node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --settings-only --target <target>
+   node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --root-shell-only --target <target>
    ```
 
-   It writes nothing else, and refuses if a `settings.json` is already there.
-   The command exits 1 if it could not write — that is a failure to report,
-   not to paper over. Then re-run doctor and confirm the check named
+   It writes only what is missing and never overwrites. Say plainly in the
+   restore report: these files came from the plugin's template, not from the
+   backup. The missing `.gitignore` is the security-relevant one — until it
+   is regenerated, a `git add -A` on the restored machine would stage
+   `keys/`. Then re-run doctor and confirm the check named
    `.claude/settings.json (present)` says `ok — present with the full deny
-   set`. These rules are one layer of the keys/ protection (the others are
-   the workspace's AGENTS.md instruction and the owner's own caution — Bash
-   access can never be fully denied by pattern rules).
+   set`.
 
 ## 5. Record the backup
 
