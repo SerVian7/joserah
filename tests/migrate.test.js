@@ -421,3 +421,137 @@ test('R19: exclusion is anchored to the workspace root, not a bare filename matc
   assert.ok(files2.includes('.joserah/knowledge/wiki/AGENTS.md'),
     'a same-named file that is not at the workspace root is scanned like any other note');
 });
+
+// --- CRITICAL 1 ------------------------------------------------------------
+// .joserah/feedback/ was scanned as ordinary owner prose. A feedback note has
+// `type:` but no `title:`, and no H1 at all (only `##` headings), so
+// ensureFrontmatter spliced in a title taken from titleFor's filename
+// fallback — and the filename is the one string in the whole pipeline that
+// renderFeedbackNote never scans, while feedback.js uploads the file verbatim
+// to a public issue tracker. The Relations pass was a second way through the
+// same door.
+
+const nfmt = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'note-format'));
+
+test('CRITICAL 1: a feedback note is out of the migration scan entirely', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/feedback/prompt/2026-08-30-sevgi-akkaya-mail-loop.md',
+    '---\ntype: feedback\narea: prompt\n---\n\n## Symptom\n\nSomething.\n');
+  const { files } = scanWorkspace(dir);
+  assert.ok(!files.some((f) => f.startsWith('.joserah/feedback/')),
+    'nothing under .joserah/feedback/ is offered to the migration');
+});
+
+test('CRITICAL 1: a rendered feedback note is byte-identical after a migration run', (t) => {
+  const dir = ws(t);
+  // An entity whose title appears in the note's own prose, so the Relations
+  // pass has something to append if it is ever let near this file.
+  write(dir, '.joserah/knowledge/wiki/entities/toolchain.md', '# Toolchain\n\nThe build chain.\n');
+  const note = nfmt.renderFeedbackNote({
+    area: 'prompt', created: '2026-08-30',
+    symptom: 'the toolchain restated a rule it had already been given, twice in one session.',
+    cause: 'the rule is injected in two layers and neither knows the other ran.',
+    suggestion: 'inject the layer once and let the later layer reference it.',
+  }, []);
+  const rel = '.joserah/feedback/prompt/2026-08-30-sevgi-akkaya-mail-loop.md';
+  write(dir, rel, note);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(dir, rel), 'utf8'), note,
+    'the bytes feedback.js would publish are exactly the bytes renderFeedbackNote produced');
+});
+
+// --- CRITICAL 2 ------------------------------------------------------------
+// migrate read every note as 'utf8' regardless of what its bytes actually
+// were. A UTF-8 BOM defeats FM_RE's ^--- anchor (so a block lands in front of
+// the mark, and on a v2 note a second block demotes the owner's real one); a
+// UTF-16 note — PowerShell 5.1's default for `>` — decodes to replacement
+// characters and is written back as mojibake, destroying every character
+// above U+007F for good.
+
+const BOM8 = Buffer.from([0xEF, 0xBB, 0xBF]);
+
+function writeBytes(dir, rel, buf) {
+  const p = path.join(dir, rel);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, buf);
+  return p;
+}
+
+test('CRITICAL 2: a plain UTF-8 note (no BOM) still migrates', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/knowledge/people/ada-lovelace.md';
+  writeBytes(dir, rel, Buffer.from('# Ada Lovelace\n\nNotes.\n', 'utf8'));
+  const r = runTool('migrate.js', [dir]);
+  const out = JSON.parse(r.stdout);
+  assert.deepStrictEqual(out.skipped, [], 'nothing refused');
+  assert.match(fs.readFileSync(path.join(dir, rel), 'utf8'), /^---\ntitle: Ada Lovelace\n/);
+});
+
+test('CRITICAL 2: a UTF-8 BOM note is left untouched and reported as skipped', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/knowledge/people/ada-lovelace.md';
+  const bytes = Buffer.concat([BOM8, Buffer.from('# Ada Lovelace\n\nNotes.\n', 'utf8')]);
+  const p = writeBytes(dir, rel, bytes);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.ok(fs.readFileSync(p).equals(bytes), 'every byte as the owner left it');
+  assert.ok(out.skipped.some((s) => s.file === rel && /BOM/i.test(s.reason)),
+    'the refusal is reported, not silent: ' + JSON.stringify(out.skipped));
+});
+
+test('CRITICAL 2: a UTF-16LE note comes out byte-identical and reported, never mojibake', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/desk/daily/2026/2026-08-30.md';
+  const bytes = Buffer.concat([
+    Buffer.from([0xFF, 0xFE]),
+    Buffer.from('# Günlük\n\nDurmuş ile görüşüldü.\n', 'utf16le'),
+  ]);
+  const p = writeBytes(dir, rel, bytes);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.ok(fs.readFileSync(p).equals(bytes),
+    'bytes identical — the Turkish characters are unrecoverable if this ever writes');
+  assert.ok(out.skipped.some((s) => s.file === rel && /UTF-16/i.test(s.reason)),
+    'reported as skipped: ' + JSON.stringify(out.skipped));
+});
+
+test('CRITICAL 2: a BOM note already on v2 does not get a second frontmatter block', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/knowledge/people/ada-lovelace.md';
+  const body = '---\ntitle: Ada Lovelace\ntype: person\n---\n\n# Ada Lovelace\n\nNotes.\n';
+  const bytes = Buffer.concat([BOM8, Buffer.from(body, 'utf8')]);
+  const p = writeBytes(dir, rel, bytes);
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, '');
+  assert.strictEqual((text.match(/^---$/gm) || []).length, 2,
+    'exactly one frontmatter block, the owner\'s own');
+  assert.ok(fs.readFileSync(p).equals(bytes), 'untouched');
+});
+
+// --- IMPORTANT 5 -----------------------------------------------------------
+test('IMPORTANT 5: .joserah/user/ is a drop folder, not the assistant\'s to rewrite', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/user/cv.md';
+  const body = '# Curriculum vitae\n\nWhat the owner dropped here.\n';
+  write(dir, rel, body);
+  const { files } = scanWorkspace(dir);
+  assert.ok(!files.some((f) => f.startsWith('.joserah/user/')), 'user/ excluded from the scan');
+  runTool('migrate.js', [dir]);
+  assert.strictEqual(fs.readFileSync(path.join(dir, rel), 'utf8'), body, 'byte-identical');
+});
+
+// --- a note with no trailing newline ---------------------------------------
+test('migrate does not glue an appended Relations block onto the note\'s last prose line', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/people/ada-lovelace.md', '# Ada Lovelace\n\nNotes.\n');
+  const rel = '.joserah/desk/inbox/scratch.md';
+  write(dir, rel, '# Scratch\n\nSpoke to Ada Lovelace today.');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const text = fs.readFileSync(path.join(dir, rel), 'utf8');
+  assert.match(text, /Spoke to Ada Lovelace today\.\n\n## Relations\n/,
+    'the owner\'s last line stays a line of its own');
+});

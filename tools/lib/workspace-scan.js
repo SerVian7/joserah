@@ -3,9 +3,15 @@
  * Enumerate the markdown files a migration may touch in one workspace.
  *
  * Three kinds of exclusion, and they are different in kind:
- *  - IMMUTABILITY: raw/ is source material the AI never writes; directives.md
- *    is the workspace's own standing rules and survives every plugin update;
- *    keys/ is secret.
+ *  - IMMUTABILITY: raw/ is source material the AI never writes; user/ is the
+ *    drop folder the install skill tells owners to leave a CV or a bio in, so
+ *    it is source material of exactly the same kind; directives.md is the
+ *    workspace's own standing rules and survives every plugin update; keys/
+ *    is secret. feedback/ holds notes that are published verbatim as public
+ *    GitHub issues, and its filenames are the one string the identifier scan
+ *    never reads — a migration that titled such a note from its slug, or
+ *    appended `- mentions [[Some Entity]]` to it, would send the owner's data
+ *    to a public issue tracker under a heading promising nothing was found.
  *  - OWNERSHIP: projects/ and docker-stack/ belong to other repos, and a
  *    nested .joserah/config.json is somebody else's workspace, which migrates
  *    on its own update and never at a neighbour's hand. .claude/ is Claude
@@ -32,7 +38,8 @@ const path = require('path');
 const SKIP_DIR_ANY = new Set(['.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']);
 const SKIP_REL = [
   'keys', 'projects', 'docker-stack', '.claude',
-  '.joserah/knowledge/raw', '.joserah/tools', '.joserah/last-time-inject',
+  '.joserah/knowledge/raw', '.joserah/user', '.joserah/feedback',
+  '.joserah/tools', '.joserah/last-time-inject',
 ];
 const SKIP_FILE_REL = new Set([
   '.joserah/directives.md',

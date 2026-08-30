@@ -7,6 +7,11 @@
  * `## Relations` section. It never edits a line of the owner's prose, never
  * enters a nested workspace, and never touches raw/, directives.md or keys/.
  * Running it twice in a row must produce no second-run change.
+ *
+ * A note whose bytes are not plain UTF-8 is refused rather than migrated —
+ * see byteOrderMark below. The contract is "never mangle", not "always
+ * migrate", so the refusal is reported in `skipped` and the file is left
+ * exactly as its owner left it.
  */
 'use strict';
 const fs = require('fs');
@@ -106,6 +111,35 @@ function stampFormatVersion(text, version) {
   return { text: text.slice(0, braceIdx + 1) + insertion + text.slice(braceIdx + 1), changed: true };
 }
 
+// scaffold.js and doctor.js already strip a leading U+FEFF before parsing
+// config.json, for the same underlying reason: on Windows — this plugin's
+// target platform — PowerShell redirection and several editors write an
+// encoding mark that nothing downstream expects. A note is not config.json,
+// though, and stripping is the wrong answer for one:
+//  - a UTF-8 BOM defeats FM_RE's `^---` anchor, so a new frontmatter block
+//    lands in FRONT of the mark; on a note already on v2 that means a second,
+//    duplicate block, demoting the owner's real one to body prose — and the
+//    next run then reports `changed: 0`, so the damage is stable and
+//    invisible to the idempotence guarantee this tool is judged by;
+//  - a UTF-16 note (PowerShell 5.1's default for `>` redirection) decoded as
+//    UTF-8 becomes replacement characters, and writing that back destroys
+//    every character above U+007F — every Turkish letter in the file —
+//    with no way back.
+// Re-encoding somebody's note is a rewrite, which this tool does not do. So
+// the mark is detected on the raw bytes and the file is left alone.
+const BYTE_ORDER_MARKS = [
+  { bytes: [0xEF, 0xBB, 0xBF], reason: 'UTF-8 BOM' },
+  { bytes: [0xFF, 0xFE], reason: 'UTF-16LE BOM' },
+  { bytes: [0xFE, 0xFF], reason: 'UTF-16BE BOM' },
+];
+
+function byteOrderMark(buf) {
+  for (const m of BYTE_ORDER_MARKS) {
+    if (buf.length >= m.bytes.length && m.bytes.every((b, i) => buf[i] === b)) return m.reason;
+  }
+  return null;
+}
+
 // Entities are the graph's nodes: one file per person or organisation. Their
 // titles are what other notes mention in prose.
 const ENTITY_PREFIXES = ['.joserah/knowledge/people/', '.joserah/knowledge/wiki/entities/'];
@@ -138,9 +172,20 @@ function mentionedEntities(text, index, selfTitle) {
 const { files, boundaries } = scanWorkspace(root);
 let changed = 0;
 
-const entityIndex = buildEntityIndex(root, files);
-
+// Partitioned before anything reads a note as text, so a skipped file is also
+// kept out of the entity index — a title read out of mis-decoded bytes would
+// otherwise put a wrong entity name into every other note in the workspace.
+const skipped = [];
+const migratable = [];
 for (const rel of files) {
+  const reason = byteOrderMark(fs.readFileSync(path.join(root, rel)));
+  if (reason) skipped.push({ file: rel, reason });
+  else migratable.push(rel);
+}
+
+const entityIndex = buildEntityIndex(root, migratable);
+
+for (const rel of migratable) {
   const abs = path.join(root, rel);
   const original = fs.readFileSync(abs, 'utf8');
   const title = titleFor(rel, original);
@@ -157,6 +202,11 @@ for (const rel of files) {
     // otherwise a CRLF note ends up with an LF-joined block glued onto CRLF
     // prose. detectEol reads it off the original bytes, before frontmatter
     // (which reuses the same eol) is spliced in.
+    // A note that ends without a final newline would otherwise get its last
+    // prose line and the `## Relations` heading run together on one line —
+    // the one remaining case where this tool visibly altered a line the owner
+    // wrote, rather than only adding after it.
+    if (!/\n$/.test(text)) text += detectEol(original);
     text += renderRelations(
       missing.map((e) => ({ type: 'mentions', target: e, context: null })),
       detectEol(original)
@@ -219,4 +269,7 @@ if (!fs.existsSync(agentPath)) {
   }
 }
 
-console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created }));
+// `skipped` sits beside changed/removed/created so a --dry-run tells the
+// owner what this tool refused to touch and why, rather than leaving the
+// refusal silent and indistinguishable from "nothing needed doing".
+console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created, skipped }));
