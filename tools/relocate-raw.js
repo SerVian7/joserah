@@ -33,7 +33,11 @@ if (!fs.existsSync(oldRaw)) {
 // scaffold.js (Tasks 1-3) already creates raw/README.md at the root of every
 // new workspace, so newRaw existing with exactly that plugin-owned template
 // file is the expected steady state going into a migration, not a conflict.
-// Only owner content there (anything else) is a genuine collision.
+// Only owner content there (anything else) is a genuine collision. This
+// guard is deliberately never loosened into a "resume" mode: a raw/ holding
+// real content after a prior partial move looks identical, on disk, to a
+// raw/ holding someone else's real content, and this tool must never guess
+// which one it is looking at.
 if (fs.existsSync(newRaw) && fs.readdirSync(newRaw).some((e) => e !== 'README.md')) {
   console.error('relocate-raw: raw/ already exists at the root and is not empty — resolve by hand first.');
   process.exit(1);
@@ -71,25 +75,38 @@ function sameContent(a, b) {
 }
 
 if (!dryRun) {
-  // The two mutating stages below (rewriting notes, then moving the tree)
-  // are each real disk I/O that can fail partway (disk full, a locked or
-  // read-only note, a permission error). Neither stage is transactional
-  // with the other, so a failure is caught here and reported with exactly
-  // which stage it happened in and how much of it completed, rather than
-  // surfacing as a raw stack trace and leaving the operator to work out by
-  // hand whether the notes, the directory, both, or neither were touched.
+  // Three mutating stages, deliberately ordered so that a failure at each
+  // one is either fully recoverable by re-running, or — where it cannot be
+  // — says so plainly instead of promising a re-run the tool will refuse.
   //
-  // Note edits are written before the move (not after): the rewrite target
-  // paths are computed above from oldRaw/newRaw as strings, independent of
-  // which one currently exists on disk, and writing them first means a
-  // failure during the move leaves every citing note already correct and
-  // only the directory partially relocated — re-running the tool finishes
-  // the move (the per-entry loop below only touches what is still under
-  // oldRaw) without re-touching notes that already have their new link.
-  let stage = 'writing-notes';
+  //  1. updating-gitignore — writing the raw/ exclusion is harmless and
+  //     idempotent whether or not raw/ exists yet, so it goes first: if it
+  //     fails, nothing else has happened, and "fix the issue and re-run" is
+  //     simply true.
+  //  2. writing-notes — pure path-string arithmetic against oldRaw/newRaw
+  //     as strings (see above), independent of which one currently exists
+  //     on disk. If this fails partway, the directory hasn't moved at all
+  //     yet, so re-running is safe: notes already rewritten no longer match
+  //     the oldRaw-prefix check and are left untouched the second time.
+  //  3. moving-raw — this is the one stage a re-run genuinely cannot
+  //     recover: once any entry has landed in newRaw, the guard above
+  //     refuses every subsequent run (by design — it cannot tell a partial
+  //     move from someone else's real content). A failure here is reported
+  //     with exactly what moved, what didn't, and that the fix is a manual
+  //     move, not another run of this tool.
+  let stage = 'updating-gitignore';
   let notesWritten = 0;
   let preservedReadme = null;
+  const movedEntries = [];
   try {
+    const giPath = path.join(root, '.gitignore');
+    const gi = fs.existsSync(giPath) ? fs.readFileSync(giPath, 'utf8') : '';
+    if (!/^raw\/$/m.test(gi)) {
+      fs.writeFileSync(giPath, gi.replace(/\s*$/, '\n') +
+        '\n# Source material: originals the owner already holds elsewhere. Never in a repository backup.\nraw/\n');
+    }
+
+    stage = 'writing-notes';
     for (const [abs, next] of edits) {
       fs.writeFileSync(abs, next);
       notesWritten++;
@@ -118,20 +135,13 @@ if (!dryRun) {
           fs.renameSync(from, altTo);
           preservedReadme = path.relative(root, altTo).split(path.sep).join('/');
         }
+        movedEntries.push(entry);
         continue;
       }
       fs.renameSync(from, to);
+      movedEntries.push(entry);
     }
     fs.rmdirSync(oldRaw);
-
-    stage = 'updating-gitignore';
-    // .gitignore: ensure the root exclusion exists (idempotent).
-    const giPath = path.join(root, '.gitignore');
-    const gi = fs.existsSync(giPath) ? fs.readFileSync(giPath, 'utf8') : '';
-    if (!/^raw\/$/m.test(gi)) {
-      fs.writeFileSync(giPath, gi.replace(/\s*$/, '\n') +
-        '\n# Source material: originals the owner already holds elsewhere. Never in a repository backup.\nraw/\n');
-    }
   } catch (err) {
     console.error(JSON.stringify({
       error: true,
@@ -140,17 +150,29 @@ if (!dryRun) {
       notesWritten,
       notesTotal: edits.length,
     }));
-    if (stage === 'writing-notes') {
+    if (stage === 'updating-gitignore') {
+      console.error(
+        'relocate-raw: failed while updating .gitignore — nothing else was touched. ' +
+        'Fix the underlying issue and re-run.'
+      );
+    } else if (stage === 'writing-notes') {
       console.error(
         `relocate-raw: failed while rewriting note links (${notesWritten}/${edits.length} written) — ` +
         'the raw/ move was not started. Fix the underlying issue and re-run; notes already rewritten ' +
         'are left alone on the next run.'
       );
     } else {
+      let remaining = [];
+      try { remaining = fs.readdirSync(oldRaw); } catch (e2) { /* oldRaw itself is now unreadable or gone */ }
       console.error(
-        'relocate-raw: notes were rewritten to point at the new raw/ location, but the move of ' +
-        `raw/ itself did not finish (stage: ${stage}). Fix the underlying issue and re-run relocate-raw ` +
-        'to complete the move — do not hand-edit the notes.'
+        'relocate-raw: the citing notes have already been rewritten to point at the new location, but ' +
+        'moving raw/ itself failed partway.\n' +
+        `  old (source):      ${oldRaw}\n` +
+        `  new (destination): ${newRaw}\n` +
+        `  already moved:     ${movedEntries.length ? movedEntries.join(', ') : '(none)'}\n` +
+        `  still under old:   ${remaining.length ? remaining.join(', ') : '(none)'}\n` +
+        'Re-running relocate-raw will be refused by design (the destination raw/ is no longer empty) — ' +
+        'move the remaining entries into the destination by hand, then remove the old directory.'
       );
     }
     process.exit(1);
