@@ -170,3 +170,100 @@ test('R8: scan excludes .claude/ so agent and command definitions are not treate
   const { files } = scanWorkspace(dir);
   assert.ok(!files.some((f) => f.startsWith('.claude/')), '.claude/ excluded from scan');
 });
+
+test('config.json: formatVersion is stamped with a targeted edit, not a re-serialise', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  // Deliberately awkward, hand-written formatting: an inline array where
+  // scaffold would have wrapped it onto its own lines, 4-space indentation
+  // where scaffold uses 2, and no formatVersion key at all yet. None of that
+  // is migrate's to fix.
+  const awkward =
+    '{\n' +
+    '    "workspace": "w",\n' +
+    '    "hosts": ["../akkaya"],\n' +
+    '    "kind": "home"\n' +
+    '}\n';
+  fs.writeFileSync(cfgPath, awkward, 'utf8');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const after = fs.readFileSync(cfgPath, 'utf8');
+  assert.strictEqual(
+    after,
+    '{\n' +
+    '    "formatVersion": 2,\n' +
+    '    "workspace": "w",\n' +
+    '    "hosts": ["../akkaya"],\n' +
+    '    "kind": "home"\n' +
+    '}\n',
+    'byte-identical apart from the single inserted formatVersion line'
+  );
+});
+
+test('config.json: already at the current formatVersion is not written at all', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const before = fs.readFileSync(cfgPath, 'utf8'); // scaffold already stamps formatVersion: 2
+  const beforeMtime = fs.statSync(cfgPath).mtimeMs;
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const after = fs.readFileSync(cfgPath, 'utf8');
+  assert.strictEqual(after, before, 'not a single byte changed');
+  assert.strictEqual(fs.statSync(cfgPath).mtimeMs, beforeMtime, 'file was never opened for writing');
+});
+
+test('config.json: CRLF file keeps CRLF after formatVersion is inserted', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const crlf = '{\r\n  "workspace": "w",\r\n  "kind": "home"\r\n}\r\n';
+  fs.writeFileSync(cfgPath, crlf, 'utf8');
+  runTool('migrate.js', [dir]);
+  const after = fs.readFileSync(cfgPath, 'utf8');
+  assert.strictEqual(
+    after,
+    '{\r\n  "formatVersion": 2,\r\n  "workspace": "w",\r\n  "kind": "home"\r\n}\r\n'
+  );
+  assert.doesNotMatch(after, /[^\r]\n|^\n/, 'no lone LF anywhere in the file');
+});
+
+test('config.json: no trailing newline is preserved as no trailing newline', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const noTrailing = '{\n  "workspace": "w",\n  "kind": "home"\n}';
+  fs.writeFileSync(cfgPath, noTrailing, 'utf8');
+  runTool('migrate.js', [dir]);
+  const after = fs.readFileSync(cfgPath, 'utf8');
+  assert.strictEqual(after, '{\n  "formatVersion": 2,\n  "workspace": "w",\n  "kind": "home"\n}');
+});
+
+test('config.json: a second run over an already-stamped awkward config is byte-identical', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const awkward = '{\n    "workspace": "w",\n    "hosts": ["../akkaya"]\n}\n';
+  fs.writeFileSync(cfgPath, awkward, 'utf8');
+  runTool('migrate.js', [dir]);
+  const after1 = fs.readFileSync(cfgPath, 'utf8');
+  const after1Mtime = fs.statSync(cfgPath).mtimeMs;
+  runTool('migrate.js', [dir]);
+  assert.strictEqual(fs.readFileSync(cfgPath, 'utf8'), after1, 'second run made no further change');
+  assert.strictEqual(fs.statSync(cfgPath).mtimeMs, after1Mtime, 'second run did not even open the file for writing');
+});
+
+test('config.json: --dry-run never writes even when formatVersion is stale', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const stale = '{\n  "workspace": "w",\n  "formatVersion": 1\n}\n';
+  fs.writeFileSync(cfgPath, stale, 'utf8');
+  runTool('migrate.js', [dir, '--dry-run']);
+  assert.strictEqual(fs.readFileSync(cfgPath, 'utf8'), stale, 'dry run wrote nothing to config.json');
+});
+
+test('config.json: invalid JSON is left completely untouched rather than mangled', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const broken = '{ "workspace": "w", oops }\n';
+  fs.writeFileSync(cfgPath, broken, 'utf8');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(fs.readFileSync(cfgPath, 'utf8'), broken, 'malformed config left byte-for-byte as-is');
+});
