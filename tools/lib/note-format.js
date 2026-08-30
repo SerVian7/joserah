@@ -91,4 +91,50 @@ function ensureFrontmatter(text, defaults) {
   };
 }
 
-module.exports = { parseFrontmatter, ensureFrontmatter };
+const OBS_RE = /^\s*-\s+\[([A-Za-z][A-Za-z0-9_-]*)\]\s+(.+)$/;
+const REL_RE = /^\s*-\s+(?:([A-Za-z][A-Za-z0-9_-]*)\s+)?\[\[([^\]]+)\]\]\s*(?:\(([^)]*)\))?\s*$/;
+const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+
+function splitContext(text) {
+  const m = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(text);
+  return m ? { content: m[1].trim(), context: m[2] } : { content: text.trim(), context: null };
+}
+
+function parseObservations(body) {
+  const out = [];
+  for (const line of body.split(/\r?\n/)) {
+    const m = OBS_RE.exec(line);
+    if (!m) continue;
+    const { content, context } = splitContext(m[2]);
+    const tags = (content.match(/#([A-Za-z0-9_-]+)/g) || []).map((t) => t.slice(1));
+    out.push({ category: m[1], content, tags, context });
+  }
+  return out;
+}
+
+function parseRelations(body) {
+  const out = [];
+  for (const line of body.split(/\r?\n/)) {
+    const m = REL_RE.exec(line);
+    if (!m) continue;
+    out.push({ type: m[1] || 'links_to', target: m[2].trim(), context: m[3] != null ? m[3] : null });
+  }
+  return out;
+}
+
+function extractWikilinks(text) {
+  const seen = [];
+  for (const m of text.matchAll(WIKILINK_RE)) {
+    const t = m[1].trim();
+    if (!seen.includes(t)) seen.push(t);
+  }
+  return seen;
+}
+
+function renderRelations(relations) {
+  const lines = relations.map((r) =>
+    `- ${r.type} [[${r.target}]]${r.context ? ` (${r.context})` : ''}`);
+  return `\n## Relations\n\n${lines.join('\n')}\n`;
+}
+
+module.exports = { parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations, extractWikilinks, renderRelations };

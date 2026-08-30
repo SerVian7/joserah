@@ -79,3 +79,28 @@ test('ensureFrontmatter: leaves an unterminated frontmatter block untouched', ()
   assert.strictEqual(r.changed, false);
   assert.strictEqual(r.text, input);
 });
+
+test('parseObservations: category, tags and context', () => {
+  const obs = nf.parseObservations('- [method] Pour over extracts floral notes #brewing (slow)\n- plain bullet\n');
+  assert.strictEqual(obs.length, 1);
+  assert.strictEqual(obs[0].category, 'method');
+  assert.strictEqual(obs[0].content, 'Pour over extracts floral notes #brewing');
+  assert.deepStrictEqual(obs[0].tags, ['brewing']);
+  assert.strictEqual(obs[0].context, 'slow');
+});
+
+test('parseRelations: typed relation and context', () => {
+  const rel = nf.parseRelations('- works_at [[Zenger Agency]] (since 2019)\n- [[Bare Link]]\n');
+  assert.strictEqual(rel.length, 2);
+  assert.deepStrictEqual(rel[0], { type: 'works_at', target: 'Zenger Agency', context: 'since 2019' });
+  assert.deepStrictEqual(rel[1], { type: 'links_to', target: 'Bare Link', context: null });
+});
+
+test('extractWikilinks: unique and ordered', () => {
+  assert.deepStrictEqual(nf.extractWikilinks('see [[A]] then [[B]] and [[A]] again'), ['A', 'B']);
+});
+
+test('renderRelations: emits a Relations block', () => {
+  const out = nf.renderRelations([{ type: 'mentions', target: 'Spine', context: null }]);
+  assert.strictEqual(out, '\n## Relations\n\n- mentions [[Spine]]\n');
+});
