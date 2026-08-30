@@ -5,9 +5,9 @@ description: Use when someone wants to create a new Joserah knowledge-base works
 
 # Install a Joserah workspace
 
-Create a new workspace where the user picks, get it verified, and only then
-ask who they are. Location and creation first, verification second, identity
-last — a working, checked workspace beats an interrogation.
+Create a new workspace where the user picks, get it verified, and only then record who they are.
+Location and creation first, verification second, identity submission last — a working, checked
+workspace beats an interrogation.
 
 > **Running the plugin's tools.** The commands here use
 > `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
@@ -67,25 +67,46 @@ pick an empty directory, or move the conflicting files aside first. **Never
 add `--force` on your own initiative** — only when the user, having seen the
 list, asks for exactly that.
 
-## 3. Ask about access and identity
+## 3. Ask before creating: language, name, reach, and the assistant's definition
 
-**Ask: whose machine is this?**
+Ask these five in this order, each in the language the user is writing in. Three go straight into
+the next step's command — language, reach, and the assistant's name. The owner's name and the
+keep-up-to-date answer are held for step 7, once the workspace exists and consent has been given.
+The one-or-two-sentence definition is never a flag at all — it goes straight into a file, in step 4.
 
-> "Bu workspace bu bilgisayara tam erişimi olan birinin mi, yoksa yalnız kendi klasörüyle çalışacak misafir bir hafızanın mı?"
+**Ask first: which dialogue language should it use with you?** → `--language LANG`, passed now.
+Ask this before anything else, then use it for everything that follows — in this skill and beyond.
 
-- Owner → `--trust owner` (the default).
-- Guest → `--trust guest`, plus `--host-path <host workspace root>` so the host tree is walled off.
+**Ask for the owner name.** Hold the answer; it is not passed until step 7.
+
+**Ask: may the assistant act on this machine, or only inside this folder?** Ask it in exactly
+those words — about consequence, never about a trust level or a flag name.
+
+> "Bu asistan bilgisayarınızın tamamında hareket edebilsin mi, yoksa yalnızca bu klasörle mi
+> sınırlı kalsın?"
+
+- The whole machine → `--trust owner` (the default).
+- Only inside this folder → `--trust guest`, plus `--host-path <host workspace root>` so the host
+  tree is walled off.
 
 Say plainly, once, when guest is chosen: the deny rules are a guardrail, not a sandbox. If the
 guest must be genuinely unable to reach the rest of the machine, the answer is a separate OS user
 account or a container — offer that rather than implying the rules are airtight.
 
-**Ask: what is the assistant called here?** → `--assistant NAME`. Default: leave empty; do not
-invent a name. This is what the assistant will call itself in this workspace, so it matters:
-without it, it falls back to whatever model is running and the owner gets a stranger.
+Whether this workspace serves one person or a team is **not** asked here, or anywhere in this
+interview: it is data that arrives later, from use, never a proxy for privilege. `--kind` keeps
+its default; nobody is asked to name it.
 
-**Ask: which language should it speak to you?** → `--language LANG`. Already part of the
-identity questions; keep it explicit and ask it of every install, including guest workspaces.
+**Ask the assistant's definition: what should it be called, and — in one or two plain sentences —
+what it is for here?** The name is `--assistant NAME`, passed now; leave it empty rather than
+invent one if they decline. The sentences are not a flag: once the workspace exists (step 4),
+write them, in the owner's own words, below the marker line in `.joserah/agent.md`.
+
+**Ask whether that definition should keep itself up to date.** Offer three answers: **automatic**
+(the assistant proposes amendments to `agent.md` as it learns how it is actually used, and applies
+them), **ask first** (it proposes, the owner decides), or **off**. Hold the answer; it is
+submitted in step 7 as `--identity-mode auto|manual|off`. If they do not answer, pass nothing —
+absent means never asked.
 
 ## 4. Create it
 
@@ -94,11 +115,19 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name
   --trust <owner|guest> --assistant <NAME> --language <LANG>
 ```
 
-If the answer from step 3 was guest, add `--host-path <host workspace root>` to the command so the host tree is walled off.
+If the answer from step 3 was "only inside this folder", add `--host-path <host workspace root>`
+to the command so the host tree is walled off.
 
-This deliberately runs without `--owner` or `--role` — the workspace owner's identity is asked separately
-in step 7. The `--trust`, `--assistant` and `--language` are known from step 3, so pass them now.
-Empty assistant name is correct if the owner declined to answer; do not pass a placeholder guess.
+This deliberately runs without `--owner`, `--role`, `--consent-model`, `--feedback` or
+`--identity-mode` — the owner's name was asked in step 3 but, along with role, consent, feedback
+and the identity-mode answer, is submitted in step 7, once consent has been given. The `--trust`,
+`--assistant` and `--language` known from step 3 are passed now. Empty assistant name is correct
+if the owner declined to answer; do not pass a placeholder guess.
+
+If the owner gave the one-or-two-sentence definition in step 3, write it now, verbatim, below the
+marker line in `<path>/.joserah/agent.md` (`<!-- joserah:agent-overlay-below -->`) — nothing above
+that line is ever read, and nothing else in the file changes. If they declined, leave the file
+exactly as scaffolded.
 
 ## 5. Verify before moving on
 
@@ -127,42 +156,55 @@ Then ask whether to continue. That is the whole question — three sentences and
 first pass, deliberately short: it is not a privacy policy and must not be presented as legal advice.
 If they ask a real legal question, say you cannot answer it.
 
-Hold on to their answer and the exact model name you gave — you'll pass both into the command in the
-next step. On no: stop here entirely. Do not ask who they are, do not run `/joserah:onboard` or
-`/joserah:import`, and say plainly that nothing was recorded.
+Hold on to their answer and the exact model name you gave — it becomes `--consent-model NAME` in
+step 7's command. On no: stop here entirely. Do not ask who they are, do not offer feedback, do
+not run `/joserah:onboard` or `/joserah:import`, and say plainly that nothing was recorded.
 
-## 7. Now ask who they are
+## 7. Ask who they are, then offer feedback
 
-Only reached if step 6 ended in yes. Two questions, once the workspace itself is proven to work:
-**owner name** and **one line about who they are**. The language was already established in step 3,
-so do not ask again. Ask in whatever language was chosen there.
+Only reached if step 6 ended in yes. Ask one more question, now that the workspace itself is
+proven to work and consent has been given: **one line about who they are** (their role). The
+owner's name and language were already collected in step 3 — do not ask either again.
 
-Offer the alternative to answering out loud: they can instead drop a document
-— a CV, a short bio, an "about me" note — into the drop folder, and let
-Joserah read it from there. Give them the drop folder's absolute path —
-`<path>/.joserah/user/`. Either way works; do not insist on the interview
+Offer the alternative to answering out loud: they can instead drop a document — a CV, a short bio,
+an "about me" note — into the drop folder, and let Joserah read it from there. Give them the drop
+folder's absolute path — `<path>/.joserah/user/`. Either way works; do not insist on the interview
 if they would rather hand over a file.
 
-If they decline the role line, or want to skip identity for now, pass an
-empty string — do not invent one; they can fill it in later via
-`/joserah:onboard`.
+If they decline the role line, or want to skip identity for now, pass an empty string — do not
+invent one; they can fill it in later via `/joserah:onboard`.
+
+**Then offer feedback, once, without pressure:**
+
+Say plainly: Joserah is improved from how it goes wrong in real use. If they turn feedback on, the
+assistant will write short notes about *this software* — what misfired and what would fix it — with
+no names, no companies and no examples from their work, and open them as public issues on the
+project's repository. Say that this needs a GitHub account and the `gh` command already signed in
+on this machine, and that without it nothing is sent and nothing breaks.
+
+Offer three answers and take whichever they give: **automatic** (write and file, then show them
+what was sent), **ask me** (mention it once when something comes up), **off**.
+
+Pass the answer through `--feedback auto|manual|off` and, when they give one, `--github <user>`.
+If they do not answer, pass nothing — an absent block means never asked, and the assistant then
+says nothing about feedback ever again. Pass step 3's keeps-up-to-date answer the same way, as
+`--identity-mode auto|manual|off` — nothing if that one went unanswered either.
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --identity-only --target <path> \
-  --owner <name> --language <LANG> --role <line> --consent-model "<model name>"
+  --owner <name> --language <LANG> --role <line> --consent-model "<model name>" \
+  [--feedback auto|manual|off] [--github <user>] [--identity-mode auto|manual|off]
 ```
 
-Pass the `--language <LANG>` from step 3 as-is. Do not ask the user again. Pass `--consent-model`
-with the exact model name you gave in step 6 — that is what makes the yes in step 6 count; never
-pass this flag on a no, and never pass a guessed or placeholder name.
+Pass the `--owner` from step 3 and the `--language <LANG>` from step 3 as-is — do not ask either
+again. Pass `--consent-model` with the exact model name you gave in step 6 — that is what makes the
+yes in step 6 count; never pass this flag on a no, and never pass a guessed or placeholder name.
 
-This rewrites `AGENTS.md`, `.joserah/personal/profile.md` and
-`.joserah/conventions.md` with the real values, and updates
-`.joserah/config.json`. Run it once, immediately after this step — running it
-again later, after the owner or an assistant has hand-edited any of those
-three files, would overwrite that editing. Re-run
-`node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm
-nothing broke.
+This rewrites `.joserah/personal/profile.md` and `.joserah/conventions.md` with the real values,
+and updates `.joserah/config.json`, including the feedback and identity-mode blocks when they were
+answered. Run it once, immediately after this step — running it again later, after the owner or an
+assistant has hand-edited any of those files, would overwrite that editing. Re-run
+`node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm nothing broke.
 
 ## 8. Hand off
 

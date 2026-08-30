@@ -543,3 +543,38 @@ test('a second --report on an already-reported note is refused, not a silent sec
   assert.strictEqual(fs.readFileSync(p, 'utf8'), afterFirst,
     'the recorded URL from the first report is untouched by the refused second attempt');
 });
+
+// Task 20: the skill that turns config.json's feedback.mode into behaviour,
+// and the install skill's questions in their agreed order.
+
+test('the feedback skill exists and states the three modes', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'feedback', 'SKILL.md'), 'utf8');
+  assert.match(text, /^---\nname: feedback\n/);
+  for (const m of ['auto', 'manual', 'off']) assert.ok(text.includes(m), 'documents ' + m);
+});
+
+test('the feedback skill names no one and ships no real example', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'feedback', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(text, /Sevgi|Serkan|Akkaya|Zenger/i, 'no real people or workspaces');
+});
+
+// AMENDED 2026-08-30 (task-20-brief.md): "one person or an organisation" is
+// not an install question — a company assistant can be fully encapsulated
+// and a personal one can be handed the whole machine, so who the workspace
+// serves is not a proxy for privilege and is never asked. Reach and the
+// assistant's definition take its place in the order this test checks;
+// written against the strings the amended skill text actually contains.
+test('install asks its questions in the agreed order', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'install', 'SKILL.md'), 'utf8');
+  const at = (s) => {
+    const i = text.indexOf(s);
+    assert.notStrictEqual(i, -1, 'missing: ' + s);
+    return i;
+  };
+  assert.ok(at('dialogue language') < at('owner name'), 'language before name');
+  assert.ok(at('owner name') < at('only inside this folder'), 'name before reach');
+  assert.ok(at('only inside this folder') < at('what it is for here'),
+    'reach before the assistant\'s definition');
+  assert.ok(at('what it is for here') < at('--consent-model'), 'definition before consent');
+  assert.ok(at('--consent-model') < at('--feedback'), 'consent before the feedback question');
+});
