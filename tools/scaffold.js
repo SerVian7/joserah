@@ -3,8 +3,29 @@
  * Create a Joserah workspace from templates/.
  * Usage: node scaffold.js --target DIR --workspace NAME
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
+ *                         [--trust owner|guest] [--kind home|hosted|shared] [--assistant NAME]
+ *                         [--host-path DIR] [--consent-model NAME]
+ *                         [--feedback auto|manual|off] [--github USER]
+ *                         [--identity-mode auto|manual|off]
  *        node scaffold.js --settings-only --target DIR [--force]
- *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG] [--role LINE]
+ *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
+ *                         [--role LINE] [--consent-model NAME]
+ *                         [--feedback auto|manual|off] [--github USER]
+ *                         [--identity-mode auto|manual|off]
+ *
+ * `--feedback`/`--identity-mode` record whether the owner has been asked
+ * about self-improvement feedback notes and about .joserah/agent.md keeping
+ * itself current — same non-destructive rule as `--consent-model`: both are
+ * accepted on both entry points, and omitting either flag on a later
+ * --identity-only call leaves an existing block untouched rather than
+ * clearing it. They differ on which entry point the install flow actually
+ * uses, because the two questions sit at different points in the interview:
+ * feedback is asked after consent, so the create call always runs first and
+ * --identity-only is the only path that ever carries it for real; the
+ * self-update question is asked before creation, alongside --trust and
+ * --assistant, so the install flow passes --identity-mode on the main
+ * create call instead — never held across the consent question, where a
+ * "no" would otherwise drop an answer the owner already gave.
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
@@ -42,12 +63,25 @@ const args = parseArgs(process.argv.slice(2));
 // tools/lib/permission-deny.js is the single source of truth for the set;
 // `--settings-only` exists so a restore of an older backup can write exactly
 // these rules again rather than an agent inventing a plausible-looking set.
-const { PERMISSION_DENY } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
+const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
+
+// `--feedback` and `--identity-mode` share one three-value vocabulary.
+// Defined once, up here, so both the main create path and --identity-only
+// (below) can validate before either writes a single byte — an unknown value
+// must be refused, never silently coerced or guessed.
+const THREE_MODES = ['auto', 'manual', 'off'];
+function validateThreeMode(flag, value) {
+  if (value !== undefined && !THREE_MODES.includes(value)) {
+    console.error(`scaffold: --${flag} must be "auto", "manual" or "off" (got ${value})`);
+    process.exit(1);
+  }
+}
 
 // Permission rules are the workspace's guard on keys/ — they must exist from
 // the first minute, so scaffold creates .claude/ itself. (Claude Code also
 // creates that directory on its own; the two coexist fine.)
-function writeSettings(dir, force) {
+function writeSettings(dir, force, rules) {
   const claudeDir = path.join(dir, '.claude');
   const file = path.join(claudeDir, 'settings.json');
   if (fs.existsSync(file) && !force) {
@@ -56,7 +90,7 @@ function writeSettings(dir, force) {
     process.exit(1);
   }
   fs.mkdirSync(claudeDir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ permissions: { deny: PERMISSION_DENY } }, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(file, JSON.stringify({ permissions: { deny: rules } }, null, 2) + '\n', 'utf8');
   return file;
 }
 
@@ -83,17 +117,30 @@ if (args.settingsOnly) {
     console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found) — refusing to write settings`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ settings: writeSettings(dir, args.force), rules: PERMISSION_DENY.length }));
+  const cfgForSettings = readJson(path.join(dir, '.joserah', 'config.json'));
+  // A restore reproduces the guest wall from what the workspace recorded at
+  // creation time — see the config.json write below. Without `hosting`
+  // persisted there, this path silently dropped the three host rules and
+  // handed back a workspace with no wall at all.
+  // The fallback here must NOT be a bare 'owner': a restore onto a hosted or
+  // shared workspace whose config.json has lost its `trust` key would then
+  // write the nine-rule owner set — no machine-control rules, no host wall —
+  // which is the exact wide-by-default failure defaultTrustFor exists to close.
+  const rules = denyFor(cfgForSettings.trust || defaultTrustFor(cfgForSettings.kind),
+    { hostPaths: hostPathsFor(cfgForSettings, dir) });
+  console.log(JSON.stringify({ settings: writeSettings(dir, args.force, rules), rules: rules.length }));
   process.exit(0);
 }
 
 // `--identity-only --target DIR [--owner --language --role]`: used by the
 // `install` skill after `doctor` has passed on a workspace created without
 // these three values. Re-renders exactly the files that carry them —
-// AGENTS.md, .joserah/personal/profile.md, .joserah/conventions.md — fresh
-// from templates/, using the workspace name and creation date already on
-// record in config.json. Safe only because nothing else has touched those
-// files yet at this point in the install flow; it is not a general-purpose
+// .joserah/personal/profile.md (owner name, role line) and
+// .joserah/conventions.md (dialogue language) — fresh from templates/, using
+// the --owner/--language/--role values passed on this call. AGENTS.md
+// carries no identity (it reads config.json at runtime instead) so it is
+// never in this list. Safe only because nothing else has touched those files
+// yet at this point in the install flow; it is not a general-purpose
 // re-template command and must not be offered once onboarding has begun.
 if (args.identityOnly) {
   if (!args.target) { console.error('scaffold: --identity-only needs --target DIR'); process.exit(1); }
@@ -103,6 +150,12 @@ if (args.identityOnly) {
     console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found)`);
     process.exit(1);
   }
+  // The install flow's create call runs before the feedback/identity
+  // questions are asked, so this is the only entry point that can ever reach
+  // them for real — validated before the profile.md/conventions.md rewrite
+  // below touches a single file, same as the main path.
+  validateThreeMode('feedback', args.feedback);
+  validateThreeMode('identity-mode', args['identity-mode']);
   const cfg = readJson(cfgPath);
   const owner = args.owner || '';
   const language = args.language || '';
@@ -120,7 +173,6 @@ if (args.identityOnly) {
     return out;
   }
   const rewritten = [
-    'AGENTS.md',
     path.join('.joserah', 'personal', 'profile.md'),
     path.join('.joserah', 'conventions.md'),
   ];
@@ -134,6 +186,22 @@ if (args.identityOnly) {
   }
   cfg.ownerName = owner;
   cfg.dialogueLanguage = language;
+  // The install skill asks consent in the same dialogue turn as identity and
+  // submits both on this one call — see the note at the main config.json
+  // write below. Omitted here means the answer wasn't yes on this call; an
+  // existing consent record from an earlier call is left untouched.
+  if (args['consent-model']) {
+    cfg.consent = { askedOn: localISODate(), model: args['consent-model'], version: 1 };
+  }
+  // Same non-destructive rule as consent above: omitted here means the
+  // question wasn't asked on this call, not "off" — an existing block from an
+  // earlier call is left exactly as it was.
+  if (args.feedback) {
+    cfg.feedback = { mode: args.feedback, github: args.github || null, askedOn: localISODate() };
+  }
+  if (args['identity-mode']) {
+    cfg.identity = { mode: args['identity-mode'], askedOn: localISODate() };
+  }
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
   console.log(JSON.stringify({ updated }));
   process.exit(0);
@@ -151,6 +219,35 @@ for (const req of ['target', 'workspace']) {
 args.owner = args.owner || '';
 args.language = args.language || '';
 args.role = args.role || '';
+args.assistant = args.assistant || '';
+
+// `kind` picks the role supplement (see roleFor in lib/note-format) — never
+// asked as its own question, so it must be rejected up front rather than
+// silently coerced into a role that would then contradict it. Resolved
+// before --trust below, which derives its own default from this value.
+args.kind = args.kind || 'home';
+if (!['home', 'hosted', 'shared'].includes(args.kind)) {
+  console.error(`scaffold: --kind must be "home", "hosted" or "shared" (got ${args.kind})`);
+  process.exit(1);
+}
+
+// Silence must not resolve to the wider permission: an unattended --kind
+// hosted/shared create call with no --trust flag defaults to guest, not
+// owner. See defaultTrustFor in lib/permission-deny.js — the same
+// derivation --settings-only uses, so the two write paths cannot disagree.
+args.trust = args.trust || defaultTrustFor(args.kind);
+if (args.trust !== 'owner' && args.trust !== 'guest') {
+  console.error(`scaffold: --trust must be "owner" or "guest" (got ${args.trust})`);
+  process.exit(1);
+}
+
+// `feedback` and `identity` share one three-value vocabulary — validated here,
+// alongside --trust and --kind, so a bad value is refused before the target
+// root is even resolved, let alone created. Both flags are optional: absent
+// means never asked (see the config.json write below), so only a *given*
+// value is checked against the vocabulary.
+validateThreeMode('feedback', args.feedback);
+validateThreeMode('identity-mode', args['identity-mode']);
 
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
@@ -164,8 +261,15 @@ if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
 // Scaffolding into a directory that already holds the owner's own README.md,
 // CLAUDE.md, .gitignore or .claude/settings.json must not silently destroy
 // them — losing a .gitignore can expose whatever it was hiding.
+// templates/roles/ holds the client and server role supplements. Exactly one
+// is picked by kind and written explicitly as JOSERAH-ROLE.md (see below and
+// in copyTree) — the directory itself is never copied wholesale, so both the
+// collision check and the actual copy skip it by name.
+const COPY_SKIP_DIRS = ['roles'];
+
 function plannedTemplateFiles(from, to, acc) {
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) plannedTemplateFiles(src, dst, acc);
@@ -179,6 +283,7 @@ const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
   path.join(root, '.claude', 'settings.json'),
   path.join(root, '.gitignore'),
   path.join(root, '.joserah', 'tools', 'verify-links.js'),
+  path.join(root, 'JOSERAH-ROLE.md'),
 ]);
 
 const conflicts = PLANNED.filter((p) => fs.existsSync(p))
@@ -194,6 +299,17 @@ if (conflicts.length && !args.force) {
 }
 
 const today = localISODate();
+
+// --host-path is recorded in config.json, not merely compiled into rules and
+// forgotten: doctor.js verifies the deny set against what the workspace says
+// about itself, and `--settings-only` (the backup skill's restore path)
+// rebuilds the set from the same key. While nothing wrote it, deleting all
+// three host rules by hand still passed doctor and a restore quietly removed
+// them. Stored exactly as it was given — a relative path stays relative and
+// readable, and is interpreted against the workspace root by hostPathsFor,
+// which is the only place that resolution happens.
+const hosting = args['host-path'] ? { hostPath: args['host-path'] } : null;
+
 const SUBS = {
   '{{OWNER_NAME}}': args.owner,
   '{{WORKSPACE_NAME}}': args.workspace,
@@ -212,10 +328,19 @@ let filesCreated = 0;
 function copyTree(from, to) {
   fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) copyTree(src, dst);
-    else if (e.name.endsWith('.md')) {
+    // The workspace-root AGENTS.md is plugin-owned and identical everywhere —
+    // identity comes from config.json at runtime, never from this file — so
+    // it is copied verbatim rather than run through substitute(). Nested
+    // AGENTS.md stubs (keys/, projects/) are unrelated files and keep going
+    // through the normal .md path below.
+    else if (dst === path.join(root, 'AGENTS.md')) {
+      fs.copyFileSync(src, dst);
+      filesCreated++;
+    } else if (e.name.endsWith('.md')) {
       fs.writeFileSync(dst, substitute(fs.readFileSync(src, 'utf8')), 'utf8');
       filesCreated++;
     } else {
@@ -227,6 +352,12 @@ function copyTree(from, to) {
 
 copyTree(TEMPLATES, root);
 
+// The role supplement is picked by kind, not copied as part of the tree
+// above — see COPY_SKIP_DIRS. Copied verbatim, like AGENTS.md: it is
+// plugin-owned and carries no tokens to substitute.
+fs.copyFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(args.kind)}.md`),
+  path.join(root, 'JOSERAH-ROLE.md'));
+
 // Journal year dir so the first session has somewhere to land.
 fs.mkdirSync(path.join(root, '.joserah', 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });
 
@@ -235,10 +366,28 @@ fs.mkdirSync(path.join(root, '.joserah'), { recursive: true });
 fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   workspaceName: args.workspace,
   ownerName: args.owner,
+  assistantName: args.assistant,
   dialogueLanguage: args.language,
   created: today,
   createdByPluginVersion: readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
+  formatVersion: FORMAT_VERSION,
+  trust: args.trust,
+  kind: args.kind,
+  ...(hosting ? { hosting } : {}),
   lastBackup: null,
+  // Recorded only when the install skill actually asked and got a yes. Absent
+  // means never asked — never write a consent record nobody gave.
+  ...(args['consent-model'] ? {
+    consent: { askedOn: today, model: args['consent-model'], version: 1 },
+  } : {}),
+  // Recorded only when the install skill actually asked. Absent means never
+  // asked; never write an opt-in nobody gave.
+  ...(args.feedback ? {
+    feedback: { mode: args.feedback, github: args.github || null, askedOn: today },
+  } : {}),
+  ...(args['identity-mode'] ? {
+    identity: { mode: args['identity-mode'], askedOn: today },
+  } : {}),
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in
 // this file. It is deliberately not written here — absent means "use the
@@ -247,7 +396,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
 // that then drift.
 
 // Permission rules (see PERMISSION_DENY above — the one source of truth).
-writeSettings(root, true);
+writeSettings(root, true, denyFor(args.trust, { hostPaths: hostPathsFor({ hosting }, root) }));
 
 // Workspace .gitignore. The project/runtime rule is expressed as a pattern,
 // never an enumerated list, so it holds in anyone's workspace.

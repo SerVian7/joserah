@@ -44,6 +44,11 @@ function* mdFiles(dir, rel) {
 
 // Blank out fenced blocks and inline code so link examples inside backticks
 // are not treated as real links.
+//
+// Deliberately duplicated (also in tools/lib/note-format.js): this file is
+// copied verbatim into every workspace by scaffold.js, and doctor.js compares
+// the workspace's copy to the plugin's byte-for-byte, so it cannot require a
+// sibling library file that would not travel with it.
 function stripCode(text) {
   return text
     .replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '))
@@ -81,8 +86,20 @@ function existsExact(baseDir, target) {
   return true;
 }
 
+// Wikilink targets resolve against note TITLES inside this vault — never
+// against a path, and never outside the workspace. That containment is the
+// point: a hosted workspace's links cannot reach its host.
+const ALL_FILES = [...mdFiles(ROOT, '')];
+const TITLES = new Set();
+for (const f of ALL_FILES) {
+  const text = fs.readFileSync(f, 'utf8');
+  const m = /^#\s+(.+?)\s*$/m.exec(text);
+  TITLES.add((m ? m[1] : path.basename(f, '.md')).toLowerCase());
+}
+const WIKILINK_RE = /\[\[([^\]\n]+)\]\]/g;
+
 const broken = [];
-for (const file of mdFiles(ROOT, '')) {
+for (const file of ALL_FILES) {
   const lines = stripCode(fs.readFileSync(file, 'utf8')).split(/\r?\n/);
   lines.forEach((line, i) => {
     for (const m of line.matchAll(LINK_RE)) {
@@ -97,6 +114,17 @@ for (const file of mdFiles(ROOT, '')) {
       if (!target) continue;
       if (!existsExact(path.dirname(file), target)) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]}`);
+      }
+    }
+    // Case-insensitive on purpose, unlike existsExact above: a path names a
+    // filesystem entry, where case is part of its identity and a mismatch is
+    // a real break on a case-sensitive host; a wikilink names a note's title,
+    // a human-written reference where case carries no meaning and enforcing
+    // it would only manufacture false breaks.
+    for (const m of line.matchAll(WIKILINK_RE)) {
+      const target = m[1].split('|')[0].trim();
+      if (!TITLES.has(target.toLowerCase())) {
+        broken.push(`${path.relative(ROOT, file)}:${i + 1} → [[${target}]] (no note titled "${target}" in this workspace)`);
       }
     }
   });

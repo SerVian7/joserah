@@ -59,6 +59,34 @@ Propose the specific repair for each failure and wait for a yes:
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 
+## Update notice
+
+Run `node "${CLAUDE_PLUGIN_ROOT}/tools/check-update.js" <workspace-root>`. If `behind` is true,
+tell the owner in **one line**, in their language — "Joserah'ın yeni sürümü var, güncelleyeyim
+mi?" — and nothing more. Do not explain plugins, marketplaces or versions unless asked.
+
+On yes: update, then run `migrate.js` immediately so the workspace matches the new version.
+Never ask the owner to close and reopen the terminal, and never require `npx`. If the only
+available path needs either, say plainly that the update has to wait and report it to the
+developer instead.
+
+If `behind` is `null` — the check could not tell — say nothing to the owner about updates and
+carry on with whatever else brought you here; do not report it as a problem, and do not retry.
+
+## Format version
+
+`doctor` reports the workspace's `formatVersion`. If it is behind, run:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace-root> --dry-run
+```
+
+The output is a JSON object with `scanned` (note count), `changed` (notes that gained frontmatter or relations),
+`boundaries` (nested workspaces that were refused — each migrates on its own update), and `removed` (files that
+will be deleted, typically `CLAUDE.md`). Show the owner these counts and lists, and say plainly what will be
+removed. Once they agree, run it again without `--dry-run`. Migration is additive and idempotent: it adds
+frontmatter and a `## Relations` block, and never edits prose.
+
 ## Migrate a pre-0.3.0 workspace
 
 Doctor's `no legacy .joserah/keys directory` check fails on workspaces

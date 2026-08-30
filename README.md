@@ -41,6 +41,7 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | **Capture without commands** | Say "remind me" or "kaydet" mid-sentence and it lands in your inbox, timestamped. |
 | **Context that arrives on its own** | Open tasks and recent decisions are in the session before you type. |
 | **A workspace that explains itself** | Its `AGENTS.md` tells any assistant how to behave in it — routines included. Works with Claude Code today; the format is model-agnostic on purpose. |
+| **A graph, not just files** | Notes carry typed `[[relations]]`, so the knowledge is a graph you can also open in Obsidian — no database, no service. |
 
 ## The six skills
 
@@ -71,7 +72,6 @@ knowledge base.
 ```
 <workspace>/
 ├── AGENTS.md          the router — read this first
-├── CLAUDE.md           one line -> AGENTS.md
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git

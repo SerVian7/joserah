@@ -31,13 +31,34 @@ function ensureDailyStub(today) {
   return p;
 }
 
-function firstNOpenTasks(p, n) {
+// A task is often a wrapped paragraph, not one line — the marker plus its
+// indented continuation lines, ending at the next `- [ ]` or a blank line.
+// Keeping only the marker line handed the briefing half a sentence; one
+// session was told a task concerned "Işılay Gece, Orhan" and nothing
+// further. The cap below is a character budget, not a task count: a line
+// count has no relationship to how much of the briefing one long task
+// consumes, and would either cut a task short again or, for short one-line
+// tasks, stop well before the budget is actually used.
+function firstNOpenTasks(p, maxChars) {
+  const lines = readText(p).split(/\r?\n/);
   const out = [];
-  for (const line of readText(p).split(/\r?\n/)) {
-    if (line.trim().startsWith('- [ ]')) {
-      out.push(line.trim());
-      if (out.length >= n) break;
+  let used = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('- [ ]')) continue;
+    const block = [lines[i].trim()];
+    let j = i + 1;
+    while (j < lines.length && /^\s+\S/.test(lines[j])) {
+      block.push(lines[j].trim());
+      j++;
     }
+    const task = block.join(' ');
+    // At least one task always goes through, even over budget — an empty
+    // briefing is worse than one long task, and this is still whole, never
+    // cut mid-sentence.
+    if (out.length && used + task.length > maxChars) break;
+    out.push(task);
+    used += task.length;
+    i = j - 1;
   }
   return out;
 }
@@ -117,12 +138,71 @@ const cfg = readConfig(ROOT) || {};
 const staleness = backupStalenessLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
+// Context arrives in four layers, and the order is deliberate — it is how the
+// model weighs what it reads:
+//   1. AGENTS.md   the system prompt: the same in every workspace, never varies.
+//   2. this block   what is TRUE of this workspace: who it belongs to, who you
+//                   are in it, what language, what you may touch.
+//   3. agent block  the owner's overlay on the assistant's default character
+//                   (layer 4 below) — empty unless the owner wrote to it.
+//   4. next block   what happens to be true RIGHT NOW: the date, open tasks,
+//                   today's journal — computed per session, true of no other.
+// Identity belongs in layer 2 and is injected, never left to AGENTS.md to be
+// read: a file the model may or may not open cannot override the name it
+// already believes it has. On 2026-08-30 an assistant with
+// `assistantName: "Rıfkı"` on record still introduced itself as Claude.
+const who = [];
+if (cfg.assistantName) {
+  who.push(`**Your name in this workspace is ${cfg.assistantName}.** Introduce yourself as ${cfg.assistantName} — never as the model or tool you happen to be running on.`);
+}
+if (cfg.ownerName) who.push(`The owner of this workspace is **${cfg.ownerName}**.`);
+if (cfg.dialogueLanguage) who.push(`Speak **${cfg.dialogueLanguage}** to them.`);
+if (cfg.ownerName && cfg.assistantName) {
+  who.push(`Open by greeting them by name and giving yours — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
+}
+who.push('They are the owner, **not a developer of this software**: do not volunteer file paths, folder names, repository names, config keys, tool or model names, or version numbers. Few words, concrete data.');
+if (cfg.trust === 'guest') {
+  who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
+}
+// Layer 2 first, then layer 3, then layer 4. What is true of this workspace
+// outranks what is true only of this moment, so it is read first and never
+// buried under a date.
 const parts = [
-  `## Joserah session context — ${today} ${pad(now.getHours())}:${pad(now.getMinutes())} ${weekday(now)}`,
-  `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
+  '## This workspace',
+  who.join('\n'),
 ];
 
-const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 5);
+// Layer 4 — the owner's overlay on the assistant's default character. Shipped
+// empty; injected only when it has real content, so an untouched workspace
+// spends no context on it. Detection is a wording-independent marker, never
+// a comparison against the plugin's own template file: an earlier version of
+// this hook diffed the workspace copy against a template it read from disk
+// at `../templates/.joserah/agent.md` — a missing or unreadable templates/
+// tree made that read return '', every workspace file trivially "started
+// with" the empty string, and the entire untouched essay got injected as if
+// it were the owner's own rules. A future reword of the shipped prose had
+// the same failure mode from the other direction: an old, already-scaffolded
+// workspace would no longer match the new wording and would leak its own
+// stale essay into context. Neither is possible once nothing is compared
+// against anything — only text after the last marker occurrence is ever
+// read, whatever the prose above it says, and there is no runtime read of
+// the plugin tree at all. No marker at all (a hand-made or hand-edited
+// file) means there is no reliable boundary between explanation and rule,
+// so nothing is injected — silence is the safe default for an owner who
+// never asked for any of this, not a guess at which lines are "prose".
+const AGENT_MARKER = '<!-- joserah:agent-overlay-below -->';
+const agentText = readText(path.join(ROOT, '.joserah', 'agent.md'));
+const agentMarkerAt = agentText.lastIndexOf(AGENT_MARKER);
+const agentBody = agentMarkerAt === -1 ? '' : agentText.slice(agentMarkerAt + AGENT_MARKER.length).trim();
+if (agentBody) parts.push('\n## This assistant\n' + agentBody);
+
+parts.push(
+  `\n## Right now (computed for this session)`,
+  `${today} ${pad(now.getHours())}:${pad(now.getMinutes())}, ${weekday(now)}.`,
+  `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
+);
+
+const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 1500);
 if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));
 
 const dailyText = readText(dailyPath);

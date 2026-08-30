@@ -5,7 +5,23 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
-const { PERMISSION_DENY } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
+const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
+
+// Duplicated from hooks/session-start.js (a script, not a module, so it has
+// nothing to require) — the exact byte sequence the session-start hook
+// looks for before it will inject anything from .joserah/agent.md at all.
+const AGENT_OVERLAY_MARKER = '<!-- joserah:agent-overlay-below -->';
+
+// Shared by every check below that byte-compares a plugin-owned file against
+// its canonical copy or template (JOSERAH-ROLE.md, verify-links.js): a
+// workspace with no .gitattributes of its own checks out under whatever the
+// owner's global core.autocrlf says, and Windows with autocrlf=true — the
+// plugin's own target platform — rewrites the checkout to CRLF while the
+// plugin's own copy on disk stays LF. That is a checkout convention, not
+// evidence of drift, so every such comparison normalises line endings first;
+// a genuine content difference still differs after normalising.
+function normalizeEol(s) { return s.replace(/\r\n/g, '\n'); }
 
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
@@ -20,9 +36,29 @@ const cfg = readConfig(root);
 check('workspace marker readable', !!cfg, root);
 check('node version >= 18', Number(process.versions.node.split('.')[0]) >= 18, process.version);
 
-for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
-                 '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md', 'keys/AGENTS.md']) {
-  check(`exists: ${f}`, fs.existsSync(path.join(root, f)));
+// `CLAUDE.md` is deliberately NOT required: a workspace carries `AGENTS.md`
+// only, so it is not tied to one vendor's tool (owner, 2026-08-30: "CLAUDE.md
+// dosyası olmasına gerek yok, sonsuza dek claude ile çalışmayabiliriz").
+const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
+                  '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md',
+                  '.joserah/agent.md'];
+
+// A hosted workspace runs on the host's accounts and the host's `keys/` by
+// design, so it has no `keys/` of its own and must not be told to grow one.
+if (cfg && cfg.kind !== 'hosted') required.push('keys/AGENTS.md');
+
+// A remedy is only printed for a file something can actually install again.
+// migrate.js writes .joserah/agent.md when it is missing (see its R17 block)
+// and is the only tool that will — scaffold.js refuses to run twice on an
+// existing workspace, and forcing it past that refusal overwrites
+// directives.md and learned.md wholesale, which is the owner's own prose.
+const REQUIRED_REMEDY = {
+  '.joserah/agent.md': `missing — run: node tools/migrate.js ${root}`,
+};
+
+for (const f of required) {
+  const present = fs.existsSync(path.join(root, f));
+  check(`exists: ${f}`, present, present ? '' : (REQUIRED_REMEDY[f] || ''));
 }
 
 // `.claude/` is not ours — Claude Code creates it on its own, and it must not
@@ -44,6 +80,48 @@ function versionAtLeast(version, min) {
   }
   return true; // equal counts as "at least"
 }
+// `trust` decides the entire deny set, so it is resolved here — above the
+// settings block below — for two separate reasons.
+//
+// denyFor throws on a value it does not recognise, and that throw used to
+// land inside the settings block's JSON try/catch: a corrupted trust level
+// was reported as "present but not valid JSON", pointing the owner at the
+// wrong file entirely.
+//
+// And a workspace that is somebody else's memory hosted here (`hosted`) or
+// reached by several people (`shared`) must never have a missing `trust`
+// quietly defaulted to `owner`. That default certified the nine-rule owner
+// set — no machine-control rules at all — as the full expected set, on
+// exactly the workspaces the guest wall exists for.
+let trust = null;
+{
+  const recorded = cfg ? cfg.trust : undefined;
+  // Same question defaultTrustFor answers for scaffold.js's write paths —
+  // "which kinds must never have a missing trust silently forgiven?" — but
+  // used here to fail loudly instead of to pick a default: reusing it keeps
+  // the two tools from ever independently drifting on which kinds those are.
+  const needsExplicitTrust = cfg && defaultTrustFor(cfg.kind) === 'guest';
+  if (!cfg) {
+    // An unreadable config is not a "home" workspace with no trust key — it
+    // is a workspace this tool knows nothing about, `kind` included. Saying
+    // anything else here would be a claim the file cannot support.
+    check('trust level', false, 'config.json could not be read or parsed — nothing to check it against');
+  } else if (recorded === 'owner' || recorded === 'guest') {
+    trust = recorded;
+    check('trust level', true, recorded);
+  } else if (recorded === undefined || recorded === null) {
+    if (needsExplicitTrust) {
+      check('trust level', false,
+        `config.json records no "trust" for a "${cfg.kind}" workspace — it must say "owner" or "guest"; without it the deny set cannot be checked at all`);
+    } else {
+      trust = defaultTrustFor(cfg.kind);
+      check('trust level', true, 'not recorded — a "home" workspace is its owner\'s own');
+    }
+  } else {
+    check('trust level', false, `unknown trust level ${JSON.stringify(recorded)} — expected "owner" or "guest"`);
+  }
+}
+
 {
   const settingsPath = path.join(root, '.claude', 'settings.json');
   const createdBy = cfg && cfg.createdByPluginVersion;
@@ -57,15 +135,22 @@ function versionAtLeast(version, min) {
         : `absent — fine, this workspace predates 0.3.0 (created by ${createdBy || 'unknown'}), when .claude/ was not always written`);
   } else {
     let ok = false, detail = 'present but invalid';
-    try {
-      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      const deny = (parsed.permissions && parsed.permissions.deny) || [];
-      const missing = PERMISSION_DENY.filter((r) => !deny.includes(r));
-      ok = missing.length === 0;
-      detail = ok ? 'present with the full deny set'
-                 : `present but missing ${missing.length} deny rule(s): ${missing.join(', ')}`;
-    } catch (err) {
-      detail = `present but not valid JSON: ${err.message}`;
+    if (!trust) {
+      // Nothing to compare against: saying "ok" here would be the exact
+      // false clean report the trust check above exists to prevent.
+      detail = 'present, but which rules belong in it cannot be decided — see the trust level check above';
+    } else {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const deny = (parsed.permissions && parsed.permissions.deny) || [];
+        const expected = denyFor(trust, { hostPaths: hostPathsFor(cfg, root) });
+        const missing = expected.filter((r) => !deny.includes(r));
+        ok = missing.length === 0;
+        detail = ok ? `present with the full ${trust} deny set`
+                   : `present but missing ${missing.length} rule(s) from the ${trust} deny set: ${missing.join(', ')}`;
+      } catch (err) {
+        detail = `present but not valid JSON: ${err.message}`;
+      }
     }
     check('.claude/settings.json (present)', ok, detail);
   }
@@ -83,6 +168,74 @@ function versionAtLeast(version, min) {
     legacy ? 'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section' : '');
 }
 
+// JOSERAH-ROLE.md is copied verbatim from templates/roles/ by kind at
+// scaffold time, never re-rendered from config.json. A mismatch here means
+// the workspace was scaffolded under one role and its `kind` was changed
+// afterwards without re-scaffolding — the same class of drift the
+// verify-links.js check below catches for a different file.
+{
+  const rolePath = path.join(root, 'JOSERAH-ROLE.md');
+  const role = roleFor(cfg && cfg.kind);
+  const templatePath = path.join(__dirname, '..', 'templates', 'roles', `joserah-${role}.md`);
+  let ok = false, detail;
+  if (!fs.existsSync(rolePath)) {
+    // Never scaffold.js: that command cannot run as printed on a workspace
+    // that already exists, and forcing it past its own refusal makes
+    // copyTree overwrite .joserah/directives.md and .joserah/learned.md
+    // wholesale — the owner's standing rules, which the note scan itself
+    // calls immutable. migrate.js installs this file and touches nothing
+    // else, so it is the only safe remedy to hand an agent.
+    detail = `missing — run: node tools/migrate.js ${root}`;
+  } else {
+    // R20: same cause as the verify-links.js check below — a workspace with
+    // no .gitattributes checks this file out as CRLF on Windows with
+    // autocrlf=true while the plugin's template on disk stays LF, so the
+    // comparison runs through the shared normalizeEol helper too. A genuine
+    // role mismatch (kind changed after scaffolding) still differs once
+    // normalised, so this still catches the case the check exists for.
+    ok = normalizeEol(fs.readFileSync(rolePath, 'utf8')) === normalizeEol(fs.readFileSync(templatePath, 'utf8'));
+    detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding? Delete it and run: node tools/migrate.js ${root}`;
+  }
+  check('exists: JOSERAH-ROLE.md', ok, detail);
+}
+
+// R11: the session-start hook injects only the text sitting below this exact
+// marker (see AGENT_OVERLAY_MARKER above) — an owner who hand-edits
+// .joserah/agent.md and loses the marker gets a permanent, silent no-op,
+// while every check above this one still reports the file as present. Non-
+// fatal: a rewritten agent.md is the owner's own call, not a doctor failure,
+// so `ok` here is unconditional — only the detail carries the finding, gated
+// on the same boolean, so a healthy workspace's line reads clean.
+{
+  const agentPath = path.join(root, '.joserah', 'agent.md');
+  if (fs.existsSync(agentPath)) {
+    const hasMarker = fs.readFileSync(agentPath, 'utf8').includes(AGENT_OVERLAY_MARKER);
+    check('agent.md overlay marker present', true,
+      hasMarker ? '' : 'missing — the session-start hook injects only text below this marker, so nothing in this file reaches any session right now');
+  }
+}
+
+// Step 4/Task 19: informational only, like the check above — an unreported
+// feedback note is something to look at, not a broken workspace. Absent
+// .joserah/feedback/ prints nothing at all rather than a "0 notes" line no
+// one asked for.
+{
+  const feedbackDir = path.join(root, '.joserah', 'feedback');
+  if (fs.existsSync(feedbackDir)) {
+    const counts = FEEDBACK_AREAS.map((area) => {
+      const areaDir = path.join(feedbackDir, area);
+      if (!fs.existsSync(areaDir)) return `${area}: 0 unreported`;
+      const unreported = fs.readdirSync(areaDir).filter((f) => {
+        if (!f.endsWith('.md')) return false;
+        const { data } = parseFrontmatter(fs.readFileSync(path.join(areaDir, f), 'utf8'));
+        return !data.reported || data.reported === 'null';
+      }).length;
+      return `${area}: ${unreported} unreported`;
+    });
+    check('feedback notes', true, counts.join(', '));
+  }
+}
+
 // Informational only: a workspace merely created by an older plugin version
 // is not itself unhealthy. The behavioral drift that version could cause is
 // caught by the two checks around this one (legacy keys dir, verify-links.js
@@ -95,6 +248,12 @@ const pluginVersion = JSON.parse(
 check('workspace/plugin version', true,
   `workspace created by ${cfg && cfg.createdByPluginVersion || 'unknown'}, plugin is ${pluginVersion}`);
 
+const fv = cfg && cfg.formatVersion;
+check('format version', fv === FORMAT_VERSION,
+  fv === FORMAT_VERSION
+    ? `workspace is on format v${FORMAT_VERSION}`
+    : `workspace is on format v${fv || 1}, current is v${FORMAT_VERSION} \u2014 run: node tools/migrate.js ${root}`);
+
 // G1/K4-mech: the workspace's own copy of verify-links.js is written once at
 // scaffold time and never updated by anything after that. If it has drifted
 // from the plugin's copy, it can silently stop checking what it claims to —
@@ -104,9 +263,19 @@ check('workspace/plugin version', true,
 {
   const localPath = path.join(root, '.joserah', 'tools', 'verify-links.js');
   const canonical = fs.readFileSync(path.join(__dirname, 'verify-links.js'), 'utf8');
+  // A workspace with no .gitattributes of its own (pre-R18, or restored from
+  // a backup taken before it) checks out under whatever the owner's global
+  // core.autocrlf says. On Windows with autocrlf=true — the plugin's own
+  // target platform — git rewrites the checkout to CRLF while this file's
+  // canonical copy on disk stays LF, so a copy re-taken minutes ago still
+  // differs byte-for-byte from `canonical`, on every such workspace, always.
+  // That is a checkout convention, not evidence of staleness, so the
+  // comparison runs through the shared normalizeEol above (R20) — same
+  // helper, same reason, as the JOSERAH-ROLE.md check; a genuine content
+  // difference still differs after normalising and still fails below.
   let ok = false, detail;
   if (!fs.existsSync(localPath)) detail = 'missing — copy it from the plugin: tools/verify-links.js';
-  else if (fs.readFileSync(localPath, 'utf8') !== canonical) detail = 'stale — differs from the plugin copy; re-copy it';
+  else if (normalizeEol(fs.readFileSync(localPath, 'utf8')) !== normalizeEol(canonical)) detail = 'stale — differs from the plugin copy; re-copy it';
   else { ok = true; detail = 'matches the plugin copy'; }
   check('local verify-links.js current', ok, detail);
 }
