@@ -56,6 +56,35 @@ test('G1: doctor fails when the local verify-links copy has drifted', (t) => {
   assert.match(r.stdout, /verify-links\.js/);
 });
 
+// R18: a workspace without its own .gitattributes checks out under whatever
+// the owner's global core.autocrlf says — on Windows with autocrlf=true (the
+// plugin's own target platform) git rewrites the checked-out copy to CRLF
+// while the plugin's copy on disk stays LF, so a freshly re-copied file
+// still differs byte-for-byte. That is a checkout artifact, not evidence of
+// a stale copy, so it must not fail this check.
+test('R18: doctor does not fail when the local verify-links copy differs only by CRLF line endings', (t) => {
+  const dir = freshWs(t);
+  const localPath = path.join(dir, '.joserah', 'tools', 'verify-links.js');
+  const crlf = fs.readFileSync(localPath, 'utf8').replace(/\n/g, '\r\n');
+  fs.writeFileSync(localPath, crlf, 'utf8');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /ok\s+local verify-links\.js current/);
+});
+
+// A CRLF-normalised file that ALSO carries genuinely different content must
+// still fail — normalising line endings must not blind the check to real
+// drift, only to the checkout convention.
+test('R18: doctor still fails on genuine drift even when the drifted copy is CRLF', (t) => {
+  const dir = freshWs(t);
+  const localPath = path.join(dir, '.joserah', 'tools', 'verify-links.js');
+  const crlfDrifted = fs.readFileSync(localPath, 'utf8').replace(/\n/g, '\r\n') + '\r\n// drifted\r\n';
+  fs.writeFileSync(localPath, crlfDrifted, 'utf8');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /verify-links\.js/);
+});
+
 test('I3: doctor fails when the deny set is a subset', (t) => {
   const dir = freshWs(t);
   const sPath = path.join(dir, '.claude', 'settings.json');

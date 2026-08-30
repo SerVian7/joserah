@@ -47,3 +47,29 @@ test('M15: config.json with a BOM is still readable by identity-only', (t) => {
   const r = runTool('scaffold.js', ['--identity-only', '--target', dir, '--owner', 'O', '--language', 'en']);
   assert.strictEqual(r.status, 0, r.stderr);
 });
+
+// R18: a workspace without its own .gitattributes checks out under whatever
+// the owner's global core.autocrlf says. On Windows with autocrlf=true \u2014
+// the plugin's own target platform \u2014 git rewrites the checked-out copy of
+// .joserah/tools/verify-links.js to CRLF while the plugin's own copy stays
+// LF, so doctor's byte-for-byte drift check fails on a file that was never
+// actually stale. Shipping this file into every scaffolded workspace stops
+// the drift at its source.
+test('R18: scaffold writes a workspace .gitattributes forcing LF', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const ga = fs.readFileSync(path.join(dir, '.gitattributes'), 'utf8');
+  assert.match(ga, /eol=lf/);
+  assert.match(ga, /\*\.js\s+text eol=lf/);
+});
+
+test('R18: scaffold treats an existing workspace .gitattributes as a collision, same as every other file it writes', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '.gitattributes'), 'owner-written rules\n');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.notStrictEqual(r.status, 0, 'refuses rather than silently overwriting');
+  assert.match(r.stderr, /\.gitattributes/);
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.gitattributes'), 'utf8'), 'owner-written rules\n');
+});

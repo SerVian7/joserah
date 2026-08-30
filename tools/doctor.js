@@ -185,9 +185,19 @@ check('format version', fv === FORMAT_VERSION,
 {
   const localPath = path.join(root, '.joserah', 'tools', 'verify-links.js');
   const canonical = fs.readFileSync(path.join(__dirname, 'verify-links.js'), 'utf8');
+  // A workspace with no .gitattributes of its own (pre-R18, or restored from
+  // a backup taken before it) checks out under whatever the owner's global
+  // core.autocrlf says. On Windows with autocrlf=true — the plugin's own
+  // target platform — git rewrites the checkout to CRLF while this file's
+  // canonical copy on disk stays LF, so a copy re-taken minutes ago still
+  // differs byte-for-byte from `canonical`, on every such workspace, always.
+  // That is a checkout convention, not evidence of staleness, so the
+  // comparison is normalised to LF; a genuine content difference still
+  // differs after normalising and still fails below.
+  const normalizeEol = (s) => s.replace(/\r\n/g, '\n');
   let ok = false, detail;
   if (!fs.existsSync(localPath)) detail = 'missing — copy it from the plugin: tools/verify-links.js';
-  else if (fs.readFileSync(localPath, 'utf8') !== canonical) detail = 'stale — differs from the plugin copy; re-copy it';
+  else if (normalizeEol(fs.readFileSync(localPath, 'utf8')) !== normalizeEol(canonical)) detail = 'stale — differs from the plugin copy; re-copy it';
   else { ok = true; detail = 'matches the plugin copy'; }
   check('local verify-links.js current', ok, detail);
 }
