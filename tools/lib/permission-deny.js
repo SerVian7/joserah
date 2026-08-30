@@ -1,4 +1,6 @@
 'use strict';
+const path = require('path');
+
 // The single source of truth for the keys deny rules. scaffold.js writes them;
 // doctor.js verifies them. Deny-by-enumeration cannot make Bash access
 // impossible (absolute paths and unlisted tools bypass string matching) — the
@@ -33,6 +35,17 @@ const GUEST_MACHINE_DENY = [
   'Bash(powershell:*)', 'Bash(pwsh:*)', 'Bash(cmd:*)', 'Bash(wmic:*)',
 ];
 
+// The host path a workspace records may be written relative to its own root —
+// the one hosted workspace in existence records `"hostPath": "../atay"` — and
+// toRulePath below would compile that to `//../atay/**`, a rule that can
+// never match anything. Resolution lives here, in one place, so scaffold.js
+// (which writes the rules) and doctor.js (which verifies them) cannot
+// disagree about what a stored hostPath means.
+function hostPathsFor(cfg, root) {
+  const p = cfg && cfg.hosting && cfg.hosting.hostPath;
+  return p ? [path.resolve(root, p)] : [];
+}
+
 // Claude Code accepts an absolute path rule as `//<drive>/<path>/**`; a
 // Windows `d:/atay` therefore becomes `//d/atay/**`.
 function toRulePath(p) {
@@ -51,4 +64,4 @@ function denyFor(trust, opts = {}) {
   return rules;
 }
 
-module.exports = { PERMISSION_DENY, GUEST_MACHINE_DENY, denyFor };
+module.exports = { PERMISSION_DENY, GUEST_MACHINE_DENY, denyFor, hostPathsFor };

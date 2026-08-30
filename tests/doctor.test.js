@@ -228,3 +228,60 @@ test('doctor reports a workspace still on an older format version', (t) => {
   assert.match(r.stdout, /format version/i);
   assert.match(r.stdout, /migrate/i);
 });
+
+// --- IMPORTANT 6 -----------------------------------------------------------
+// doctor's remedy for a missing JOSERAH-ROLE.md was a scaffold.js command
+// that cannot run as printed on an existing workspace — and forcing it past
+// that refusal makes copyTree overwrite .joserah/directives.md and
+// .joserah/learned.md wholesale, the owner's own standing rules. Migration is
+// the installer for this file; every remedy must say so.
+
+function detailLine(stdout, name) {
+  const line = stdout.split('\n').find((l) => l.includes(name));
+  assert.ok(line, 'no check line named ' + name);
+  return line;
+}
+
+test('IMPORTANT 6: a missing JOSERAH-ROLE.md sends an agent to migrate.js, never scaffold.js', (t) => {
+  const dir = freshWs(t);
+  fs.rmSync(path.join(dir, 'JOSERAH-ROLE.md'));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  const line = detailLine(r.stdout, 'exists: JOSERAH-ROLE.md');
+  assert.match(line, /migrate\.js/);
+  assert.doesNotMatch(line, /scaffold\.js/, 'never a command that overwrites directives.md');
+});
+
+test('IMPORTANT 6: a drifted JOSERAH-ROLE.md names a remedy too', (t) => {
+  const dir = freshWs(t);
+  fs.appendFileSync(path.join(dir, 'JOSERAH-ROLE.md'), '\nhand-edited\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  const line = detailLine(r.stdout, 'exists: JOSERAH-ROLE.md');
+  assert.match(line, /migrate\.js/);
+  assert.doesNotMatch(line, /scaffold\.js/);
+});
+
+test('IMPORTANT 6: a missing .joserah/agent.md carries a remedy at all', (t) => {
+  const dir = freshWs(t);
+  fs.rmSync(path.join(dir, '.joserah', 'agent.md'));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(detailLine(r.stdout, 'exists: .joserah/agent.md'), /migrate\.js/);
+});
+
+// A corrupted trust value made denyFor throw inside the settings block's JSON
+// try, so a trust misconfiguration was reported as "present but not valid
+// JSON" — pointing the owner at the wrong file entirely.
+test('a corrupted trust value is reported as a trust problem, not as invalid JSON', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.trust = 'sandboxed';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /FAIL\s+trust level.*sandboxed/);
+  assert.doesNotMatch(r.stdout, /not valid JSON/,
+    'the settings file parses fine; the trust level is what is broken');
+});

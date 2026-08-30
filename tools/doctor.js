@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
-const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
 
 // Duplicated from hooks/session-start.js (a script, not a module, so it has
@@ -47,8 +47,18 @@ const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.m
 // design, so it has no `keys/` of its own and must not be told to grow one.
 if (cfg && cfg.kind !== 'hosted') required.push('keys/AGENTS.md');
 
+// A remedy is only printed for a file something can actually install again.
+// migrate.js writes .joserah/agent.md when it is missing (see its R17 block)
+// and is the only tool that will — scaffold.js refuses to run twice on an
+// existing workspace, and forcing it past that refusal overwrites
+// directives.md and learned.md wholesale, which is the owner's own prose.
+const REQUIRED_REMEDY = {
+  '.joserah/agent.md': `missing — run: node tools/migrate.js ${root}`,
+};
+
 for (const f of required) {
-  check(`exists: ${f}`, fs.existsSync(path.join(root, f)));
+  const present = fs.existsSync(path.join(root, f));
+  check(`exists: ${f}`, present, present ? '' : (REQUIRED_REMEDY[f] || ''));
 }
 
 // `.claude/` is not ours — Claude Code creates it on its own, and it must not
@@ -70,6 +80,39 @@ function versionAtLeast(version, min) {
   }
   return true; // equal counts as "at least"
 }
+// `trust` decides the entire deny set, so it is resolved here — above the
+// settings block below — for two separate reasons.
+//
+// denyFor throws on a value it does not recognise, and that throw used to
+// land inside the settings block's JSON try/catch: a corrupted trust level
+// was reported as "present but not valid JSON", pointing the owner at the
+// wrong file entirely.
+//
+// And a workspace that is somebody else's memory hosted here (`hosted`) or
+// reached by several people (`shared`) must never have a missing `trust`
+// quietly defaulted to `owner`. That default certified the nine-rule owner
+// set — no machine-control rules at all — as the full expected set, on
+// exactly the workspaces the guest wall exists for.
+let trust = null;
+{
+  const recorded = cfg ? cfg.trust : undefined;
+  const needsExplicitTrust = cfg && (cfg.kind === 'hosted' || cfg.kind === 'shared');
+  if (recorded === 'owner' || recorded === 'guest') {
+    trust = recorded;
+    check('trust level', true, recorded);
+  } else if (recorded === undefined || recorded === null) {
+    if (needsExplicitTrust) {
+      check('trust level', false,
+        `config.json records no "trust" for a "${cfg.kind}" workspace — it must say "owner" or "guest"; without it the deny set cannot be checked at all`);
+    } else {
+      trust = 'owner';
+      check('trust level', true, 'not recorded — a "home" workspace is its owner\'s own');
+    }
+  } else {
+    check('trust level', false, `unknown trust level ${JSON.stringify(recorded)} — expected "owner" or "guest"`);
+  }
+}
+
 {
   const settingsPath = path.join(root, '.claude', 'settings.json');
   const createdBy = cfg && cfg.createdByPluginVersion;
@@ -83,18 +126,22 @@ function versionAtLeast(version, min) {
         : `absent — fine, this workspace predates 0.3.0 (created by ${createdBy || 'unknown'}), when .claude/ was not always written`);
   } else {
     let ok = false, detail = 'present but invalid';
-    try {
-      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      const deny = (parsed.permissions && parsed.permissions.deny) || [];
-      const trust = (cfg && cfg.trust) || 'owner';
-      const hostPath = cfg && cfg.hosting && cfg.hosting.hostPath;
-      const expected = denyFor(trust, { hostPaths: hostPath ? [hostPath] : [] });
-      const missing = expected.filter((r) => !deny.includes(r));
-      ok = missing.length === 0;
-      detail = ok ? `present with the full ${trust} deny set`
-                 : `present but missing ${missing.length} rule(s) from the ${trust} deny set: ${missing.join(', ')}`;
-    } catch (err) {
-      detail = `present but not valid JSON: ${err.message}`;
+    if (!trust) {
+      // Nothing to compare against: saying "ok" here would be the exact
+      // false clean report the trust check above exists to prevent.
+      detail = 'present, but which rules belong in it cannot be decided — see the trust level check above';
+    } else {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const deny = (parsed.permissions && parsed.permissions.deny) || [];
+        const expected = denyFor(trust, { hostPaths: hostPathsFor(cfg, root) });
+        const missing = expected.filter((r) => !deny.includes(r));
+        ok = missing.length === 0;
+        detail = ok ? `present with the full ${trust} deny set`
+                   : `present but missing ${missing.length} rule(s) from the ${trust} deny set: ${missing.join(', ')}`;
+      } catch (err) {
+        detail = `present but not valid JSON: ${err.message}`;
+      }
     }
     check('.claude/settings.json (present)', ok, detail);
   }
@@ -123,7 +170,13 @@ function versionAtLeast(version, min) {
   const templatePath = path.join(__dirname, '..', 'templates', 'roles', `joserah-${role}.md`);
   let ok = false, detail;
   if (!fs.existsSync(rolePath)) {
-    detail = `missing — run: scaffold.js --target ${root} --kind ${(cfg && cfg.kind) || 'home'}`;
+    // Never scaffold.js: that command cannot run as printed on a workspace
+    // that already exists, and forcing it past its own refusal makes
+    // copyTree overwrite .joserah/directives.md and .joserah/learned.md
+    // wholesale — the owner's standing rules, which the note scan itself
+    // calls immutable. migrate.js installs this file and touches nothing
+    // else, so it is the only safe remedy to hand an agent.
+    detail = `missing — run: node tools/migrate.js ${root}`;
   } else {
     // R20: same cause as the verify-links.js check below — a workspace with
     // no .gitattributes checks this file out as CRLF on Windows with
@@ -132,7 +185,7 @@ function versionAtLeast(version, min) {
     // role mismatch (kind changed after scaffolding) still differs once
     // normalised, so this still catches the case the check exists for.
     ok = normalizeEol(fs.readFileSync(rolePath, 'utf8')) === normalizeEol(fs.readFileSync(templatePath, 'utf8'));
-    detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding?`;
+    detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding? Delete it and run: node tools/migrate.js ${root}`;
   }
   check('exists: JOSERAH-ROLE.md', ok, detail);
 }

@@ -63,7 +63,7 @@ const args = parseArgs(process.argv.slice(2));
 // tools/lib/permission-deny.js is the single source of truth for the set;
 // `--settings-only` exists so a restore of an older backup can write exactly
 // these rules again rather than an agent inventing a plausible-looking set.
-const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 
 // `--feedback` and `--identity-mode` share one three-value vocabulary.
@@ -94,14 +94,6 @@ function writeSettings(dir, force, rules) {
   return file;
 }
 
-// A guest workspace is walled off from the host tree it sits beside. The host
-// path comes from the hosting block when there is one, and from --host-path
-// at creation time.
-function hostPathsFrom(cfg) {
-  const p = cfg && cfg.hosting && cfg.hosting.hostPath;
-  return p ? [p] : [];
-}
-
 // Strips a leading UTF-8 BOM before parsing — PowerShell redirection and some
 // Windows editors write one, and JSON.parse rejects it outright otherwise.
 function readJson(p) {
@@ -126,8 +118,12 @@ if (args.settingsOnly) {
     process.exit(1);
   }
   const cfgForSettings = readJson(path.join(dir, '.joserah', 'config.json'));
+  // A restore reproduces the guest wall from what the workspace recorded at
+  // creation time — see the config.json write below. Without `hosting`
+  // persisted there, this path silently dropped the three host rules and
+  // handed back a workspace with no wall at all.
   const rules = denyFor(cfgForSettings.trust || 'owner',
-    { hostPaths: hostPathsFrom(cfgForSettings) });
+    { hostPaths: hostPathsFor(cfgForSettings, dir) });
   console.log(JSON.stringify({ settings: writeSettings(dir, args.force, rules), rules: rules.length }));
   process.exit(0);
 }
@@ -294,6 +290,17 @@ if (conflicts.length && !args.force) {
 }
 
 const today = localISODate();
+
+// --host-path is recorded in config.json, not merely compiled into rules and
+// forgotten: doctor.js verifies the deny set against what the workspace says
+// about itself, and `--settings-only` (the backup skill's restore path)
+// rebuilds the set from the same key. While nothing wrote it, deleting all
+// three host rules by hand still passed doctor and a restore quietly removed
+// them. Stored exactly as it was given — a relative path stays relative and
+// readable, and is interpreted against the workspace root by hostPathsFor,
+// which is the only place that resolution happens.
+const hosting = args['host-path'] ? { hostPath: args['host-path'] } : null;
+
 const SUBS = {
   '{{OWNER_NAME}}': args.owner,
   '{{WORKSPACE_NAME}}': args.workspace,
@@ -357,6 +364,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   formatVersion: FORMAT_VERSION,
   trust: args.trust,
   kind: args.kind,
+  ...(hosting ? { hosting } : {}),
   lastBackup: null,
   // Recorded only when the install skill actually asked and got a yes. Absent
   // means never asked — never write a consent record nobody gave.
@@ -379,7 +387,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
 // that then drift.
 
 // Permission rules (see PERMISSION_DENY above — the one source of truth).
-writeSettings(root, true, denyFor(args.trust, { hostPaths: args['host-path'] ? [args['host-path']] : [] }));
+writeSettings(root, true, denyFor(args.trust, { hostPaths: hostPathsFor({ hosting }, root) }));
 
 // Workspace .gitignore. The project/runtime rule is expressed as a pattern,
 // never an enumerated list, so it holds in anyone's workspace.
