@@ -27,6 +27,10 @@ const GUEST_MACHINE_DENY = [
   'Bash(docker:*)', 'Bash(podman:*)', 'Bash(docker-compose:*)',
   'Bash(npm install -g:*)', 'Bash(pip install:*)', 'Bash(apt:*)',
   'Bash(apt-get:*)', 'Bash(choco:*)', 'Bash(winget:*)',
+  // On Windows, these shells are the general-purpose escape hatch that makes the
+  // individually-named machine-control rules above moot; without them, a guest can
+  // bypass every one via powershell -Command "Stop-Computer" or other shell incantations.
+  'Bash(powershell:*)', 'Bash(pwsh:*)', 'Bash(cmd:*)', 'Bash(wmic:*)',
 ];
 
 // Claude Code accepts an absolute path rule as `//<drive>/<path>/**`; a
