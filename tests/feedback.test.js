@@ -358,6 +358,23 @@ test('scanForIdentifiers does not read a heading and the next paragraph\'s first
     'a freshly rendered, clean note must pass a whole-file scan');
 });
 
+// Fix round 2: narrowing the separator to same-line whitespace only closed
+// the heading+paragraph false positive above, but reopened a real gap —
+// hard-wrapped prose (a pasted email signature, an 80-column terminal copy)
+// splits a real name across exactly one line break with no blank line in
+// between, and that used to scan clean at 5518cae. Both reviewer-probed
+// shapes must still be caught; a genuine paragraph break (a blank line, two
+// line breaks) between two capitalized words must still NOT be — that is
+// exactly the heading/paragraph shape fix round 1 exists to let through.
+test('scanForIdentifiers still catches a name split by exactly one hard line-wrap, but not by a blank line', () => {
+  assert.ok(nf.scanForIdentifiers('Kindest regards,\nSevgi\nAkkaya', []).length,
+    'a signature wrapped onto its own two lines');
+  assert.ok(nf.scanForIdentifiers('...written by Sevgi\nAkkaya during review.', []).length,
+    'a name split by an ordinary hard line-wrap');
+  assert.deepStrictEqual(nf.scanForIdentifiers('Sevgi\n\nAkkaya', []), [],
+    'a blank line between two capitalized words is a paragraph break, not a wrapped name');
+});
+
 // CRITICAL 2 — --root used to be resolved with path.resolve() alone and
 // handed to readConfig, which returns null on any failure; feedback.js then
 // fell back to `|| {}`, silently emptying the forbidden-word vocabulary and
@@ -390,6 +407,26 @@ test('--report exits 1 when config.json\'s "hosts" field is present but not an a
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /hosts/i);
   assert.match(fs.readFileSync(p, 'utf8'), /reported: null/);
+});
+
+// MINOR (fix round 2): this config file's own idiom uses `null` for "not
+// yet set" (`lastBackup: null` is the shipped example) — a future writer of
+// `hosts` following that same convention must not break --report for no
+// reason. `null` is treated the same as absent; only a genuinely
+// wrong-typed value (a string, a number, ...) is still refused.
+test('--report treats "hosts": null the same as absent, not as a wrong-typed refusal', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.hosts = null;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const preload = makeGhShim(path.join(tmpdir(t), 'gh-shim'));
+  const r = runTool('feedback.js', ['--report', p, '--root', dir], {
+    env: ghShimEnv(preload, { stdout: 'https://github.com/SerVian7/joserah/issues/13\n', status: 0 }),
+  });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
 
 // The other side of the same guard: when `hosts` IS a proper array, each

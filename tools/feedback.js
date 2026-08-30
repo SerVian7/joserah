@@ -153,9 +153,14 @@ if (args.report !== undefined) {
 
   // `hosts` is a real, populated field in at least one live workspace (an
   // array of relative paths) — a present-but-wrong-typed value must say
-  // something rather than silently collapsing to an empty vocabulary.
+  // something rather than silently collapsing to an empty vocabulary. `null`
+  // is treated the same as absent, not as wrong-typed: this config file's
+  // own idiom uses `null` for "not yet set" (see `lastBackup`), so a future
+  // writer following that convention must not break --report for no reason.
+  // A string, a number, or anything else that isn't an array is genuinely
+  // the wrong shape and is still refused.
   let hostsEntries;
-  if (cfg.hosts === undefined) {
+  if (cfg.hosts === undefined || cfg.hosts === null) {
     hostsEntries = [];
   } else if (Array.isArray(cfg.hosts)) {
     hostsEntries = cfg.hosts;

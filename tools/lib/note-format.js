@@ -236,16 +236,20 @@ function scanForIdentifiers(text, forbidden) {
   if (/\bhttps?:\/\/\S+/.test(text)
     || /\bwww\.[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\S*/i.test(text)
     || /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S+/i.test(text)) found.push('a link');
-  // The separator between the two words is same-line whitespace only
-  // (`[ \t]+`), never the bare `\s+` a first draft used — `\s` matches `\n`
-  // too, so that version read a section heading and the next paragraph's
-  // opening word as "two adjacent words" the moment anything scans a whole
-  // rendered document rather than one extracted sentence at a time (found
-  // via feedback.js's whole-file re-scan: `## Symptom\n\nThe assistant...`
-  // matched "Symptom" + "The" as a personal name). A real two-word name is
-  // always written on one line; nothing legitimate needs this to cross a
-  // line break.
-  if (new RegExp(NOT_BEFORE + NAME_WORD + '[ \\t]+' + NAME_WORD + NOT_AFTER).test(text)) {
+  // Fix round 2 (Task 19 review): a same-line-only separator (`[ \t]+`)
+  // closed the heading+paragraph false positive (previous comment, kept
+  // below in spirit) but reopened a real gap — a hard-wrapped signature or
+  // an 80-column copy-paste ("Kindest regards,\nSevgi\nAkkaya", "written by
+  // Sevgi\nAkkaya during review.") splits a real name across exactly one
+  // line break with no blank line in between, and that used to scan clean.
+  // NAME_SEP now allows same-line whitespace, OR same-line whitespace plus
+  // exactly one line break plus more same-line whitespace — never two, so a
+  // heading followed by a blank line and then a paragraph
+  // (`## Symptom\n\nThe assistant...`) still fails to match: after the one
+  // required `\n` is consumed, the second NAME_WORD must start immediately,
+  // but a blank line puts another line break there instead of a letter.
+  const NAME_SEP = '(?:[ \\t]+|[ \\t]*\\r?\\n[ \\t]*)';
+  if (new RegExp(NOT_BEFORE + NAME_WORD + NAME_SEP + NAME_WORD + NOT_AFTER).test(text)) {
     found.push('a personal name');
   }
   // Matched per quote family (straight ", curly “...”, straight ', curly
