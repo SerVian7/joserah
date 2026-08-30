@@ -90,13 +90,15 @@ identity questions; keep it explicit and ask it of every install, including gues
 ## 4. Create it
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name> --git
+node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name> --git \
+  --trust <owner|guest> --assistant <NAME> --language <LANG>
 ```
 
-This deliberately runs without `--owner`, `--language` or `--role` — nothing
-about the owner is known yet, and the scaffold does not invent it. Those
-tokens are written as empty for now and filled in by step 5, after doctor has
-passed. Empty is correct; do not pass a placeholder guess.
+If the answer from step 3 was guest, add `--host-path <host workspace root>` to the command so the host tree is walled off.
+
+This deliberately runs without `--owner` or `--role` — the workspace owner's identity is asked separately
+in step 6. The `--trust`, `--assistant` and `--language` are known from step 3, so pass them now.
+Empty assistant name is correct if the owner declined to answer; do not pass a placeholder guess.
 
 ## 5. Verify before moving on
 
@@ -109,9 +111,9 @@ to identity questions on a failing doctor.
 
 ## 6. Now ask who they are
 
-Three questions, once the workspace itself is proven to work: **owner name**,
-**dialogue language**, and **one line about who they are**. Ask in whatever
-language the user is writing to you in.
+Two questions, once the workspace itself is proven to work: **owner name** and
+**one line about who they are**. The language was already established in step 3,
+so do not ask again. Ask in whatever language was chosen there.
 
 Offer the alternative to answering out loud: they can instead drop a document
 — a CV, a short bio, an "about me" note — into the drop folder, and let
@@ -125,8 +127,10 @@ empty string — do not invent one; they can fill it in later via
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --identity-only --target <path> \
-  --owner <name> --language <lang> --role <line>
+  --owner <name> --language <LANG> --role <line>
 ```
+
+Pass the `--language <LANG>` from step 3 as-is. Do not ask the user again.
 
 This rewrites `AGENTS.md`, `.joserah/personal/profile.md` and
 `.joserah/conventions.md` with the real values, and updates
