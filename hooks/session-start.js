@@ -153,15 +153,26 @@ const parts = [
 
 // Layer 4 — the owner's overlay on the assistant's default character. Shipped
 // empty; injected only when it has real content, so an untouched workspace
-// spends no context on it. The shipped explanatory prose is stripped by
-// matching it as a literal block read straight from the plugin's own
-// template (the single source of truth for what "still shipped, still
-// empty" looks like) — never by discarding every line that starts with "#"
-// or ">", which would also swallow a heading or a quoted line the owner adds
-// as a real rule.
+// spends no context on it. Detection is a wording-independent marker, never
+// a comparison against the plugin's own template file: an earlier version of
+// this hook diffed the workspace copy against a template it read from disk
+// at `../templates/.joserah/agent.md` — a missing or unreadable templates/
+// tree made that read return '', every workspace file trivially "started
+// with" the empty string, and the entire untouched essay got injected as if
+// it were the owner's own rules. A future reword of the shipped prose had
+// the same failure mode from the other direction: an old, already-scaffolded
+// workspace would no longer match the new wording and would leak its own
+// stale essay into context. Neither is possible once nothing is compared
+// against anything — only text after the last marker occurrence is ever
+// read, whatever the prose above it says, and there is no runtime read of
+// the plugin tree at all. No marker at all (a hand-made or hand-edited
+// file) means there is no reliable boundary between explanation and rule,
+// so nothing is injected — silence is the safe default for an owner who
+// never asked for any of this, not a guess at which lines are "prose".
+const AGENT_MARKER = '<!-- joserah:agent-overlay-below -->';
 const agentText = readText(path.join(ROOT, '.joserah', 'agent.md'));
-const agentTemplate = readText(path.join(__dirname, '..', 'templates', '.joserah', 'agent.md'));
-const agentBody = (agentText.startsWith(agentTemplate) ? agentText.slice(agentTemplate.length) : agentText).trim();
+const agentMarkerAt = agentText.lastIndexOf(AGENT_MARKER);
+const agentBody = agentMarkerAt === -1 ? '' : agentText.slice(agentMarkerAt + AGENT_MARKER.length).trim();
 if (agentBody) parts.push('\n## This assistant\n' + agentBody);
 
 parts.push(

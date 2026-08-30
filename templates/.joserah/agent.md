@@ -9,3 +9,6 @@ sentences; there is no format to follow.
 
 It is empty on purpose. An empty file means "the default is fine", and the plugin never writes
 here again, so what you add survives every update.
+
+Write below the line below; nothing above it is ever read.
+<!-- joserah:agent-overlay-below -->

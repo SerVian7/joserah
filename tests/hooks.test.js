@@ -118,3 +118,54 @@ test('session-start injects the agent overlay only when it has content', (t) => 
   assert.ok(ctx.indexOf('## This assistant') < ctx.indexOf('## Right now'),
     'agent overlay comes before the computed block');
 });
+
+// Fix round 1 for task 16: the reviewer found that comparing the workspace's
+// agent.md against a template read from `../templates/.joserah/agent.md` at
+// runtime had two opposite failure modes — a missing/unreadable templates/
+// tree makes the read return '', which makes every file trivially "start
+// with" it, silently injecting the whole untouched essay; and a future
+// reword of the shipped prose would make an *old* workspace's copy stop
+// matching, leaking its own stale essay instead. Both are impossible once
+// there is no comparison at all — this guards that the fix actually removed
+// the read rather than just papering over one of the two symptoms.
+test('session-start reads no path outside the workspace to detect the agent overlay', (t) => {
+  const src = fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'session-start.js'), 'utf8');
+  assert.doesNotMatch(src, /__dirname/,
+    'the agent-overlay check must not depend on any path relative to the plugin install — ' +
+    'that read is exactly what let a missing templates/ tree silently inject boilerplate');
+});
+
+test('session-start ignores stale or mismatched boilerplate above the marker', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const agentPath = path.join(dir, '.joserah', 'agent.md');
+  // Deliberately NOT what templates/.joserah/agent.md ships today — simulates
+  // a workspace scaffolded under an older wording that has since been
+  // reworded. If the hook compared against the *current* template text this
+  // would fail to match and the whole paragraph below would leak into
+  // context alongside the owner's real line.
+  fs.writeFileSync(agentPath,
+    '# This assistant (some since-reworded explanation, long gone from the current template)\n\n' +
+    'A paragraph that no longer matches anything the plugin ships today.\n\n' +
+    '<!-- joserah:agent-overlay-below -->\n' +
+    '- Always answer in bullet points.\n');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Always answer in bullet points/);
+  assert.doesNotMatch(ctx, /since-reworded explanation/,
+    'stale boilerplate above the marker must never leak into context, no matter how it reads');
+});
+
+test('session-start injects nothing when the marker is missing', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const agentPath = path.join(dir, '.joserah', 'agent.md');
+  // A hand-made or hand-edited file with no marker at all: there is no
+  // reliable boundary between "explanation" and "rule" left to detect, so
+  // the safe default is silence, not dumping the whole file into context —
+  // this owner never opted into the marker protocol at all.
+  fs.writeFileSync(agentPath, '# Some hand-made file\n\nJust some notes, no marker anywhere.\n');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /## This assistant/);
+});
