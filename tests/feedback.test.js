@@ -571,17 +571,21 @@ test('install asks its questions in the agreed order', () => {
     assert.notStrictEqual(i, -1, 'missing: ' + s);
     return i;
   };
+  // Fix round 2 (controller review of cb16d36): 'only inside this folder'
+  // occurs twice — once in the reach question itself (step 3), once in step
+  // 4's cross-reference back to it — so on its own it landed on the right
+  // spot by luck (step 3 happens to sit before step 4), not by construction.
+  // The longer phrase below is the question's own wording and appears only
+  // once. Every anchor in this test is checked to occur exactly once in
+  // skills/install/SKILL.md, verified with a plain occurrence count per
+  // string (see task-20-report.md), so each `at(...)` can only resolve to
+  // the real question it names, never to a mention of it in passing
+  // elsewhere in the file.
   assert.ok(at('dialogue language') < at('owner name'), 'language before name');
-  assert.ok(at('owner name') < at('only inside this folder'), 'name before reach');
-  assert.ok(at('only inside this folder') < at('what it is for here'),
+  assert.ok(at('owner name') < at('act on this machine, or only inside this folder'),
+    'name before reach');
+  assert.ok(at('act on this machine, or only inside this folder') < at('what it is for here'),
     'reach before the assistant\'s definition');
-  assert.ok(at('what it is for here') < at('--consent-model'), 'definition before consent');
-  // Fix round 1 (controller review of 2e03ce5): '--consent-model' and
-  // '--feedback' both first occur in the SAME sentence in step 4 (the list
-  // of flags that call deliberately omits), so comparing their first
-  // occurrence proved nothing about which QUESTION comes first — swapping
-  // the real consent and feedback questions would not have touched that
-  // sentence at all. Asserted here against strings that occur only at the
-  // questions themselves, the way the other four assertions above already do.
+  assert.ok(at('what it is for here') < at('Ask for consent'), 'definition before consent');
   assert.ok(at('Ask for consent') < at('Then offer feedback'), 'consent before the feedback question');
 });
