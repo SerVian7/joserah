@@ -26,6 +26,7 @@ function normalizeEol(s) { return s.replace(/\r\n/g, '\n'); }
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
 function check(name, ok, detail) { checks.push({ name, ok, detail: detail || '' }); }
+function warn(name, detail) { checks.push({ name, ok: true, warn: true, detail: detail || '' }); }
 
 if (!root) {
   console.log('FAIL  not inside a Joserah workspace (no .joserah/config.json found)');
@@ -166,6 +167,18 @@ let trust = null;
   const legacy = fs.existsSync(path.join(root, '.joserah', 'keys'));
   check('no legacy .joserah/keys directory', !legacy,
     legacy ? 'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section' : '');
+}
+
+// Source material used to live under .joserah/knowledge/raw; tasks 1-4 moved
+// it to raw/ at the workspace root. This is a warning, not a failure: nothing
+// is broken by leftover files here, but they are stray and easy to miss since
+// nothing else in the workspace still reads this location.
+{
+  const legacyRaw = path.join(root, '.joserah', 'knowledge', 'raw');
+  if (fs.existsSync(legacyRaw) && fs.readdirSync(legacyRaw).length) {
+    warn('legacy .joserah/knowledge/raw present',
+      `source material now lives in raw/ at the workspace root — run: node tools/relocate-raw.js ${root}`);
+  }
 }
 
 // JOSERAH-ROLE.md is copied verbatim from templates/roles/ by kind at
@@ -316,10 +329,48 @@ if (process.platform === 'win32') {
       : 'not found — the plugin\'s hooks are declared with shell:"bash" and will NEVER fire; install Git for Windows');
 }
 
+// P3-3 + P0-1: audit every projects/{Owner}/{Project} (or projects/{Owner}
+// with no second level) directory for whether it is actually backed up
+// anywhere. This is the check the backup skill (Task 7) points owners at
+// instead of duplicating: `git -C <dir> remote get-url origin` answers for
+// the nearest ANCESTOR repository when <dir> is not a repository of its own,
+// which once made the backup manifest claim a project was backed up by the
+// workspace's own remote when no copy of that project's work existed
+// anywhere else. `rev-parse --show-toplevel` is the guard: only when it
+// prints <dir> itself is any other git command run there trustworthy.
+function gitIn(dir, argv) {
+  const r = spawnSync('git', ['-C', dir, ...argv], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+const projectsDir = path.join(root, 'projects');
+const gitOk = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
+if (gitOk && fs.existsSync(projectsDir)) {
+  const level1 = fs.readdirSync(projectsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+  for (const owner of level1) {
+    const ownerDir = path.join(projectsDir, owner.name);
+    const entries = fs.readdirSync(ownerDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+    const candidates = entries.length ? entries.map((e) => path.join(ownerDir, e.name)) : [ownerDir];
+    for (const dir of candidates) {
+      const rel = path.relative(root, dir).split(path.sep).join('/');
+      // A directory is a repository of its own ONLY if git names it as its own
+      // toplevel. Anything else means git is answering for an ancestor — the
+      // exact lie the backup manifest once told (P0-1).
+      const top = gitIn(dir, ['rev-parse', '--show-toplevel']);
+      const isOwnRepo = top !== null && path.resolve(top) === path.resolve(dir);
+      if (!isOwnRepo) { warn(`${rel}`, 'no repository of its own — no copy of this work exists anywhere else'); continue; }
+      const remote = gitIn(dir, ['remote', 'get-url', 'origin']);
+      if (!remote) { warn(`${rel}`, 'repository with no remote — history exists only on this machine'); continue; }
+      const unpushed = gitIn(dir, ['log', '--branches', '--not', '--remotes', '--oneline']);
+      if (unpushed) warn(`${rel}`, `${unpushed.split('\n').length} commit(s) not pushed to ${remote}`);
+    }
+  }
+}
+
 let failed = 0;
 for (const c of checks) {
   if (!c.ok) failed++;
-  console.log(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.name}${c.detail ? '  — ' + c.detail : ''}`);
+  const tag = c.warn ? 'warn' : c.ok ? 'ok  ' : 'FAIL';
+  console.log(`${tag}  ${c.name}${c.detail ? '  — ' + c.detail : ''}`);
 }
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

@@ -300,3 +300,38 @@ test('an unparsable config.json is not reported as a home workspace with no trus
   assert.ok(!r.stdout.includes('a "home" workspace is its owner'),
     'never claims a kind it could not read');
 });
+
+test('doctor warns about the legacy knowledge/raw location, exit stays 0', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.mkdirSync(path.join(dir, '.joserah', 'knowledge', 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'raw', 'old.pdf'), 'x');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn {2}.*legacy .*knowledge\/raw/m);
+  assert.match(r.stdout, /relocate-raw/, 'points at the migration tool');
+});
+
+test('doctor warns when a project directory has no repository of its own', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.mkdirSync(path.join(dir, 'projects', 'Own', 'orphan'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'projects', 'Own', 'orphan', 'work.md'), 'unsaved work\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn {2}.*projects\/Own\/orphan.*no repository/m);
+});
+
+test('doctor does not claim a remote for a non-repo subdir inside a repo workspace', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const g = (a) => require('child_process').spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+  if (g(['--version']).status !== 0) return t.skip('git unavailable');
+  g(['init']); g(['remote', 'add', 'origin', 'https://example.invalid/parent.git']);
+  fs.mkdirSync(path.join(dir, 'projects', 'Own', 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'projects', 'Own', 'sub', 'w.md'), 'x\n');
+  const r = runTool('doctor.js', [dir]);
+  // the parent's remote must NOT be reported as the subproject's:
+  assert.ok(!/sub.*parent\.git/.test(r.stdout), 'parent remote never attributed to the subdir');
+  assert.match(r.stdout, /^warn {2}.*projects\/Own\/sub.*no repository/m);
+});
