@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { readConfig } = require('../hooks/lib/workspace');
+const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const { parseFrontmatter, scanForIdentifiers, FEEDBACK_AREAS } = require('./lib/note-format');
 
 // The plugin's OWN repository — feedback notes are about Joserah itself and
@@ -40,13 +40,24 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 
-// A note reached through --list/--report unreported when its `reported`
-// frontmatter key is still the literal string the note format writes at
-// render time (`reported: null`) — the frontmatter reader has no concept of
-// JSON null, only the strings it finds after `key:`.
+// A note is unreported when its `reported` frontmatter key is still the
+// literal string the note format writes at render time (`reported: null`) —
+// the frontmatter reader has no concept of JSON null, only the strings it
+// finds after `key:`. Shared by --list and --report (fix round 1: --report
+// used to skip this check entirely and would happily file a second issue for
+// an already-reported note).
 function isUnreported(data) {
   return !data.reported || data.reported === 'null';
 }
+
+// The exact line carrying the `reported:` key, wherever it sits in the
+// frontmatter block, matched instead of a hardcoded `'reported: null'`
+// literal so a note whose spacing has drifted from the shipped format still
+// gets rewritten rather than silently failing to update. `$` in multiline
+// mode stops right before a bare `\r` too, so replacing only what this
+// matches (never rebuilding the surrounding text) preserves a CRLF note's
+// line endings automatically.
+const REPORTED_LINE_RE = /^reported:.*$/m;
 
 function notesIn(root) {
   const out = [];
@@ -72,8 +83,13 @@ if (args.list !== undefined) {
 }
 
 // The exact bytes between one `## Heading` and the next (or end of file),
-// trimmed. Feedback notes have a fixed, exhaustive set of headings (see
-// renderFeedbackNote) — this is not a general markdown-section parser.
+// trimmed. Used only to build the issue title (the first 60 chars of the
+// Symptom section) — NEVER part of the trust path. Fix round 1: the leak
+// scan used to run over exactly these three extracted sections, which means
+// anything appended to the file outside them (e.g. below the fixed
+// Redaction-check heading) went unscanned yet was still uploaded whole via
+// --body-file. The scan below runs over the raw file text instead; this
+// helper survives only for the cosmetic title.
 function extractSection(body, heading) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp('^## ' + escaped + '\\s*$', 'm');
@@ -102,31 +118,66 @@ if (args.report !== undefined) {
   if (!args.root) badInput('--report needs --root <workspace-root>');
   const file = path.resolve(args.report);
   if (!fs.existsSync(file)) badInput(`no such note file: ${file}`);
-  const root = path.resolve(args.root);
+
+  // Resolved the same way tools/doctor.js finds a workspace — by walking up
+  // from the given path — rather than trusting --root points exactly at
+  // one. Fix round 1: a mistyped or misresolved --root used to fall through
+  // readConfig's `null`-on-failure straight into `|| {}`, silently emptying
+  // the forbidden-word vocabulary (no ownerName, no workspaceName, no
+  // hosts) while the tool went on to report anyway. An unscannable note is
+  // the single most dangerous state this tool can reach, so it is bad input
+  // now, not a quiet downgrade.
+  const root = findWorkspace(path.resolve(args.root));
+  const cfg = root && readConfig(root);
+  if (!cfg) badInput(`--root ${args.root} is not a readable Joserah workspace (no .joserah/config.json found)`);
 
   const raw = fs.readFileSync(file, 'utf8');
   const { data, body } = parseFrontmatter(raw);
   if (!FEEDBACK_AREAS.includes(data.area)) {
     badInput(`${file} has no valid feedback area in its frontmatter`);
   }
+  // Fix round 1: re-reporting an already-reported note used to file a
+  // second public issue and then silently keep the first URL on disk (the
+  // `reported: null` replace was a no-op the second time, so the tool
+  // printed the new URL and exited 0 while the file lied about which one it
+  // actually held). Refused outright, same predicate --list uses.
+  if (!isUnreported(data)) {
+    badInput(`${file} is already reported (${data.reported}) — refusing to file a second issue for it`);
+  }
+  // A note that somehow has no `reported:` line at all (hand-edited, or
+  // frontmatter otherwise damaged) must not let a failed rewrite pass as
+  // done — checked before gh is ever called, not after.
+  if (!REPORTED_LINE_RE.test(raw)) {
+    badInput(`${file} has no "reported:" line to update — refusing to report without a way to record it`);
+  }
+
+  // `hosts` is a real, populated field in at least one live workspace (an
+  // array of relative paths) — a present-but-wrong-typed value must say
+  // something rather than silently collapsing to an empty vocabulary.
+  let hostsEntries;
+  if (cfg.hosts === undefined) {
+    hostsEntries = [];
+  } else if (Array.isArray(cfg.hosts)) {
+    hostsEntries = cfg.hosts;
+  } else {
+    badInput(`config.json's "hosts" field is present but not an array (got ${typeof cfg.hosts}) — refusing to scan with an incomplete vocabulary`);
+  }
+  const forbidden = [cfg.ownerName, cfg.workspaceName, cfg.assistantName, ...hostsEntries];
 
   // Re-scan before sending: this note may have reached disk by some route
   // other than renderFeedbackNote (hand-edited, restored, copied in), and it
-  // must still never leave the machine carrying the owner's data. Only the
-  // three prose sections are scanned — Redaction check is this tool's own
-  // fixed boilerplate, not owner-authored content.
-  const symptom = extractSection(body, 'Symptom');
-  const cause = extractSection(body, 'Suspected cause');
-  const suggestion = extractSection(body, 'Suggestion');
-  const cfg = readConfig(root) || {};
-  const hostsEntries = Array.isArray(cfg.hosts) ? cfg.hosts : [];
-  const forbidden = [cfg.ownerName, cfg.workspaceName, cfg.assistantName, ...hostsEntries];
-  const found = scanForIdentifiers([symptom, cause, suggestion].join('\n'), forbidden);
+  // must still never leave the machine carrying the owner's data. Scanned as
+  // the raw file text — exactly the bytes --body-file below hands to gh — so
+  // "scanned" and "published" are always the same string, frontmatter and
+  // headings included.
+  const found = scanForIdentifiers(raw, forbidden);
   if (found.length) {
     badInput(`refusing to report — needs redaction: found ${found.join(', ')}`);
   }
 
+  const symptom = extractSection(body, 'Symptom');
   const title = `feedback(${data.area}): ${symptom.replace(/\s+/g, ' ').trim().slice(0, 60)}`;
+
   const result = spawnSync('gh',
     ['issue', 'create', '--repo', FEEDBACK_REPO, '--title', title, '--body-file', file, '--label', 'feedback'],
     { encoding: 'utf8' });
@@ -140,7 +191,7 @@ if (args.report !== undefined) {
   if (!urlMatch) giveUp('gh did not report an issue URL');
 
   const url = urlMatch[0];
-  fs.writeFileSync(file, raw.replace('reported: null', 'reported: ' + url), 'utf8');
+  fs.writeFileSync(file, raw.replace(REPORTED_LINE_RE, 'reported: ' + url), 'utf8');
   console.log(url);
   process.exit(0);
 }

@@ -315,3 +315,194 @@ test('the repository it reports to is the plugin repository, not the workspace',
   const src = fs.readFileSync(path.join(PLUGIN_ROOT, 'tools', 'feedback.js'), 'utf8');
   assert.ok(src.includes(FEEDBACK_REPO), 'reports to ' + FEEDBACK_REPO);
 });
+
+// Fix round 1 (controller review of eccc26d).
+//
+// CRITICAL 1 — feedback.js used to scan only the three extracted prose
+// sections while handing `gh` the whole raw file via --body-file: anything
+// added outside those sections (e.g. below the fixed Redaction-check
+// heading) went unscanned yet was still published. Proven directly: append
+// a P.S. line after the note's fixed sections and confirm it is still
+// caught now that the scan runs over the raw file text.
+test('--report scans the WHOLE file, not just the extracted sections', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  fs.appendFileSync(p, '\nP.S. contact Ada Lovelace at ada@example.com\n');
+  const r = runTool('feedback.js', ['--report', p, '--root', dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /redact/i);
+});
+
+// The controller's ruling requires confirming a freshly rendered clean note
+// still passes a whole-file scan (frontmatter, headings and the
+// Redaction-check sentence included) before this could be trusted at all.
+// It did not, the first time: see the scanForIdentifiers regression test
+// below this one, in the same file, for the bug that caused it and the fix.
+test('a freshly rendered, clean note passes a whole-file scan (frontmatter and headings included)', () => {
+  const text = nf.renderFeedbackNote(GOOD, ['Serkan', 'atay', 'joserah']);
+  assert.deepStrictEqual(nf.scanForIdentifiers(text, ['Serkan', 'atay', 'joserah']), []);
+});
+
+// Fix round 1: the personal-name check's word separator was a bare `\s+`,
+// which matches `\n` — so scanning a WHOLE rendered note (as --report now
+// must) always read a section heading and the next section's opening,
+// capitalized, word as "two adjacent words" forming a name:
+// "## Symptom\n\nThe assistant..." matched "Symptom" + "The". That made the
+// whole-file re-scan reject every clean note there is, not just leaky ones.
+// A real two-word name is always written on one line, so the separator is
+// same-line whitespace only now (tools/lib/note-format.js).
+test('scanForIdentifiers does not read a heading and the next paragraph\'s first word as a name', () => {
+  const text = nf.renderFeedbackNote(GOOD, []);
+  assert.deepStrictEqual(nf.scanForIdentifiers(text, []), [],
+    'a freshly rendered, clean note must pass a whole-file scan');
+});
+
+// CRITICAL 2 — --root used to be resolved with path.resolve() alone and
+// handed to readConfig, which returns null on any failure; feedback.js then
+// fell back to `|| {}`, silently emptying the forbidden-word vocabulary and
+// reporting anyway. A wrong --root must be bad input, never a quiet
+// downgrade to "no vocabulary".
+test('--report exits 1 when --root is not a Joserah workspace, instead of reporting with an empty vocabulary', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const notAWorkspace = tmpdir(t);
+  const r = runTool('feedback.js', ['--report', p, '--root', notAWorkspace]);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /workspace/i);
+  assert.match(fs.readFileSync(p, 'utf8'), /reported: null/, 'the note is left alone');
+});
+
+// `hosts` is a real, populated field in at least one live workspace (an
+// array of relative paths) — the `Array.isArray` guard on it is load-bearing,
+// not a no-op, so a present-but-wrong-typed value must say something rather
+// than silently collapsing to an empty list.
+test('--report exits 1 when config.json\'s "hosts" field is present but not an array', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.hosts = 'not-an-array';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const r = runTool('feedback.js', ['--report', p, '--root', dir]);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /hosts/i);
+  assert.match(fs.readFileSync(p, 'utf8'), /reported: null/);
+});
+
+// The other side of the same guard: when `hosts` IS a proper array, each
+// entry is real forbidden vocabulary, not decoration.
+test('--report scans with each "hosts" entry from config.json as forbidden vocabulary', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.hosts = ['projects/acme-corp'];
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8')
+    .replace('## Symptom\n\nThe', '## Symptom\n\nSeen under projects/acme-corp while'));
+  const r = runTool('feedback.js', ['--report', p, '--root', dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /redact/i);
+});
+
+// IMPORTANT — --report never checked whether a note was already reported;
+// run twice, it filed a second public issue and the `reported: null` replace
+// became a no-op, so the file kept the first URL while the tool printed the
+// second and exited 0. Guarded now on the same predicate --list uses.
+//
+// A genuine `gh` is never invoked by any test in this file (hard
+// requirement: no test may create a real issue or touch the network). This
+// one instead resolves a stubbed `gh` — a copy of the current Node binary,
+// named gh.exe so Windows can execute it directly with no shell, with a
+// --require preload (loaded via NODE_OPTIONS) that recognizes the "issue
+// create" invocation by its resolved argv and prints a canned response
+// before real gh-lookup or module-loading logic ever runs. Nothing here
+// spawns a network-capable process or a real `gh`.
+function makeGhShim(shimDir) {
+  fs.mkdirSync(shimDir, { recursive: true });
+  fs.copyFileSync(process.execPath, path.join(shimDir, 'gh.exe'));
+  const preload = path.join(shimDir, 'preload.js');
+  fs.writeFileSync(preload, [
+    "'use strict';",
+    "const path = require('path');",
+    "const base = path.basename(process.argv[1] || '');",
+    "if (base === 'issue' && process.argv.includes('create')) {",
+    "  let cfg = {};",
+    "  try { cfg = JSON.parse(process.env.GH_SHIM_RESULT || '{}'); } catch (e) {}",
+    "  if (cfg.stdout) process.stdout.write(cfg.stdout);",
+    "  if (cfg.stderr) process.stderr.write(cfg.stderr);",
+    "  process.exit(typeof cfg.status === 'number' ? cfg.status : 0);",
+    "}",
+  ].join('\n'));
+  return preload;
+}
+
+// The env this stubbed `gh` needs: PATH so the shim resolves before any real
+// `gh`, NODE_OPTIONS (forward slashes — NODE_OPTIONS strips backslashes on
+// Windows) to preload the interceptor, and the canned result it should hand
+// back as if it were `gh`'s own stdout/stderr/exit status.
+function ghShimEnv(preload, result) {
+  return {
+    PATH: path.dirname(preload) + path.delimiter + process.env.PATH,
+    NODE_OPTIONS: '--require "' + preload.split(path.sep).join('/') + '"',
+    GH_SHIM_RESULT: JSON.stringify(result),
+  };
+}
+
+test('--report succeeds through a stubbed gh: URL extracted from stdout, reported: rewritten, exit 0', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const preload = makeGhShim(path.join(tmpdir(t), 'gh-shim'));
+  const r = runTool('feedback.js', ['--report', p, '--root', dir], {
+    env: ghShimEnv(preload, { stdout: 'https://github.com/SerVian7/joserah/issues/42\n', status: 0 }),
+  });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.strictEqual(r.stdout.trim(), 'https://github.com/SerVian7/joserah/issues/42');
+  assert.match(fs.readFileSync(p, 'utf8'),
+    /^reported: https:\/\/github\.com\/SerVian7\/joserah\/issues\/42$/m);
+});
+
+// Nothing exercised a CRLF note through the rewrite path before this: the
+// `reported:` line is matched (and replaced) with a regex, not a hardcoded
+// literal string, precisely so a note's existing line endings elsewhere are
+// never touched.
+test('--report preserves CRLF line endings through the stubbed-gh success path', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/\n/g, '\r\n'));
+  const preload = makeGhShim(path.join(tmpdir(t), 'gh-shim'));
+  const r = runTool('feedback.js', ['--report', p, '--root', dir], {
+    env: ghShimEnv(preload, { stdout: 'https://github.com/SerVian7/joserah/issues/99\n', status: 0 }),
+  });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  const updated = fs.readFileSync(p, 'utf8');
+  assert.match(updated, /reported: https:\/\/github\.com\/SerVian7\/joserah\/issues\/99\r\n/);
+  assert.strictEqual(/(?<!\r)\n/.test(updated), false, 'no bare LF introduced by the rewrite');
+});
+
+test('a second --report on an already-reported note is refused, not a silent second issue', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const preload = makeGhShim(path.join(tmpdir(t), 'gh-shim'));
+  const first = runTool('feedback.js', ['--report', p, '--root', dir], {
+    env: ghShimEnv(preload, { stdout: 'https://github.com/SerVian7/joserah/issues/7\n', status: 0 }),
+  });
+  assert.strictEqual(first.status, 0, first.stdout + first.stderr);
+  const afterFirst = fs.readFileSync(p, 'utf8');
+
+  // PATH emptied so a second, wrongly-permitted attempt could not possibly
+  // reach a real (or even stubbed) gh — proving the refusal happens before
+  // any second issue could be filed, not merely that the shim wasn't asked.
+  const second = runTool('feedback.js', ['--report', p, '--root', dir], { env: { PATH: '' } });
+  assert.strictEqual(second.status, 1, second.stdout + second.stderr);
+  assert.match(second.stderr, /already reported/i);
+  assert.strictEqual(fs.readFileSync(p, 'utf8'), afterFirst,
+    'the recorded URL from the first report is untouched by the refused second attempt');
+});

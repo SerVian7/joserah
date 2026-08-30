@@ -236,7 +236,16 @@ function scanForIdentifiers(text, forbidden) {
   if (/\bhttps?:\/\/\S+/.test(text)
     || /\bwww\.[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\S*/i.test(text)
     || /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S+/i.test(text)) found.push('a link');
-  if (new RegExp(NOT_BEFORE + NAME_WORD + '\\s+' + NAME_WORD + NOT_AFTER).test(text)) {
+  // The separator between the two words is same-line whitespace only
+  // (`[ \t]+`), never the bare `\s+` a first draft used — `\s` matches `\n`
+  // too, so that version read a section heading and the next paragraph's
+  // opening word as "two adjacent words" the moment anything scans a whole
+  // rendered document rather than one extracted sentence at a time (found
+  // via feedback.js's whole-file re-scan: `## Symptom\n\nThe assistant...`
+  // matched "Symptom" + "The" as a personal name). A real two-word name is
+  // always written on one line; nothing legitimate needs this to cross a
+  // line break.
+  if (new RegExp(NOT_BEFORE + NAME_WORD + '[ \\t]+' + NAME_WORD + NOT_AFTER).test(text)) {
     found.push('a personal name');
   }
   // Matched per quote family (straight ", curly “...”, straight ', curly
