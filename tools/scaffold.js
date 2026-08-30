@@ -4,9 +4,10 @@
  * Usage: node scaffold.js --target DIR --workspace NAME
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
  *                         [--trust owner|guest] [--kind home|hosted|shared] [--assistant NAME]
- *                         [--host-path DIR]
+ *                         [--host-path DIR] [--consent-model NAME]
  *        node scaffold.js --settings-only --target DIR [--force]
- *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG] [--role LINE]
+ *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
+ *                         [--role LINE] [--consent-model NAME]
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
@@ -149,6 +150,13 @@ if (args.identityOnly) {
   }
   cfg.ownerName = owner;
   cfg.dialogueLanguage = language;
+  // The install skill asks consent in the same dialogue turn as identity and
+  // submits both on this one call — see the note at the main config.json
+  // write below. Omitted here means the answer wasn't yes on this call; an
+  // existing consent record from an earlier call is left untouched.
+  if (args['consent-model']) {
+    cfg.consent = { askedOn: localISODate(), model: args['consent-model'], version: 1 };
+  }
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
   console.log(JSON.stringify({ updated }));
   process.exit(0);
@@ -297,6 +305,11 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   trust: args.trust,
   kind: args.kind,
   lastBackup: null,
+  // Recorded only when the install skill actually asked and got a yes. Absent
+  // means never asked — never write a consent record nobody gave.
+  ...(args['consent-model'] ? {
+    consent: { askedOn: today, model: args['consent-model'], version: 1 },
+  } : {}),
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in
 // this file. It is deliberately not written here — absent means "use the

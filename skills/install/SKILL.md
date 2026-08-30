@@ -97,7 +97,7 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name
 If the answer from step 3 was guest, add `--host-path <host workspace root>` to the command so the host tree is walled off.
 
 This deliberately runs without `--owner` or `--role` — the workspace owner's identity is asked separately
-in step 6. The `--trust`, `--assistant` and `--language` are known from step 3, so pass them now.
+in step 7. The `--trust`, `--assistant` and `--language` are known from step 3, so pass them now.
 Empty assistant name is correct if the owner declined to answer; do not pass a placeholder guess.
 
 ## 5. Verify before moving on
@@ -107,12 +107,34 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>
 ```
 
 Every check must print `ok`. If any fails, fix it and re-run — do not move on
-to identity questions on a failing doctor.
+to consent or identity questions on a failing doctor.
 
-## 6. Now ask who they are
+## 6. Ask for consent
 
-Two questions, once the workspace itself is proven to work: **owner name** and
-**one line about who they are**. The language was already established in step 3,
+Ask once, now that the workspace exists but before anything real goes into it — in the language
+chosen in step 3, and say it plainly, not as a document to read:
+
+1. Name the model that is actually running right now, and who provides it. Read this from your own
+   running environment; **do not guess a model name.** If you cannot determine it, say so plainly
+   and ask them to check, rather than naming one.
+2. Say that what they write here is sent to that provider to be processed, which means it leaves
+   this machine and may be handled in another country.
+3. Say that if they put other people's personal information in here — colleagues, clients, family —
+   they are responsible for it, and in some countries doing that without a lawful basis is an
+   offence, not just a policy breach.
+
+Then ask whether to continue. That is the whole question — three sentences and a yes/no. This is a
+first pass, deliberately short: it is not a privacy policy and must not be presented as legal advice.
+If they ask a real legal question, say you cannot answer it.
+
+Hold on to their answer and the exact model name you gave — you'll pass both into the command in the
+next step. On no: stop here entirely. Do not ask who they are, do not run `/joserah:onboard` or
+`/joserah:import`, and say plainly that nothing was recorded.
+
+## 7. Now ask who they are
+
+Only reached if step 6 ended in yes. Two questions, once the workspace itself is proven to work:
+**owner name** and **one line about who they are**. The language was already established in step 3,
 so do not ask again. Ask in whatever language was chosen there.
 
 Offer the alternative to answering out loud: they can instead drop a document
@@ -127,10 +149,12 @@ empty string — do not invent one; they can fill it in later via
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --identity-only --target <path> \
-  --owner <name> --language <LANG> --role <line>
+  --owner <name> --language <LANG> --role <line> --consent-model "<model name>"
 ```
 
-Pass the `--language <LANG>` from step 3 as-is. Do not ask the user again.
+Pass the `--language <LANG>` from step 3 as-is. Do not ask the user again. Pass `--consent-model`
+with the exact model name you gave in step 6 — that is what makes the yes in step 6 count; never
+pass this flag on a no, and never pass a guessed or placeholder name.
 
 This rewrites `AGENTS.md`, `.joserah/personal/profile.md` and
 `.joserah/conventions.md` with the real values, and updates
@@ -140,7 +164,7 @@ three files, would overwrite that editing. Re-run
 `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm
 nothing broke.
 
-## 7. Hand off
+## 8. Hand off
 
 Tell the user, in their language:
 

@@ -96,3 +96,21 @@ test('scaffold rejects an unknown trust level instead of guessing', (t) => {
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stderr, /trust/i);
 });
+
+test('scaffold records consent when the model is named', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js',
+    ['--target', dir, '--workspace', 'w', '--consent-model', 'Claude Opus 5']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.consent.model, 'Claude Opus 5');
+  assert.strictEqual(cfg.consent.version, 1);
+  assert.match(cfg.consent.askedOn, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('scaffold omits the consent block entirely when it was never asked', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual('consent' in cfg, false, 'absent, not a fabricated yes');
+});
