@@ -285,3 +285,18 @@ test('a corrupted trust value is reported as a trust problem, not as invalid JSO
   assert.doesNotMatch(r.stdout, /not valid JSON/,
     'the settings file parses fine; the trust level is what is broken');
 });
+
+// The trust check read `cfg ? cfg.trust : undefined`, so an unparsable
+// config.json — which yields a null cfg, `kind` included — printed
+// `not recorded — a "home" workspace is its owner's own`. The overall exit was
+// still 1, so nothing was certified green, but the line made a claim the file
+// cannot support.
+test('an unparsable config.json is not reported as a home workspace with no trust key', (t) => {
+  const dir = freshWs(t);
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{ not json at all');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(detailLine(r.stdout, 'trust level'), /could not be read or parsed/);
+  assert.ok(!r.stdout.includes('a "home" workspace is its owner'),
+    'never claims a kind it could not read');
+});

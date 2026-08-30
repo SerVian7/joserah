@@ -648,3 +648,41 @@ test('scanForIdentifiers catches numeric identifiers', () => {
   assert.deepStrictEqual(nf.scanForIdentifiers('on 2026-08-30 it ran twice, in v2', []), [],
     'a date and a version number are not identifiers');
 });
+
+// The path check's first anchor ("not preceded by a path character") read a
+// slash CONTINUING a token as the start of an absolute path, so every command
+// the plugin's own skills document — `${CLAUDE_PLUGIN_ROOT}/tools/...`,
+// `<root>/notes`, `$(pwd)/x` — read as a leak. It flagged 33 lines across
+// skills/, including the feedback skill's own --report invocation, and a
+// `prompt` or `structure` note is ABOUT commands and paths: a scan that fires
+// on the subject matter of the note type it guards gets written around.
+test('scanForIdentifiers does not read a variable expansion or a placeholder as a rooted path', () => {
+  // Copied verbatim from skills/feedback/SKILL.md.
+  const documented = 'node "${CLAUDE_PLUGIN_ROOT}/tools/feedback.js" --report <file> --root <root>';
+  assert.deepStrictEqual(nf.scanForIdentifiers(documented, []), [],
+    'the skill\'s own command line must render, not throw');
+  assert.doesNotThrow(() => nf.renderFeedbackNote({
+    area: 'structure', created: '2026-08-30',
+    symptom: 'the documented command was refused when quoted back in a note.',
+    cause: 'running ' + documented + ' is what the skill itself asks for.',
+    suggestion: 'anchor the path check on the start of a token.',
+  }, []));
+  assert.deepStrictEqual(nf.scanForIdentifiers('write it to <path>/.joserah/agent.md', []), [],
+    'a placeholder root is not a rooted path');
+  assert.deepStrictEqual(nf.scanForIdentifiers('run $(pwd)/tools/doctor.js', []), [],
+    'a command substitution is not a rooted path');
+});
+
+// ...and the real leak shapes must all still fire after that loosening.
+test('scanForIdentifiers still catches every rooted path shape after the token-start anchor', () => {
+  for (const t of [
+    'It wrote to D:\\work\\clients\\sevgi-akkaya\\mail.md',
+    'it opened \\\\fileserver\\share\\notes.md',
+    'it read ~/notes/things.md instead',
+    'it read /home/somebody/notes.md instead',
+    'it quoted `~/notes/things.md` back',
+    'it logged (\"D:\\work\\x.md\") verbatim',
+  ]) {
+    assert.ok(nf.scanForIdentifiers(t, []).includes('a file path'), 'missed: ' + t);
+  }
+});

@@ -240,11 +240,24 @@ const SUFFIXABLE_MIN = 3;
 // `tools/lib/note-format.js` or `skills/feedback/SKILL.md` is exactly what
 // structure feedback is for, and the bare-domain link check above is already
 // narrowed for the same reason.
+//
+// A path must also START a token: at the beginning of the text, after
+// whitespace, or just inside up to two opening delimiters someone wrapped a
+// real path in (`("D:\work\x.md")`, `` `~/notes/x.md` ``). The first draft of
+// this check anchored on "not preceded by a path character" instead, which
+// read a slash CONTINUING a token as the start of an absolute path —
+// `${CLAUDE_PLUGIN_ROOT}/tools/doctor.js`, `<root>/notes`, `$(pwd)/x`, which
+// is how the plugin's own skill files write every command they document. It
+// flagged 28 blocks of them, including the feedback skill's own --report
+// invocation. A `prompt` or `structure` note is ABOUT commands and paths, so
+// a scan that fires on the subject matter of the note type it guards is the
+// exact failure the residual-gap list below argues against: it does not get
+// obeyed, it gets written around.
 const PATH_RES = [
-  /(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s"']*/,                    // D:\work\..., d:/atay
-  /\\\\[A-Za-z0-9._-]+\\[^\s"']+/,                             // \\server\share\...
-  /(?<![A-Za-z0-9])~[\\/][^\s"']+/,                            // ~/notes/...
-  /(?<![A-Za-z0-9._/-])\/[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+/,   // /home/somebody/x
+  /(?<!\S)["'`(\[]{0,2}[A-Za-z]:[\\/][^\s"']*/,                 // D:\work\..., d:/atay
+  /(?<!\S)["'`(\[]{0,2}\\\\[A-Za-z0-9._-]+\\[^\s"']+/,          // \\server\share\...
+  /(?<!\S)["'`(\[]{0,2}~[\\/][^\s"']+/,                         // ~/notes/...
+  /(?<!\S)["'`(\[]{0,2}\/[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+/,    // /home/somebody/x
 ];
 
 // The same promise, for numbers. A national id, a phone written in spaced
@@ -279,7 +292,19 @@ const NUMERIC_RES = [
 //    is a genuinely long acronym pair — "GRAPHQL SCHEMA" reads as a name.
 //  - A forbidden word carrying more than three joined suffix letters, or
 //    embedded in a compound, is not matched (see SUFFIX).
+//  - The converse of that allowance: SUFFIXABLE_MIN admits any three-letter
+//    vocabulary word into ordinary English. An ownerName of "Ali Can" flags
+//    "can not" on the bare word and "candy" on the suffix rule. That is the
+//    fail-toward-flag posture working as intended — a false positive costs
+//    one rewrite — but it is a real cost on short given names, and it is
+//    disclosed rather than discovered.
 //  - A repo-relative file path is allowed on purpose (see PATH_RES).
+//  - A rooted path is flagged even when every identifying segment of it is a
+//    placeholder: `~/Documents/<name>` reads the same to this check as
+//    `~/Documents/somebody`. Six lines of the plugin's own documentation trip
+//    it for that reason. Teaching the check to forgive `<...>` segments was
+//    considered and refused — it would forgive `D:\work\<client>\mail.md` too,
+//    which is the leak shape the check exists for.
 function scanForIdentifiers(text, forbidden) {
   const found = [];
   if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(text)) found.push('an address');

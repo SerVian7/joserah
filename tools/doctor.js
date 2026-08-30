@@ -97,7 +97,12 @@ let trust = null;
 {
   const recorded = cfg ? cfg.trust : undefined;
   const needsExplicitTrust = cfg && (cfg.kind === 'hosted' || cfg.kind === 'shared');
-  if (recorded === 'owner' || recorded === 'guest') {
+  if (!cfg) {
+    // An unreadable config is not a "home" workspace with no trust key — it
+    // is a workspace this tool knows nothing about, `kind` included. Saying
+    // anything else here would be a claim the file cannot support.
+    check('trust level', false, 'config.json could not be read or parsed — nothing to check it against');
+  } else if (recorded === 'owner' || recorded === 'guest') {
     trust = recorded;
     check('trust level', true, recorded);
   } else if (recorded === undefined || recorded === null) {
