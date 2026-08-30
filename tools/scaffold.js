@@ -5,9 +5,20 @@
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
  *                         [--trust owner|guest] [--kind home|hosted|shared] [--assistant NAME]
  *                         [--host-path DIR] [--consent-model NAME]
+ *                         [--feedback auto|manual|off] [--github USER]
+ *                         [--identity-mode auto|manual|off]
  *        node scaffold.js --settings-only --target DIR [--force]
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
  *                         [--role LINE] [--consent-model NAME]
+ *                         [--feedback auto|manual|off] [--github USER]
+ *                         [--identity-mode auto|manual|off]
+ *
+ * `--feedback`/`--identity-mode` record whether the owner has been asked
+ * about self-improvement feedback notes and about .joserah/agent.md keeping
+ * itself current — same non-destructive rule as `--consent-model`: reachable
+ * from both entry points (the install flow's create call runs before these
+ * questions), and omitting a flag on a later --identity-only call leaves an
+ * existing block untouched rather than clearing it.
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
@@ -47,6 +58,18 @@ const args = parseArgs(process.argv.slice(2));
 // these rules again rather than an agent inventing a plausible-looking set.
 const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
+
+// `--feedback` and `--identity-mode` share one three-value vocabulary.
+// Defined once, up here, so both the main create path and --identity-only
+// (below) can validate before either writes a single byte — an unknown value
+// must be refused, never silently coerced or guessed.
+const THREE_MODES = ['auto', 'manual', 'off'];
+function validateThreeMode(flag, value) {
+  if (value !== undefined && !THREE_MODES.includes(value)) {
+    console.error(`scaffold: --${flag} must be "auto", "manual" or "off" (got ${value})`);
+    process.exit(1);
+  }
+}
 
 // Permission rules are the workspace's guard on keys/ — they must exist from
 // the first minute, so scaffold creates .claude/ itself. (Claude Code also
@@ -120,6 +143,12 @@ if (args.identityOnly) {
     console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found)`);
     process.exit(1);
   }
+  // The install flow's create call runs before the feedback/identity
+  // questions are asked, so this is the only entry point that can ever reach
+  // them for real — validated before the profile.md/conventions.md rewrite
+  // below touches a single file, same as the main path.
+  validateThreeMode('feedback', args.feedback);
+  validateThreeMode('identity-mode', args['identity-mode']);
   const cfg = readJson(cfgPath);
   const owner = args.owner || '';
   const language = args.language || '';
@@ -157,6 +186,15 @@ if (args.identityOnly) {
   if (args['consent-model']) {
     cfg.consent = { askedOn: localISODate(), model: args['consent-model'], version: 1 };
   }
+  // Same non-destructive rule as consent above: omitted here means the
+  // question wasn't asked on this call, not "off" — an existing block from an
+  // earlier call is left exactly as it was.
+  if (args.feedback) {
+    cfg.feedback = { mode: args.feedback, github: args.github || null, askedOn: localISODate() };
+  }
+  if (args['identity-mode']) {
+    cfg.identity = { mode: args['identity-mode'], askedOn: localISODate() };
+  }
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
   console.log(JSON.stringify({ updated }));
   process.exit(0);
@@ -190,6 +228,14 @@ if (!['home', 'hosted', 'shared'].includes(args.kind)) {
   console.error(`scaffold: --kind must be "home", "hosted" or "shared" (got ${args.kind})`);
   process.exit(1);
 }
+
+// `feedback` and `identity` share one three-value vocabulary — validated here,
+// alongside --trust and --kind, so a bad value is refused before the target
+// root is even resolved, let alone created. Both flags are optional: absent
+// means never asked (see the config.json write below), so only a *given*
+// value is checked against the vocabulary.
+validateThreeMode('feedback', args.feedback);
+validateThreeMode('identity-mode', args['identity-mode']);
 
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
@@ -309,6 +355,14 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   // means never asked — never write a consent record nobody gave.
   ...(args['consent-model'] ? {
     consent: { askedOn: today, model: args['consent-model'], version: 1 },
+  } : {}),
+  // Recorded only when the install skill actually asked. Absent means never
+  // asked; never write an opt-in nobody gave.
+  ...(args.feedback ? {
+    feedback: { mode: args.feedback, github: args.github || null, askedOn: today },
+  } : {}),
+  ...(args['identity-mode'] ? {
+    identity: { mode: args['identity-mode'], askedOn: today },
   } : {}),
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in

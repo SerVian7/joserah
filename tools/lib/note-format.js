@@ -164,8 +164,105 @@ function roleFor(kind) {
   return kind === 'shared' ? 'server' : 'client';
 }
 
+// Feedback notes are about the plugin's own prompts and structure — never
+// about the owner's work. `structure` covers anything about the shape of the
+// workspace or its files; `prompt` covers anything about what an agent was
+// told. An unknown area is refused rather than guessed, same discipline as
+// `roleFor`/`kind` above: the caller must say which, not have one invented.
+const FEEDBACK_AREAS = ['prompt', 'structure'];
+
+// Turkish letters the owner's own names actually use (ş, ğ, ı, İ) sit outside
+// the Latin-1 ranges (À-Þ / ß-ÿ) a Western-only draft of this regex would
+// reach for. Ç, Ö, Ü are already inside those ranges; only these three pairs
+// needed adding. Leaving them out would mean a name written in the owner's
+// own working language could slip past the scan that a Western name could not.
+const TR_UPPER = 'ĞİŞ';
+const TR_LOWER = 'ğış';
+
+// `\b` is defined against ASCII `\w` only, even here: a name starting with a
+// non-ASCII letter (İrem, Şahin, ...) is *never* a word character to `\b`, so
+// a plain `\bTR_UPPER...` still fails to match at the start of a string or
+// after a space — the exact leak this whole scan exists to catch. Using our
+// own boundary via lookaround, built from the same letter set the name
+// pattern itself matches, sidesteps that rather than re-adding the gap this
+// block was written to close.
+const NAME_BOUNDARY_CHARS = `A-Za-zÀ-ÿ${TR_UPPER}${TR_LOWER}`;
+
+// What a leak out of a real workspace actually looks like. This is a
+// guardrail, not a redactor: it refuses text that looks like it carries
+// someone's data, and it is deliberately noisy — a false positive costs one
+// rewrite, a false negative sends a stranger's name to a public issue
+// tracker. Given that asymmetry, every check below is written to fail toward
+// "flag it", never toward "let it through".
+function scanForIdentifiers(text, forbidden) {
+  const found = [];
+  if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(text)) found.push('an address');
+  if (/\bhttps?:\/\/\S+/.test(text)) found.push('a link');
+  if (new RegExp(`(?<![${NAME_BOUNDARY_CHARS}])[A-ZÀ-Þ${TR_UPPER}][a-zß-ÿ${TR_LOWER}]+\\s+`
+    + `[A-ZÀ-Þ${TR_UPPER}][a-zß-ÿ${TR_LOWER}]+(?![${NAME_BOUNDARY_CHARS}])`)
+    .test(text)) found.push('a personal name');
+  // Matched per quote family (", curly “...”, ') rather than one class that
+  // excludes all four delimiter characters from the content: the original
+  // draft excluded the straight apostrophe from *content* too, so a quoted
+  // sentence with a contraction ("don't", "it's" — nearly all of them) broke
+  // the 120-char run and slipped through unflagged. Matching each family on
+  // its own keeps that false negative from happening for the two quote kinds
+  // that don't also serve double duty as an apostrophe.
+  if (/"[^"]{120,}"|“[^”]{120,}”|'[^']{120,}'/.test(text)) found.push('a long quotation');
+  for (const w of forbidden || []) {
+    if (w && new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(text)) {
+      found.push('a workspace word (' + w + ')');
+    }
+  }
+  return found;
+}
+
+// A pure function that refuses to render rather than one that promises to
+// redact: the guarantee lives in code that throws, not in an agent's good
+// behaviour. The five sections below are fixed and exhaustive — there is no
+// free-form region for real-world data to leak into.
+function renderFeedbackNote(fields, forbidden) {
+  const { area, created, symptom, cause, suggestion } = fields || {};
+  if (!FEEDBACK_AREAS.includes(area)) {
+    throw new Error('unknown feedback area: ' + area + ' (expected ' + FEEDBACK_AREAS.join(' or ') + ')');
+  }
+  for (const [k, v] of Object.entries({ created, symptom, cause, suggestion })) {
+    if (typeof v !== 'string' || !v.trim()) throw new Error('empty feedback field: ' + k);
+  }
+  const found = scanForIdentifiers([symptom, cause, suggestion].join('\n'), forbidden);
+  if (found.length) {
+    throw new Error('refusing to render: needs redaction — found ' + found.join(', '));
+  }
+  return [
+    '---',
+    'type: feedback',
+    'area: ' + area,
+    'formatVersion: ' + FORMAT_VERSION,
+    'created: ' + created,
+    'reported: null',
+    '---',
+    '',
+    '## Symptom',
+    '',
+    symptom.trim(),
+    '',
+    '## Suspected cause',
+    '',
+    cause.trim(),
+    '',
+    '## Suggestion',
+    '',
+    suggestion.trim(),
+    '',
+    '## Redaction check',
+    '',
+    'Scanned for: names, addresses, links, quotations, workspace words. Nothing found.',
+    '',
+  ].join('\n');
+}
+
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
   extractWikilinks, renderRelations, FORMAT_VERSION, stripCode, detectEol,
-  roleFor,
+  roleFor, FEEDBACK_AREAS, scanForIdentifiers, renderFeedbackNote,
 };
