@@ -32,6 +32,24 @@ test('relocates knowledge/raw to the root and rewrites citing links', (t) => {
   assert.strictEqual(links.status, 0, 'no broken links after relocation: ' + links.stdout);
 });
 
+test('preserves an owner-edited README.md under the old raw/ instead of discarding it', (t) => {
+  const dir = legacyWs(t);
+  // The old location may carry its own README.md from the pre-migration
+  // template. scaffold.js already wrote the *current* template's README.md
+  // at the root (see legacyWs/scaffold.js). Simulate an owner who annotated
+  // the old one, so its bytes differ from what is now at the root.
+  const oldReadme = path.join(dir, '.joserah', 'knowledge', 'raw', 'README.md');
+  fs.writeFileSync(oldReadme, '# raw/ — IMMUTABLE\n\nOwner note: do not touch, ever.\n');
+  const r = runTool('relocate-raw.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const summary = JSON.parse(r.stdout);
+  assert.strictEqual(summary.preservedReadme, 'raw/README.old.md');
+  const preserved = fs.readFileSync(path.join(dir, 'raw', 'README.old.md'), 'utf8');
+  assert.match(preserved, /Owner note: do not touch, ever\./, 'owner content survives, not deleted');
+  // The root's own (current-template) README.md is untouched by the merge.
+  assert.ok(fs.existsSync(path.join(dir, 'raw', 'README.md')), 'root README.md still present');
+});
+
 test('is a no-op when there is nothing to relocate, exit 0', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
