@@ -550,7 +550,13 @@ test('a second --report on an already-reported note is refused, not a silent sec
 test('the feedback skill exists and states the three modes', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'feedback', 'SKILL.md'), 'utf8');
   assert.match(text, /^---\nname: feedback\n/);
-  for (const m of ['auto', 'manual', 'off']) assert.ok(text.includes(m), 'documents ' + m);
+  // A bare includes() proved nothing: 'auto' is a substring of "automatic",
+  // 'off' of "offer", 'manual' of "manually" — so the old assertion passed on
+  // prose documenting none of the three modes. Anchored instead on the bullet
+  // form the mode list is actually written in, which cannot occur by accident.
+  assert.match(text, /^- \*\*auto\*\* —/m, 'documents the auto mode');
+  assert.match(text, /^- \*\*manual\*\* —/m, 'documents the manual mode');
+  assert.match(text, /^- \*\*off\*\*/m, 'documents the off mode');
 });
 
 test('the feedback skill names no one and ships no real example', () => {
@@ -588,4 +594,57 @@ test('install asks its questions in the agreed order', () => {
     'reach before the assistant\'s definition');
   assert.ok(at('what it is for here') < at('Ask for consent'), 'definition before consent');
   assert.ok(at('Ask for consent') < at('Then offer feedback'), 'consent before the feedback question');
+});
+
+// --- IMPORTANT 4 -----------------------------------------------------------
+// Every forbidden-word test above this line passes a SINGLE word, while
+// production passes cfg.ownerName — a full name in every real workspace.
+// Matched as one literal string, "Serkan Atay" fired on neither half, which
+// is how this gap survived five review rounds.
+test('scanForIdentifiers matches each word of a multi-word forbidden entry', () => {
+  assert.ok(nf.scanForIdentifiers('telling Serkan the same thing', ['Serkan Atay']).length,
+    'the first word of a two-word owner name');
+  assert.ok(nf.scanForIdentifiers('the note Atay left behind', ['Serkan Atay']).length,
+    'the second word of a two-word owner name');
+});
+
+// Turkish agglutination: the suffix attaches straight onto the word, so a
+// whole-string match fails on every inflected form of the workspace's own
+// vocabulary — on a workspace whose working language is Turkish, that is
+// most occurrences of it.
+test('scanForIdentifiers sees through a Turkish suffix on a forbidden word', () => {
+  assert.ok(nf.scanForIdentifiers('Notlar atayda tutuluyor', ['atay']).length, 'joined -da');
+  assert.ok(nf.scanForIdentifiers('Joserahin cevabi ayni oldu', ['Joserah']).length, 'joined -in');
+  assert.ok(nf.scanForIdentifiers('Akkaya\u2019nın notu geldi', ['Akkaya']).length, 'curly-apostrophe suffix');
+  assert.ok(nf.scanForIdentifiers("Akkaya'nın notu geldi", ['Akkaya']).length, 'straight-apostrophe suffix');
+});
+
+// The suffix allowance must not become a substring search: a compound word
+// appends a whole further word, not a two- or three-letter inflection.
+test('scanForIdentifiers still refuses to treat a compound as a suffixed forbidden word', () => {
+  assert.strictEqual(nf.scanForIdentifiers('Atayland is a theme park', ['atay']).length, 0);
+  assert.strictEqual(nf.scanForIdentifiers('the ownership model changed', ['owner']).length, 0);
+});
+
+// skills/feedback/SKILL.md promises "no file paths" and nothing enforced it.
+// Only rooted paths are flagged — a repo-relative path is what structure
+// feedback is FOR, and flagging one would train people around the whole scan.
+test('scanForIdentifiers catches a rooted file path but leaves a repo-relative one alone', () => {
+  assert.ok(nf.scanForIdentifiers('It wrote to D:\\work\\clients\\somebody\\mail.md', []).length,
+    'a Windows drive path');
+  assert.ok(nf.scanForIdentifiers('it read /home/somebody/notes.md instead', []).length,
+    'an absolute POSIX path');
+  assert.ok(nf.scanForIdentifiers('it read ~/notes/things.md instead', []).length, 'a ~-rooted path');
+  assert.deepStrictEqual(nf.scanForIdentifiers('the check lives in tools/lib/note-format.js', []), [],
+    'naming a file in this repo is not a leak');
+});
+
+// The same promise, for numbers. None of these has an innocent reading in a
+// note whose subject is a piece of software's prompts and structure.
+test('scanForIdentifiers catches numeric identifiers', () => {
+  assert.ok(nf.scanForIdentifiers('It echoed 0532 415 88 21 back', []).length, 'a spaced phone number');
+  assert.ok(nf.scanForIdentifiers('the id 12345678901 showed up', []).length, 'a long digit run');
+  assert.ok(nf.scanForIdentifiers('it printed TR330006100519786457841326 in full', []).length, 'an IBAN');
+  assert.deepStrictEqual(nf.scanForIdentifiers('on 2026-08-30 it ran twice, in v2', []), [],
+    'a date and a version number are not identifiers');
 });

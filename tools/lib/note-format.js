@@ -206,12 +206,58 @@ const NOT_AFTER = `(?![${WORD_CHARS}])`;
 // JSON, YAML, HTTP, FAQ) are almost universally ≤4. A length floor of 5 on
 // the ALL-CAPS alternative separates the two required sets cleanly (see the
 // round-2 report for the full checked list) without a hardcoded acronym
-// list that would need maintaining forever. It does not separate them
-// perfectly — a genuinely long acronym pair ("GRAPHQL SCHEMA", "OAUTH
-// TOKEN") still reads as a name, and a short all-caps name in this or any
-// language still slips through — both are disclosed, deliberate residual
-// gaps, not oversights.
+// list that would need maintaining forever.
 const NAME_WORD = `(?:[${CAP}][${LOW}]+|[${CAP}]{5,})`;
+
+// A Turkish suffix attaches straight onto the word it modifies, so a
+// whole-string match of the workspace's own vocabulary fails on every
+// inflected form of it — `atayda`, `Joserahin`, `Akkaya'nın` each carry a
+// forbidden word and none of them equals one. Allowing a trailing run cannot
+// become a licence to match any longer word, though: `Atayland` contains
+// `atay` and is a different thing entirely.
+//
+// The rule chosen: length, plus the apostrophe. A Turkish inflectional
+// suffix written joined onto the stem is short — `-da`, `-in`, `-lar`, `-ya`
+// — while a compound appends a whole further word, so at most three joined
+// letters may follow, which `land` exceeds. Turkish orthography separates a
+// suffix on a proper noun with an apostrophe (`Akkaya'nın`), and that
+// apostrophe is an unambiguous marker rather than a guess, so a run after
+// one may be longer. What follows the run must still be a non-letter, which
+// is what rules `Atayland` out: no prefix of `land` leaves a non-letter
+// behind it.
+const SUFFIX = `(?:[${LOW}]{1,3}|['\u2019][${LOW}]{1,8})?`;
+
+// Below this, a suffix allowance is all cost and no benefit: a workspace
+// named `w` or `AI` would otherwise match `was`, `with` and most of the
+// language, and a scan that fires on every sentence gets written around.
+const SUFFIXABLE_MIN = 3;
+
+// The feedback skill promises "no file paths" and nothing enforced any part
+// of it. Only ROOTED paths are flagged — a drive letter, a UNC share, a
+// `~`-rooted path, an absolute POSIX path. Those are the ones that name a
+// real location on a real machine ("D:\\work\\clients\\<somebody>\\mail.md").
+// A repo-relative path is deliberately left alone: naming
+// `tools/lib/note-format.js` or `skills/feedback/SKILL.md` is exactly what
+// structure feedback is for, and the bare-domain link check above is already
+// narrowed for the same reason.
+const PATH_RES = [
+  /(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s"']*/,                    // D:\work\..., d:/atay
+  /\\\\[A-Za-z0-9._-]+\\[^\s"']+/,                             // \\server\share\...
+  /(?<![A-Za-z0-9])~[\\/][^\s"']+/,                            // ~/notes/...
+  /(?<![A-Za-z0-9._/-])\/[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+/,   // /home/somebody/x
+];
+
+// The same promise, for numbers. A national id, a phone written in spaced
+// groups, an IBAN-shaped token: none of the three has an innocent reading in
+// a note whose entire subject is a piece of software's prompts and structure,
+// so they cost nothing in false positives. The separator run demands three or
+// more groups so an ISO date (`2026 08 30`, `2026-08-30`) can never be read
+// as a phone number.
+const NUMERIC_RES = [
+  /(?<!\d)\d{9,}(?!\d)/,
+  /(?<!\d)\d{3,4}(?:[ .\-]\d{2,4}){3,}(?!\d)/,
+  /(?<![A-Za-z0-9])[A-Z]{2}\d{2}[A-Z0-9]{11,30}(?![A-Za-z0-9])/,
+];
 
 // What a leak out of a real workspace actually looks like. This is a
 // guardrail, not a redactor: it refuses text that looks like it carries
@@ -219,6 +265,21 @@ const NAME_WORD = `(?:[${CAP}][${LOW}]+|[${CAP}]{5,})`;
 // rewrite, a false negative sends a stranger's name to a public issue
 // tracker. Given that asymmetry, every check below is written to fail toward
 // "flag it", never toward "let it through".
+//
+// The residual gaps, as they actually stand:
+//  - A bare single capitalised word that is somebody's name and is not in
+//    the workspace's own vocabulary is NOT flagged, and deliberately so.
+//    Flagging one was tried, with evidence: it fired on YAML, Skill, API and
+//    most of the ordinary vocabulary this note type needs, and a scan that
+//    fires on every other sentence teaches people to write around the whole
+//    thing. Two adjacent name-shaped words, or a name in the vocabulary, are
+//    caught; one loose word is the price.
+//  - An ALL-CAPS name of four letters or fewer reads as an acronym and is
+//    not flagged (see NAME_WORD's length floor); the converse false positive
+//    is a genuinely long acronym pair — "GRAPHQL SCHEMA" reads as a name.
+//  - A forbidden word carrying more than three joined suffix letters, or
+//    embedded in a compound, is not matched (see SUFFIX).
+//  - A repo-relative file path is allowed on purpose (see PATH_RES).
 function scanForIdentifiers(text, forbidden) {
   const found = [];
   if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(text)) found.push('an address');
@@ -261,11 +322,21 @@ function scanForIdentifiers(text, forbidden) {
   // from happening for the quote kinds that don't also serve double duty as
   // an apostrophe.
   if (/"[^"]{120,}"|“[^”]{120,}”|'[^']{120,}'|‘[^’]{120,}’/.test(text)) found.push('a long quotation');
-  for (const w of forbidden || []) {
-    if (!w) continue;
-    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(NOT_BEFORE + escaped + NOT_AFTER, 'i').test(text)) {
-      found.push('a workspace word (' + w + ')');
+  if (PATH_RES.some((re) => re.test(text))) found.push('a file path');
+  if (NUMERIC_RES.some((re) => re.test(text))) found.push('a numeric identifier');
+  // Split on whitespace before matching: `ownerName` is a full name in every
+  // real workspace, and matched as one literal string it never fired on
+  // either half — "telling Serkan the same thing" scanned clean against the
+  // vocabulary that contained "Serkan Atay".
+  for (const entry of forbidden || []) {
+    if (!entry) continue;
+    for (const w of String(entry).split(/\s+/)) {
+      if (!w) continue;
+      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const suffix = w.length >= SUFFIXABLE_MIN ? SUFFIX : '';
+      if (new RegExp(NOT_BEFORE + escaped + suffix + NOT_AFTER, 'i').test(text)) {
+        found.push('a workspace word (' + w + ')');
+      }
     }
   }
   return found;
@@ -310,7 +381,7 @@ function renderFeedbackNote(fields, forbidden) {
     '',
     '## Redaction check',
     '',
-    'Scanned for: names, addresses, links, quotations, workspace words. Nothing found.',
+    'Scanned for: names, addresses, links, quotations, workspace words, file paths, numeric identifiers. Nothing found.',
     '',
   ].join('\n');
 }
