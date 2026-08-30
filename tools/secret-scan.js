@@ -36,7 +36,17 @@ function isPlaceholder(rawValue) {
   if (/^[<[{].*[>\]}]$/.test(v)) return true;                // <SIFRE>, [api_key], {token}
   if (/^\$\{?[A-Za-z0-9_]+\}?$/.test(v)) return true;         // $VAR, ${VAR}
   if (/^(YOUR|MY|EXAMPLE|SAMPLE|DUMMY|TEST|CHANGE|REPLACE|INSERT|TODO|PLACEHOLDER)[_-]/i.test(v)) return true;
-  if (/^(changeme|change-me|password|secret|redacted|masked|placeholder|todo|tbd|none|null|empty)$/i.test(v)) return true;
+  // Exact-word list: every entry here must be a word that CANNOT be a live
+  // credential, not merely a word that often ISN'T one. "changeme",
+  // "change-me", "password" and "secret" were deliberately dropped from this
+  // list (review, 2026-08-31): they are dictionary words at the top of every
+  // published weak-password list, and `password: password` / `secret: secret`
+  // / `passwd: changeme` are real, working credentials — reporting them
+  // clean is the exact failure this tool exists to prevent. Do not re-add
+  // them "for symmetry" with `admin`; the same reasoning that keeps `admin`
+  // out keeps these out too. A false negative here costs more than a false
+  // positive.
+  if (/^(redacted|masked|placeholder|todo|tbd|none|null|empty)$/i.test(v)) return true;
   return false;
 }
 
@@ -99,7 +109,15 @@ for (const rel of files) {
   let text;
   try {
     text = fs.readFileSync(path.join(root, rel), 'utf8');
-  } catch {
+  } catch (err) {
+    // `--staged` lists `git diff --cached --name-only`, which includes a
+    // path staged for deletion — it has no working-tree content because the
+    // owner deleted it on purpose, not because something went wrong. Skip it
+    // silently rather than calling it unreadable, or a plain "delete a note,
+    // stage it" turns into a false "exit 2, could not scan" for the backup
+    // gate. Outside --staged, a tracked file missing from disk is exactly
+    // the corruption case exit 2 exists to catch, so that path is untouched.
+    if (staged && err.code === 'ENOENT') continue;
     unreadable.push(rel);
     continue;
   }

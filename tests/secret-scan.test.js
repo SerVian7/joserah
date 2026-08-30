@@ -91,7 +91,11 @@ test('placeholder values are not findings', (t) => {
     'token = ${API_TOKEN}',      // env-var reference
     'secret: [api_key]',         // bracketed field name
     'password=YOUR_PASSWORD_HERE',
-    'passwd: changeme',
+    'token: TBD',                // exact-word placeholder that stays on the list
+    // NOTE: 'passwd: changeme' is deliberately NOT in this fixture — see the
+    // "literal word password" test below. "changeme" is a real, working
+    // credential when nobody rotates it, so it was dropped from
+    // isPlaceholder()'s exact-word list and must trip the scan.
   ].join('\n') + '\n');
   const r = runTool('secret-scan.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);
@@ -140,4 +144,45 @@ test('--staged outside a git repository exits 2, never clean', (t) => {
   fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
   const r = runTool('secret-scan.js', [dir, '--staged'], { env: {} });
   assert.strictEqual(r.status, 2);
+});
+
+test('the literal word "password" as a value is a hit, not a placeholder', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), 'password: password\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 1, 'a dictionary-word "password" value is a real, working credential, not a placeholder');
+});
+
+test('dictionary weak-password words are hits, not placeholders — regression for the dropped exact-word entries', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), [
+    'secret: secret',
+    'passwd: changeme',
+  ].join('\n') + '\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /2 credential-shaped strings found/);
+});
+
+test('--staged skips a file staged for deletion instead of calling it unreadable', (t) => {
+  const dir = tmpdir(t);
+  const g = (a) => require('child_process').spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+  if (g(['--version']).status !== 0) return t.skip('git unavailable');
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  g(['init']);
+  g(['config', 'user.email', 'test@example.com']);
+  g(['config', 'user.name', 'Test']);
+  fs.writeFileSync(path.join(dir, 'gone.md'), 'nothing suspicious here\n');
+  g(['add', 'gone.md']);
+  g(['commit', '-m', 'initial']);
+  fs.unlinkSync(path.join(dir, 'gone.md'));
+  g(['add', 'gone.md']); // stages the deletion
+  const r = runTool('secret-scan.js', [dir, '--staged']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!/could not read/.test(r.stderr), 'a staged deletion must not be treated as unreadable');
 });
