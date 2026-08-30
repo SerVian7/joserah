@@ -57,3 +57,29 @@ test('a broken link inside .superpowers/ scratch is skipped, but the same broken
   const d2 = ws(t, { 'a.md': '[gone](nope.md)\n' });
   assert.strictEqual(runTool('verify-links.js', [d2]).status, 1, 'a real broken link outside .superpowers/ still fails');
 });
+
+test('a wikilink with no matching note in the vault is reported broken', (t) => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const dir = path2.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs2.mkdirSync(path2.join(dir, '.joserah', 'knowledge', 'people'), { recursive: true });
+  fs2.writeFileSync(path2.join(dir, '.joserah', 'knowledge', 'people', 'ada.md'),
+    '# Ada\n\n- knows [[Nobody At All]]\n', 'utf8');
+  const r = runTool('verify-links.js', [dir]);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stdout, /Nobody At All/);
+});
+
+test('a wikilink that matches a note title resolves', (t) => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const dir = path2.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const people = path2.join(dir, '.joserah', 'knowledge', 'people');
+  fs2.mkdirSync(people, { recursive: true });
+  fs2.writeFileSync(path2.join(people, 'grace.md'), '# Grace Hopper\n', 'utf8');
+  fs2.writeFileSync(path2.join(people, 'ada.md'), '# Ada\n\n- knows [[Grace Hopper]]\n', 'utf8');
+  const r = runTool('verify-links.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});

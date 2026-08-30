@@ -86,8 +86,20 @@ function existsExact(baseDir, target) {
   return true;
 }
 
+// Wikilink targets resolve against note TITLES inside this vault — never
+// against a path, and never outside the workspace. That containment is the
+// point: a hosted workspace's links cannot reach its host.
+const ALL_FILES = [...mdFiles(ROOT, '')];
+const TITLES = new Set();
+for (const f of ALL_FILES) {
+  const text = fs.readFileSync(f, 'utf8');
+  const m = /^#\s+(.+?)\s*$/m.exec(text);
+  TITLES.add((m ? m[1] : path.basename(f, '.md')).toLowerCase());
+}
+const WIKILINK_RE = /\[\[([^\]\n]+)\]\]/g;
+
 const broken = [];
-for (const file of mdFiles(ROOT, '')) {
+for (const file of ALL_FILES) {
   const lines = stripCode(fs.readFileSync(file, 'utf8')).split(/\r?\n/);
   lines.forEach((line, i) => {
     for (const m of line.matchAll(LINK_RE)) {
@@ -102,6 +114,12 @@ for (const file of mdFiles(ROOT, '')) {
       if (!target) continue;
       if (!existsExact(path.dirname(file), target)) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]}`);
+      }
+    }
+    for (const m of line.matchAll(WIKILINK_RE)) {
+      const target = m[1].split('|')[0].trim();
+      if (!TITLES.has(target.toLowerCase())) {
+        broken.push(`${path.relative(ROOT, file)}:${i + 1} → [[${target}]] (no note titled "${target}" in this workspace)`);
       }
     }
   });
