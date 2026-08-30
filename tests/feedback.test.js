@@ -112,6 +112,26 @@ test('scanForIdentifiers catches a name written in ALL CAPS', () => {
     'all-caps two-word name');
 });
 
+// Fix round 2 — the ALL-CAPS fix above (`{2,}` on a bare capital run) fired
+// on any two adjacent all-caps words, and acronyms are the native vocabulary
+// of a note type that is feedback about a piece of software's prompts and
+// structure. These MUST NOT be read as a personal name.
+test('scanForIdentifiers does not flag two adjacent acronyms as a personal name', () => {
+  assert.strictEqual(nf.scanForIdentifiers('the API URL changed', []).length, 0, 'API URL');
+  assert.strictEqual(nf.scanForIdentifiers('HTML CSS are both used', []).length, 0, 'HTML CSS');
+  assert.strictEqual(nf.scanForIdentifiers('see README FAQ for details', []).length, 0, 'README FAQ');
+  assert.strictEqual(nf.scanForIdentifiers('TODO LIST here', []).length, 0, 'TODO LIST');
+  assert.strictEqual(nf.scanForIdentifiers('reads JSON YAML both', []).length, 0, 'JSON YAML');
+  assert.strictEqual(nf.scanForIdentifiers('supports HTTP HTTPS both', []).length, 0, 'HTTP HTTPS');
+});
+
+// The tightening that keeps the acronym pairs above clean must not reopen
+// the ALL-CAPS name gap it was built to close — a real all-caps name, in the
+// owner's own working language, still has to be caught.
+test('scanForIdentifiers still catches an ALL-CAPS Turkish name after the acronym fix', () => {
+  assert.ok(nf.scanForIdentifiers('mail from DURMUŞ KABAK', []).length, 'all-caps Turkish name');
+});
+
 // A social/GitHub handle identifies a person as surely as their name does,
 // and the address check only fires on a dotted email domain — a bare @handle
 // needs its own check.

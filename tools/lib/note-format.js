@@ -194,10 +194,24 @@ const NOT_BEFORE = `(?<![${WORD_CHARS}])`;
 const NOT_AFTER = `(?![${WORD_CHARS}])`;
 
 // A name-shaped word is either TitleCase (one capital, then lowercase) or
-// ALL CAPS (two or more capitals with no lowercase at all) — a shouted name
-// in a quoted subject line or a signature block has no lowercase run for a
-// TitleCase-only pattern to find.
-const NAME_WORD = `(?:[${CAP}][${LOW}]+|[${CAP}]{2,})`;
+// ALL CAPS with no lowercase at all — a shouted name in a quoted subject
+// line or a signature block has no lowercase run for a TitleCase-only
+// pattern to find. The ALL-CAPS alternative alone (`{2,}`) also matched any
+// two adjacent acronyms — "API URL", "HTML CSS", "TODO LIST" — because
+// acronyms are the native vocabulary of a note type that is feedback about a
+// piece of software's prompts and structure. Tried and measured: real given
+// names/surnames (Sevgi, Akkaya, Durmuş, Kabak — and Turkish ones tend to
+// run long) are reliably 5+ letters, while the common short acronyms this
+// note type actually needs to say out loud (API, URL, CSS, TODO, LIST,
+// JSON, YAML, HTTP, FAQ) are almost universally ≤4. A length floor of 5 on
+// the ALL-CAPS alternative separates the two required sets cleanly (see the
+// round-2 report for the full checked list) without a hardcoded acronym
+// list that would need maintaining forever. It does not separate them
+// perfectly — a genuinely long acronym pair ("GRAPHQL SCHEMA", "OAUTH
+// TOKEN") still reads as a name, and a short all-caps name in this or any
+// language still slips through — both are disclosed, deliberate residual
+// gaps, not oversights.
+const NAME_WORD = `(?:[${CAP}][${LOW}]+|[${CAP}]{5,})`;
 
 // What a leak out of a real workspace actually looks like. This is a
 // guardrail, not a redactor: it refuses text that looks like it carries
