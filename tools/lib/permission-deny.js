@@ -10,4 +10,41 @@ const PERMISSION_DENY = [
   'Bash(tail ./keys/**)', 'Bash(strings ./keys/**)',
   'Bash(type ./keys/**)', 'Bash(Get-Content ./keys/**)', 'Bash(gc ./keys/**)',
 ];
-module.exports = { PERMISSION_DENY };
+
+// Machine-control rules for a `guest` workspace: someone else's memory hosted
+// on this machine, whose work stops at its own folder.
+//
+// IMPORTANT, and it must be said wherever this is documented: this is a
+// GUARDRAIL, NOT A SANDBOX. Deny-by-enumeration cannot make Bash access
+// impossible — absolute paths and unlisted tools bypass string matching. The
+// load-bearing layers are the workspace's AGENTS.md/directives.md contract
+// first, these rules second, and OS-level isolation (separate user account or
+// container) third — only the third is an actual sandbox.
+const GUEST_MACHINE_DENY = [
+  'Bash(shutdown:*)', 'Bash(reboot:*)', 'Bash(halt:*)', 'Bash(poweroff:*)',
+  'Bash(taskkill:*)', 'Bash(kill:*)', 'Bash(pkill:*)', 'Bash(killall:*)',
+  'Bash(systemctl:*)', 'Bash(service:*)', 'Bash(sc:*)',
+  'Bash(docker:*)', 'Bash(podman:*)', 'Bash(docker-compose:*)',
+  'Bash(npm install -g:*)', 'Bash(pip install:*)', 'Bash(apt:*)',
+  'Bash(apt-get:*)', 'Bash(choco:*)', 'Bash(winget:*)',
+];
+
+// Claude Code accepts an absolute path rule as `//<drive>/<path>/**`; a
+// Windows `d:/atay` therefore becomes `//d/atay/**`.
+function toRulePath(p) {
+  const norm = String(p).replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1').replace(/\/+$/, '');
+  return `//${norm.replace(/^\/+/, '')}/**`;
+}
+
+function denyFor(trust, opts = {}) {
+  if (trust === 'owner') return PERMISSION_DENY.slice();
+  if (trust !== 'guest') throw new Error(`unknown trust level: ${trust}`);
+  const rules = PERMISSION_DENY.concat(GUEST_MACHINE_DENY);
+  for (const p of opts.hostPaths || []) {
+    const target = toRulePath(p);
+    rules.push(`Read(${target})`, `Edit(${target})`, `Write(${target})`);
+  }
+  return rules;
+}
+
+module.exports = { PERMISSION_DENY, GUEST_MACHINE_DENY, denyFor };
