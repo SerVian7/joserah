@@ -267,3 +267,103 @@ test('config.json: invalid JSON is left completely untouched rather than mangled
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(fs.readFileSync(cfgPath, 'utf8'), broken, 'malformed config left byte-for-byte as-is');
 });
+
+// R17: a workspace scaffolded before this plan never got JOSERAH-ROLE.md or
+// .joserah/agent.md — scaffold.js is the only thing that has ever written
+// them, and this workspace predates it. Simulated here by scaffolding fresh
+// (so it is otherwise a valid workspace) and then deleting exactly the two
+// files a pre-v2 workspace never received.
+function stripPreV2Files(dir) {
+  fs.unlinkSync(path.join(dir, 'JOSERAH-ROLE.md'));
+  fs.unlinkSync(path.join(dir, '.joserah', 'agent.md'));
+}
+
+test('R17: migrate installs JOSERAH-ROLE.md when a pre-v2 workspace never got one', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const rolePath = path.join(dir, 'JOSERAH-ROLE.md');
+  assert.ok(fs.existsSync(rolePath), 'JOSERAH-ROLE.md installed by migrate');
+  const template = fs.readFileSync(
+    path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-client.md'), 'utf8');
+  assert.strictEqual(fs.readFileSync(rolePath, 'utf8'), template, 'copied verbatim from the "home" kind\'s role template');
+});
+
+test('R17: migrate installs .joserah/agent.md when a pre-v2 workspace never got one', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const agentPath = path.join(dir, '.joserah', 'agent.md');
+  assert.ok(fs.existsSync(agentPath), '.joserah/agent.md installed by migrate');
+  const template = fs.readFileSync(
+    path.join(PLUGIN_ROOT, 'templates', '.joserah', 'agent.md'), 'utf8');
+  assert.strictEqual(fs.readFileSync(agentPath, 'utf8'), template, 'copied verbatim, empty of owner rules');
+});
+
+test('R17: migrate reports both installs as "created", distinct from "changed"', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.ok(Array.isArray(out.created), 'created is reported as its own field');
+  assert.ok(out.created.includes('JOSERAH-ROLE.md'));
+  assert.ok(out.created.includes('.joserah/agent.md'));
+});
+
+// Content, not bytes: migrate's pre-existing note loop (frontmatter,
+// Relations) runs over every scanned .md file regardless of path, JOSERAH-
+// ROLE.md and agent.md included — that is unrelated to R17 and already true
+// of this tool before this change. What R17 owns is narrower: the create-if-
+// absent step must never fire, and never touch the file, when one is already
+// there — so the owner's own text must survive somewhere in the result.
+test('R17: an existing JOSERAH-ROLE.md or agent.md is never replaced by migrate\'s installer', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  fs.writeFileSync(path.join(dir, 'JOSERAH-ROLE.md'), 'owner-edited role\n');
+  fs.writeFileSync(path.join(dir, '.joserah', 'agent.md'), 'owner-written overlay\n');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(fs.readFileSync(path.join(dir, 'JOSERAH-ROLE.md'), 'utf8').endsWith('owner-edited role\n'));
+  assert.ok(fs.readFileSync(path.join(dir, '.joserah', 'agent.md'), 'utf8').endsWith('owner-written overlay\n'));
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.created.length, 0, 'nothing reported as created when both already exist');
+});
+
+test('R17: --dry-run reports what it would create but writes nothing', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  const r = runTool('migrate.js', [dir, '--dry-run']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.ok(out.created.includes('JOSERAH-ROLE.md'));
+  assert.ok(out.created.includes('.joserah/agent.md'));
+  assert.ok(!fs.existsSync(path.join(dir, 'JOSERAH-ROLE.md')), 'dry run created nothing on disk');
+  assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'agent.md')), 'dry run created nothing on disk');
+});
+
+test('R17: idempotent — a second real run creates nothing further', (t) => {
+  const dir = ws(t);
+  stripPreV2Files(dir);
+  runTool('migrate.js', [dir]);
+  const r2 = runTool('migrate.js', [dir]);
+  assert.strictEqual(r2.status, 0, r2.stderr);
+  const out2 = JSON.parse(r2.stdout);
+  assert.strictEqual(out2.created.length, 0, 'second run creates nothing — both files already present');
+});
+
+test('R17: role installed by migrate follows the workspace\'s own kind, not a hardcoded default', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.kind = 'shared';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  stripPreV2Files(dir);
+  runTool('migrate.js', [dir]);
+  const rolePath = path.join(dir, 'JOSERAH-ROLE.md');
+  const template = fs.readFileSync(
+    path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-server.md'), 'utf8');
+  assert.strictEqual(fs.readFileSync(rolePath, 'utf8'), template, 'kind "shared" maps to the "server" role, per roleFor');
+});

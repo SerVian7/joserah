@@ -12,7 +12,9 @@
 const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
-const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION } = require('./lib/note-format');
+const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION, roleFor } = require('./lib/note-format');
+
+const TEMPLATES = path.join(__dirname, '..', 'templates');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -183,4 +185,38 @@ if (fs.existsSync(claudeMd)) {
 const cfgStamp = stampFormatVersion(fs.readFileSync(cfgPath, 'utf8'), FORMAT_VERSION);
 if (cfgStamp.changed && !dryRun) fs.writeFileSync(cfgPath, cfgStamp.text, 'utf8');
 
-console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed }));
+// R17: JOSERAH-ROLE.md and .joserah/agent.md are written only at scaffold
+// time — a workspace that predates this plan never got either, and scaffold
+// itself refuses to run again on a workspace that already exists. Migrate is
+// therefore the only path left to carry such a workspace forward, so it
+// installs whichever of the two is still missing. Kept out of the `changed`
+// count above (a new file is not an amended one) and, like everything else
+// in this tool, gated on `!dryRun` only for the write itself — the decision
+// is made the same way in both modes.
+let cfgForKind;
+try {
+  cfgForKind = JSON.parse(fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, ''));
+} catch {
+  cfgForKind = null;
+}
+const kind = (cfgForKind && cfgForKind.kind) || 'home';
+
+const created = [];
+
+const rolePath = path.join(root, 'JOSERAH-ROLE.md');
+if (!fs.existsSync(rolePath)) {
+  created.push('JOSERAH-ROLE.md');
+  if (!dryRun) {
+    fs.copyFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(kind)}.md`), rolePath);
+  }
+}
+
+const agentPath = path.join(root, '.joserah', 'agent.md');
+if (!fs.existsSync(agentPath)) {
+  created.push('.joserah/agent.md');
+  if (!dryRun) {
+    fs.copyFileSync(path.join(TEMPLATES, '.joserah', 'agent.md'), agentPath);
+  }
+}
+
+console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created }));
