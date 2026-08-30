@@ -103,11 +103,13 @@ if (args.settingsOnly) {
 // `--identity-only --target DIR [--owner --language --role]`: used by the
 // `install` skill after `doctor` has passed on a workspace created without
 // these three values. Re-renders exactly the files that carry them —
-// AGENTS.md, .joserah/personal/profile.md, .joserah/conventions.md — fresh
-// from templates/, using the workspace name and creation date already on
-// record in config.json. Safe only because nothing else has touched those
-// files yet at this point in the install flow; it is not a general-purpose
-// re-template command and must not be offered once onboarding has begun.
+// .joserah/personal/profile.md, .joserah/conventions.md — fresh from
+// templates/, using the workspace name and creation date already on record
+// in config.json. AGENTS.md carries no identity (it reads config.json at
+// runtime instead) so it is never in this list. Safe only because nothing
+// else has touched those files yet at this point in the install flow; it is
+// not a general-purpose re-template command and must not be offered once
+// onboarding has begun.
 if (args.identityOnly) {
   if (!args.target) { console.error('scaffold: --identity-only needs --target DIR'); process.exit(1); }
   const dir = path.resolve(args.target);
@@ -133,7 +135,6 @@ if (args.identityOnly) {
     return out;
   }
   const rewritten = [
-    'AGENTS.md',
     path.join('.joserah', 'personal', 'profile.md'),
     path.join('.joserah', 'conventions.md'),
   ];
@@ -235,7 +236,15 @@ function copyTree(from, to) {
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) copyTree(src, dst);
-    else if (e.name.endsWith('.md')) {
+    // The workspace-root AGENTS.md is plugin-owned and identical everywhere —
+    // identity comes from config.json at runtime, never from this file — so
+    // it is copied verbatim rather than run through substitute(). Nested
+    // AGENTS.md stubs (keys/, projects/) are unrelated files and keep going
+    // through the normal .md path below.
+    else if (dst === path.join(root, 'AGENTS.md')) {
+      fs.copyFileSync(src, dst);
+      filesCreated++;
+    } else if (e.name.endsWith('.md')) {
       fs.writeFileSync(dst, substitute(fs.readFileSync(src, 'utf8')), 'utf8');
       filesCreated++;
     } else {

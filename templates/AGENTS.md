@@ -90,9 +90,9 @@ From `trust` in `.joserah/config.json`:
   down, restart or kill anything on the machine; do not start or stop containers; do not install
   anything globally. Outside services are limited to those named in `hosting.services`.
 
-`.claude/settings.json` carries deny rules for this level, but **they are a guardrail, not a
-sandbox** — enumerated denials cannot cover every path or tool. This instruction is the real
-boundary. If a task seems to need stepping outside it, stop and ask the host.
+`.claude/settings.json` carries deny rules for this level, but **they are a guardrail, not a sandbox**
+— enumerated denials cannot cover every path or tool. This instruction is the real boundary. If a
+task seems to need stepping outside it, stop and ask the host.
 
 **Privileged operations:** if something needs `sudo` or Administrator rights, **say so and ask.**
 Name what needs the privilege and why. Never silently escalate, and never silently substitute a
