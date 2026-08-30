@@ -94,3 +94,64 @@ test('migrate refuses a directory that is not a workspace', (t) => {
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stderr, /not a Joserah workspace/i);
 });
+
+test('migrate appends a Relations block for entities mentioned in prose', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\n\nA client.\n');
+  const journal = '# 2026-08-30\n\nFixed the Spine switch fabric today.\n';
+  write(dir, '.joserah/desk/daily/2026/2026-08-30.md', journal);
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(path.join(dir, '.joserah/desk/daily/2026/2026-08-30.md'), 'utf8');
+  assert.ok(text.includes(journal), 'original prose is still there, untouched');
+  assert.match(text, /## Relations/);
+  assert.match(text, /- mentions \[\[Spine\]\]/);
+});
+
+test('migrate does not duplicate a relation that already exists', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\n\nA client.\n');
+  write(dir, '.joserah/desk/daily/2026/2026-08-30.md',
+    '# 2026-08-30\n\nSpine work.\n\n## Relations\n\n- worked_on [[Spine]]\n');
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(path.join(dir, '.joserah/desk/daily/2026/2026-08-30.md'), 'utf8');
+  assert.strictEqual((text.match(/\[\[Spine\]\]/g) || []).length, 1);
+});
+
+test('migrate does not relate an entity note to itself', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/knowledge/wiki/entities/spine.md';
+  write(dir, rel, '# Spine\n\nSpine is a client.\n');
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(path.join(dir, rel), 'utf8');
+  assert.doesNotMatch(text, /- mentions \[\[Spine\]\]/);
+});
+
+test('R3: a wikilink-shaped mention inside a code fence produces no relation', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\n\nA client.\n');
+  const journal = '# 2026-08-30\n\n```\nSpine switch fabric config\n```\n\nUnrelated notes today.\n';
+  write(dir, '.joserah/desk/daily/2026/2026-08-30.md', journal);
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(path.join(dir, '.joserah/desk/daily/2026/2026-08-30.md'), 'utf8');
+  assert.doesNotMatch(text, /## Relations/, 'a mention inside a fenced code block is not a relation');
+});
+
+test('migrate run twice produces a byte-identical file once Relations are appended', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\n\nA client.\n');
+  write(dir, '.joserah/desk/daily/2026/2026-08-30.md', '# 2026-08-30\n\nFixed the Spine switch fabric today.\n');
+  const journalPath = path.join(dir, '.joserah/desk/daily/2026/2026-08-30.md');
+  runTool('migrate.js', [dir]);
+  const after1 = fs.readFileSync(journalPath, 'utf8');
+  const r2 = runTool('migrate.js', [dir]);
+  const out2 = JSON.parse(r2.stdout);
+  assert.strictEqual(out2.changed, 0, 'nothing left to change on the second run');
+  assert.strictEqual(fs.readFileSync(journalPath, 'utf8'), after1, 'second run is byte-identical');
+});
+
+test('R8: scan excludes .claude/ so agent and command definitions are not treated as notes', (t) => {
+  const dir = ws(t);
+  write(dir, '.claude/agents/reviewer.md', '# Reviewer\n\nAn agent definition, not a note.\n');
+  const { files } = scanWorkspace(dir);
+  assert.ok(!files.some((f) => f.startsWith('.claude/')), '.claude/ excluded from scan');
+});

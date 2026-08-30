@@ -8,14 +8,16 @@
  *    keys/ is secret.
  *  - OWNERSHIP: projects/ and docker-stack/ belong to other repos, and a
  *    nested .joserah/config.json is somebody else's workspace, which migrates
- *    on its own update and never at a neighbour's hand.
+ *    on its own update and never at a neighbour's hand. .claude/ is Claude
+ *    Code's own agent, command and skill definitions — not the owner's prose,
+ *    and not this plugin's to splice frontmatter into.
  */
 const fs = require('fs');
 const path = require('path');
 
 const SKIP_DIR_ANY = new Set(['.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']);
 const SKIP_REL = [
-  'keys', 'projects', 'docker-stack',
+  'keys', 'projects', 'docker-stack', '.claude',
   '.joserah/knowledge/raw', '.joserah/tools', '.joserah/last-time-inject',
 ];
 const SKIP_FILE_REL = new Set(['.joserah/directives.md']);

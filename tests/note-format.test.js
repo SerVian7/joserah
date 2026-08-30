@@ -104,3 +104,12 @@ test('renderRelations: emits a Relations block', () => {
   const out = nf.renderRelations([{ type: 'mentions', target: 'Spine', context: null }]);
   assert.strictEqual(out, '\n## Relations\n\n- mentions [[Spine]]\n');
 });
+
+test('stripCode: blanks fenced and inline code but preserves line count', () => {
+  const input = 'see [[Spine]]\n```\n[[Spine]] inside a fence\n```\nand `[[Spine]]` inline\n';
+  const out = nf.stripCode(input);
+  assert.match(out, /see \[\[Spine\]\]/, 'prose outside code is untouched');
+  assert.strictEqual(out.split('\n').length, input.split('\n').length, 'line count preserved');
+  assert.doesNotMatch(out, /\[\[Spine\]\] inside a fence/, 'fenced content blanked');
+  assert.doesNotMatch(out, /`\[\[Spine\]\]`/, 'inline code blanked');
+});

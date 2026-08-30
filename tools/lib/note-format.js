@@ -95,6 +95,16 @@ function ensureFrontmatter(text, defaults) {
   };
 }
 
+// Blank out fenced blocks and inline code, preserving line count, so a
+// `[[Name]]` or link example inside backticks is never read as a real
+// mention. Duplicated verbatim in tools/verify-links.js — see the comment
+// there for why that copy cannot require this module.
+function stripCode(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
+}
+
 const OBS_RE = /^\s*-\s+\[([A-Za-z][A-Za-z0-9_-]*)\]\s+(.+)$/;
 const REL_RE = /^\s*-\s+(?:([A-Za-z][A-Za-z0-9_-]*)\s+)?\[\[([^\]]+)\]\]\s*(?:\(([^)]*)\))?\s*$/;
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
@@ -143,5 +153,5 @@ function renderRelations(relations) {
 
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
-  extractWikilinks, renderRelations, FORMAT_VERSION,
+  extractWikilinks, renderRelations, FORMAT_VERSION, stripCode,
 };

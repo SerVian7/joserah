@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
-const { ensureFrontmatter, FORMAT_VERSION } = require('./lib/note-format');
+const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, FORMAT_VERSION } = require('./lib/note-format');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -54,16 +54,60 @@ function titleFor(rel, text) {
   return path.basename(rel, '.md');
 }
 
+// Entities are the graph's nodes: one file per person or organisation. Their
+// titles are what other notes mention in prose.
+const ENTITY_PREFIXES = ['.joserah/knowledge/people/', '.joserah/knowledge/wiki/entities/'];
+
+function buildEntityIndex(rootDir, relFiles) {
+  const index = new Map();
+  for (const rel of relFiles) {
+    if (!ENTITY_PREFIXES.some((p) => rel.startsWith(p))) continue;
+    const text = fs.readFileSync(path.join(rootDir, rel), 'utf8');
+    const title = titleFor(rel, text);
+    if (title.length >= 3) index.set(title.toLowerCase(), title);
+  }
+  return index;
+}
+
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Whole-word, case-insensitive, and never inside a fenced block or inline
+// code — the same defensive reading verify-links.js uses.
+function mentionedEntities(text, index, selfTitle) {
+  const hay = stripCode(text);
+  const found = [];
+  for (const [low, title] of index) {
+    if (selfTitle && low === selfTitle.toLowerCase()) continue;
+    if (new RegExp(`(^|[^\\w\\[])${escapeRe(title)}($|[^\\w\\]])`, 'i').test(hay)) found.push(title);
+  }
+  return found.sort();
+}
+
 const { files, boundaries } = scanWorkspace(root);
 let changed = 0;
 
+const entityIndex = buildEntityIndex(root, files);
+
 for (const rel of files) {
   const abs = path.join(root, rel);
-  const text = fs.readFileSync(abs, 'utf8');
-  const next = ensureFrontmatter(text, { title: titleFor(rel, text), type: typeFor(rel) });
-  if (!next.changed) continue;
+  const original = fs.readFileSync(abs, 'utf8');
+  const title = titleFor(rel, original);
+
+  const fm = ensureFrontmatter(original, { title, type: typeFor(rel) });
+  let text = fm.text;
+  let touched = fm.changed;
+
+  const already = new Set(extractWikilinks(text).map((w) => w.toLowerCase()));
+  const missing = mentionedEntities(original, entityIndex, title)
+    .filter((e) => !already.has(e.toLowerCase()));
+  if (missing.length) {
+    text += renderRelations(missing.map((e) => ({ type: 'mentions', target: e, context: null })));
+    touched = true;
+  }
+
+  if (!touched) continue;
   changed++;
-  if (!dryRun) fs.writeFileSync(abs, next.text, 'utf8');
+  if (!dryRun) fs.writeFileSync(abs, text, 'utf8');
 }
 
 // A workspace carries AGENTS.md only, so it is not tied to one vendor's tool.

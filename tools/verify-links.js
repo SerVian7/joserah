@@ -44,6 +44,11 @@ function* mdFiles(dir, rel) {
 
 // Blank out fenced blocks and inline code so link examples inside backticks
 // are not treated as real links.
+//
+// Deliberately duplicated (also in tools/lib/note-format.js): this file is
+// copied verbatim into every workspace by scaffold.js, and doctor.js compares
+// the workspace's copy to the plugin's byte-for-byte, so it cannot require a
+// sibling library file that would not travel with it.
 function stripCode(text) {
   return text
     .replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '))
