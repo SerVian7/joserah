@@ -67,7 +67,7 @@ pick an empty directory, or move the conflicting files aside first. **Never
 add `--force` on your own initiative** — only when the user, having seen the
 list, asks for exactly that.
 
-## 3. Ask before creating: language, name, reach, and the assistant's definition
+## 3. Ask before creating: language, name, reach, the assistant's definition, and whether it keeps itself up to date
 
 Ask these five in this order, each in the language the user is writing in. Four go straight into
 the next step's command — language, reach, the assistant's name, and the keep-up-to-date answer.

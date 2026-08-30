@@ -72,7 +72,6 @@ knowledge base.
 ```
 <workspace>/
 ├── AGENTS.md          the router — read this first
-├── CLAUDE.md           one line -> AGENTS.md
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
