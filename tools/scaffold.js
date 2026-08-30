@@ -63,7 +63,7 @@ const args = parseArgs(process.argv.slice(2));
 // tools/lib/permission-deny.js is the single source of truth for the set;
 // `--settings-only` exists so a restore of an older backup can write exactly
 // these rules again rather than an agent inventing a plausible-looking set.
-const { PERMISSION_DENY, denyFor, hostPathsFor } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 
 // `--feedback` and `--identity-mode` share one three-value vocabulary.
@@ -122,7 +122,11 @@ if (args.settingsOnly) {
   // creation time — see the config.json write below. Without `hosting`
   // persisted there, this path silently dropped the three host rules and
   // handed back a workspace with no wall at all.
-  const rules = denyFor(cfgForSettings.trust || 'owner',
+  // The fallback here must NOT be a bare 'owner': a restore onto a hosted or
+  // shared workspace whose config.json has lost its `trust` key would then
+  // write the nine-rule owner set — no machine-control rules, no host wall —
+  // which is the exact wide-by-default failure defaultTrustFor exists to close.
+  const rules = denyFor(cfgForSettings.trust || defaultTrustFor(cfgForSettings.kind),
     { hostPaths: hostPathsFor(cfgForSettings, dir) });
   console.log(JSON.stringify({ settings: writeSettings(dir, args.force, rules), rules: rules.length }));
   process.exit(0);
@@ -215,20 +219,25 @@ for (const req of ['target', 'workspace']) {
 args.owner = args.owner || '';
 args.language = args.language || '';
 args.role = args.role || '';
-
-args.trust = args.trust || 'owner';
-if (args.trust !== 'owner' && args.trust !== 'guest') {
-  console.error(`scaffold: --trust must be "owner" or "guest" (got ${args.trust})`);
-  process.exit(1);
-}
 args.assistant = args.assistant || '';
 
 // `kind` picks the role supplement (see roleFor in lib/note-format) — never
 // asked as its own question, so it must be rejected up front rather than
-// silently coerced into a role that would then contradict it.
+// silently coerced into a role that would then contradict it. Resolved
+// before --trust below, which derives its own default from this value.
 args.kind = args.kind || 'home';
 if (!['home', 'hosted', 'shared'].includes(args.kind)) {
   console.error(`scaffold: --kind must be "home", "hosted" or "shared" (got ${args.kind})`);
+  process.exit(1);
+}
+
+// Silence must not resolve to the wider permission: an unattended --kind
+// hosted/shared create call with no --trust flag defaults to guest, not
+// owner. See defaultTrustFor in lib/permission-deny.js — the same
+// derivation --settings-only uses, so the two write paths cannot disagree.
+args.trust = args.trust || defaultTrustFor(args.kind);
+if (args.trust !== 'owner' && args.trust !== 'guest') {
+  console.error(`scaffold: --trust must be "owner" or "guest" (got ${args.trust})`);
   process.exit(1);
 }
 

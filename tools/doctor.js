@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
-const { PERMISSION_DENY, denyFor, hostPathsFor } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
 
 // Duplicated from hooks/session-start.js (a script, not a module, so it has
@@ -96,7 +96,11 @@ function versionAtLeast(version, min) {
 let trust = null;
 {
   const recorded = cfg ? cfg.trust : undefined;
-  const needsExplicitTrust = cfg && (cfg.kind === 'hosted' || cfg.kind === 'shared');
+  // Same question defaultTrustFor answers for scaffold.js's write paths —
+  // "which kinds must never have a missing trust silently forgiven?" — but
+  // used here to fail loudly instead of to pick a default: reusing it keeps
+  // the two tools from ever independently drifting on which kinds those are.
+  const needsExplicitTrust = cfg && defaultTrustFor(cfg.kind) === 'guest';
   if (!cfg) {
     // An unreadable config is not a "home" workspace with no trust key — it
     // is a workspace this tool knows nothing about, `kind` included. Saying
@@ -110,7 +114,7 @@ let trust = null;
       check('trust level', false,
         `config.json records no "trust" for a "${cfg.kind}" workspace — it must say "owner" or "guest"; without it the deny set cannot be checked at all`);
     } else {
-      trust = 'owner';
+      trust = defaultTrustFor(cfg.kind);
       check('trust level', true, 'not recorded — a "home" workspace is its owner\'s own');
     }
   } else {

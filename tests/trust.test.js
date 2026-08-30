@@ -197,3 +197,50 @@ test('CRITICAL 3: doctor fails on a hosted workspace that records no trust level
   assert.doesNotMatch(r.stdout, /present with the full owner deny set/,
     'a hosted workspace must never be certified against the owner set by default');
 });
+
+// Task 22: doctor.js was fixed to fail loudly when a hosted/shared workspace
+// records no trust, but the writing side — `--settings-only`, the backup
+// skill's restore path — still resolved the same silence to `denyFor('owner')`.
+// A restore onto exactly the workspace kind the guest wall exists for wrote
+// the nine-rule owner set: no machine-control rules, no host wall. The fix
+// derives the default from `kind` in one place and uses it on both write
+// paths; these three cases pin that derivation directly against what
+// --settings-only actually writes, independent of doctor's own check.
+
+function noTrustWs(t, kind) {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w',
+    '--owner', 'O', '--language', 'en', '--role', 'r', '--kind', kind]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  delete cfg.trust;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  return dir;
+}
+
+test('CRITICAL: --settings-only on a hosted workspace with no recorded trust writes the guest deny set, not owner', (t) => {
+  const dir = noTrustWs(t, 'hosted');
+  const r = runTool('scaffold.js', ['--settings-only', '--target', dir, '--force']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const deny = denySet(dir);
+  assert.ok(deny.some((rule) => /shutdown/.test(rule)),
+    'a hosted workspace with silent trust must get the narrower guest set, never the wider owner set');
+});
+
+test('CRITICAL: --settings-only on a shared workspace with no recorded trust writes the guest deny set, not owner', (t) => {
+  const dir = noTrustWs(t, 'shared');
+  const r = runTool('scaffold.js', ['--settings-only', '--target', dir, '--force']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const deny = denySet(dir);
+  assert.ok(deny.some((rule) => /shutdown/.test(rule)),
+    'a shared workspace with silent trust must get the narrower guest set, never the wider owner set');
+});
+
+test('a home workspace with no recorded trust still gets the owner set via --settings-only', (t) => {
+  const dir = noTrustWs(t, 'home');
+  const r = runTool('scaffold.js', ['--settings-only', '--target', dir, '--force']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const deny = denySet(dir);
+  assert.deepStrictEqual(deny, pd.PERMISSION_DENY, 'home behaviour must not change');
+});

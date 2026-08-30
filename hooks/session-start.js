@@ -31,13 +31,34 @@ function ensureDailyStub(today) {
   return p;
 }
 
-function firstNOpenTasks(p, n) {
+// A task is often a wrapped paragraph, not one line — the marker plus its
+// indented continuation lines, ending at the next `- [ ]` or a blank line.
+// Keeping only the marker line handed the briefing half a sentence; one
+// session was told a task concerned "Işılay Gece, Orhan" and nothing
+// further. The cap below is a character budget, not a task count: a line
+// count has no relationship to how much of the briefing one long task
+// consumes, and would either cut a task short again or, for short one-line
+// tasks, stop well before the budget is actually used.
+function firstNOpenTasks(p, maxChars) {
+  const lines = readText(p).split(/\r?\n/);
   const out = [];
-  for (const line of readText(p).split(/\r?\n/)) {
-    if (line.trim().startsWith('- [ ]')) {
-      out.push(line.trim());
-      if (out.length >= n) break;
+  let used = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('- [ ]')) continue;
+    const block = [lines[i].trim()];
+    let j = i + 1;
+    while (j < lines.length && /^\s+\S/.test(lines[j])) {
+      block.push(lines[j].trim());
+      j++;
     }
+    const task = block.join(' ');
+    // At least one task always goes through, even over budget — an empty
+    // briefing is worse than one long task, and this is still whole, never
+    // cut mid-sentence.
+    if (out.length && used + task.length > maxChars) break;
+    out.push(task);
+    used += task.length;
+    i = j - 1;
   }
   return out;
 }
@@ -181,7 +202,7 @@ parts.push(
   `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
 );
 
-const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 5);
+const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 1500);
 if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));
 
 const dailyText = readText(dailyPath);

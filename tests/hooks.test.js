@@ -169,3 +169,27 @@ test('session-start injects nothing when the marker is missing', (t) => {
   const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.doesNotMatch(ctx, /## This assistant/);
 });
+
+// Task 22: firstNOpenTasks kept only the `- [ ]` marker line itself. Every
+// task in the akkaya workspace is a wrapped paragraph, so the briefing
+// arrived mid-sentence — one session was told a task concerned "Işılay Gece,
+// Orhan" and got nothing further. The indented continuation lines belong to
+// the task and must ride along with it, up to the next `- [ ]` or a blank
+// line.
+test('session-start carries a wrapped multi-line task in whole, not cut at the marker line', (t) => {
+  const dir = hookWs(t);
+  const nowPath = path.join(dir, '.joserah', 'desk', 'tasks', 'now.md');
+  fs.writeFileSync(nowPath,
+    '# now — current focus\n\n' +
+    '- [ ] [2026-08-30] Işılay Gece, Orhan ile konuşulacak konular üzerine uzun bir\n' +
+    '  paragraf halinde yazılmış bir görev; cümle burada bitmiyor, devam ediyor ve\n' +
+    '  önemli detaylar tam da bu devam satırlarında duruyor.\n' +
+    '- [ ] [2026-08-30] second task, one line\n');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Işılay Gece, Orhan/);
+  assert.match(ctx, /önemli detaylar tam da bu devam satırlarında duruyor/,
+    'continuation lines must arrive with the task, not be cut off mid-sentence');
+  assert.match(ctx, /second task, one line/,
+    'the next task is a separate item, not swallowed into the previous one');
+});

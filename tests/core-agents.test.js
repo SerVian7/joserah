@@ -115,3 +115,22 @@ test('scaffold rejects an unknown kind instead of guessing', (t) => {
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stderr, /kind/i);
 });
+
+// Task 22, merge hardening: four standing rules distilled from notes the
+// akkaya-hosted assistant wrote about this rewrite, plus one the owner added
+// same day. Each anchor must occur exactly once — a rule repeated somewhere
+// else in the file has drifted out of sync with itself, which is exactly the
+// kind of silent divergence rule 1 below exists to catch in workspace data.
+test('the shipped core AGENTS.md states the four merge-hardening rules exactly once each', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  const anchors = [
+    'the live system is the authority',
+    'traceable to something the owner actually said',
+    'judged by what it touches and never by who sent it',
+    'the narrower permission applies',
+  ];
+  for (const anchor of anchors) {
+    const count = text.split(anchor).length - 1;
+    assert.strictEqual(count, 1, `expected "${anchor}" exactly once in core AGENTS.md, found ${count}`);
+  }
+});

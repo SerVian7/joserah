@@ -53,6 +53,19 @@ function toRulePath(p) {
   return `//${norm.replace(/^\/+/, '')}/**`;
 }
 
+// The one place that decides what a missing `trust` means. `hosted` and
+// `shared` are somebody else's memory living on a machine (or a connection)
+// that isn't theirs — silence there must resolve to the narrower `guest`
+// set, never the wider `owner` one; a `home` workspace's owner is whoever is
+// already sitting at the machine, so silence there still means `owner`.
+// scaffold.js calls this from both write paths (the main create and
+// `--settings-only`) rather than each hard-coding 'owner' on its own — that
+// duplication is exactly what let a restore onto a hosted workspace with no
+// recorded trust write the owner set: no machine-control rules, no host wall.
+function defaultTrustFor(kind) {
+  return (kind === 'hosted' || kind === 'shared') ? 'guest' : 'owner';
+}
+
 function denyFor(trust, opts = {}) {
   if (trust === 'owner') return PERMISSION_DENY.slice();
   if (trust !== 'guest') throw new Error(`unknown trust level: ${trust}`);
@@ -64,4 +77,4 @@ function denyFor(trust, opts = {}) {
   return rules;
 }
 
-module.exports = { PERMISSION_DENY, GUEST_MACHINE_DENY, denyFor, hostPathsFor };
+module.exports = { PERMISSION_DENY, GUEST_MACHINE_DENY, denyFor, hostPathsFor, defaultTrustFor };
