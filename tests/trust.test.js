@@ -49,3 +49,50 @@ test('toRulePath handles POSIX absolute paths for non-Windows hosts', () => {
   assert.ok(rules.includes('Edit(//home/ubuntu/**)'));
   assert.ok(rules.includes('Write(//home/ubuntu/**)'));
 });
+
+const fs = require('fs');
+const { tmpdir, runTool } = require('./helpers');
+
+test('scaffold defaults to owner trust and records formatVersion 2', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.trust, 'owner');
+  assert.strictEqual(cfg.formatVersion, 2);
+  const s = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'));
+  assert.deepStrictEqual(s.permissions.deny, pd.PERMISSION_DENY);
+});
+
+test('scaffold --trust guest records it and writes the guest deny set', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js',
+    ['--target', dir, '--workspace', 'w', '--trust', 'guest', '--host-path', 'd:/atay']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.trust, 'guest');
+  const s = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'settings.json'), 'utf8'));
+  assert.ok(s.permissions.deny.includes('Read(//d/atay/**)'));
+  assert.ok(s.permissions.deny.some((r2) => /shutdown/.test(r2)));
+});
+
+test('scaffold --assistant records the assistant name', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--assistant', 'Rıfkı']);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.assistantName, 'Rıfkı');
+});
+
+test('scaffold no longer writes CLAUDE.md', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')), 'AGENTS.md is written');
+  assert.ok(!fs.existsSync(path.join(dir, 'CLAUDE.md')), 'CLAUDE.md is not');
+});
+
+test('scaffold rejects an unknown trust level instead of guessing', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--trust', 'sandboxed']);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /trust/i);
+});

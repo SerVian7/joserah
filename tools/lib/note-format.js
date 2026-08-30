@@ -21,6 +21,10 @@
 const FM_RE = /^---(\r?\n)([\s\S]*?)(\r?\n)---(\r?\n)?/;
 const FM_START_RE = /^---\r?\n/;
 
+// The note format version this library implements. doctor.js and migrate.js
+// read this to decide whether a workspace's notes need migrating.
+const FORMAT_VERSION = 2;
+
 function parseScalar(raw) {
   const v = raw.trim();
   if (v.startsWith('[') && v.endsWith(']')) {
@@ -137,4 +141,7 @@ function renderRelations(relations) {
   return `\n## Relations\n\n${lines.join('\n')}\n`;
 }
 
-module.exports = { parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations, extractWikilinks, renderRelations };
+module.exports = {
+  parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
+  extractWikilinks, renderRelations, FORMAT_VERSION,
+};

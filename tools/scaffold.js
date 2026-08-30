@@ -3,6 +3,7 @@
  * Create a Joserah workspace from templates/.
  * Usage: node scaffold.js --target DIR --workspace NAME
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
+ *                         [--trust owner|guest] [--assistant NAME] [--host-path DIR]
  *        node scaffold.js --settings-only --target DIR [--force]
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG] [--role LINE]
  *
@@ -42,12 +43,13 @@ const args = parseArgs(process.argv.slice(2));
 // tools/lib/permission-deny.js is the single source of truth for the set;
 // `--settings-only` exists so a restore of an older backup can write exactly
 // these rules again rather than an agent inventing a plausible-looking set.
-const { PERMISSION_DENY } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
+const { FORMAT_VERSION } = require('./lib/note-format');
 
 // Permission rules are the workspace's guard on keys/ — they must exist from
 // the first minute, so scaffold creates .claude/ itself. (Claude Code also
 // creates that directory on its own; the two coexist fine.)
-function writeSettings(dir, force) {
+function writeSettings(dir, force, rules) {
   const claudeDir = path.join(dir, '.claude');
   const file = path.join(claudeDir, 'settings.json');
   if (fs.existsSync(file) && !force) {
@@ -56,8 +58,16 @@ function writeSettings(dir, force) {
     process.exit(1);
   }
   fs.mkdirSync(claudeDir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ permissions: { deny: PERMISSION_DENY } }, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(file, JSON.stringify({ permissions: { deny: rules } }, null, 2) + '\n', 'utf8');
   return file;
+}
+
+// A guest workspace is walled off from the host tree it sits beside. The host
+// path comes from the hosting block when there is one, and from --host-path
+// at creation time.
+function hostPathsFrom(cfg) {
+  const p = cfg && cfg.hosting && cfg.hosting.hostPath;
+  return p ? [p] : [];
 }
 
 // Strips a leading UTF-8 BOM before parsing — PowerShell redirection and some
@@ -83,7 +93,10 @@ if (args.settingsOnly) {
     console.error(`scaffold: ${dir} is not a Joserah workspace (no .joserah/config.json found) — refusing to write settings`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ settings: writeSettings(dir, args.force), rules: PERMISSION_DENY.length }));
+  const cfgForSettings = readJson(path.join(dir, '.joserah', 'config.json'));
+  const rules = denyFor(cfgForSettings.trust || 'owner',
+    { hostPaths: hostPathsFrom(cfgForSettings) });
+  console.log(JSON.stringify({ settings: writeSettings(dir, args.force, rules), rules: rules.length }));
   process.exit(0);
 }
 
@@ -151,6 +164,13 @@ for (const req of ['target', 'workspace']) {
 args.owner = args.owner || '';
 args.language = args.language || '';
 args.role = args.role || '';
+
+args.trust = args.trust || 'owner';
+if (args.trust !== 'owner' && args.trust !== 'guest') {
+  console.error(`scaffold: --trust must be "owner" or "guest" (got ${args.trust})`);
+  process.exit(1);
+}
+args.assistant = args.assistant || '';
 
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
@@ -235,9 +255,12 @@ fs.mkdirSync(path.join(root, '.joserah'), { recursive: true });
 fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   workspaceName: args.workspace,
   ownerName: args.owner,
+  assistantName: args.assistant,
   dialogueLanguage: args.language,
   created: today,
   createdByPluginVersion: readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
+  formatVersion: FORMAT_VERSION,
+  trust: args.trust,
   lastBackup: null,
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in
@@ -247,7 +270,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
 // that then drift.
 
 // Permission rules (see PERMISSION_DENY above — the one source of truth).
-writeSettings(root, true);
+writeSettings(root, true, denyFor(args.trust, { hostPaths: args['host-path'] ? [args['host-path']] : [] }));
 
 // Workspace .gitignore. The project/runtime rule is expressed as a pattern,
 // never an enumerated list, so it holds in anyone's workspace.
