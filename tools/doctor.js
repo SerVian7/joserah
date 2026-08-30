@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
-const { PERMISSION_DENY } = require('./lib/permission-deny');
+const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
+const { FORMAT_VERSION } = require('./lib/note-format');
 
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
@@ -69,10 +70,13 @@ function versionAtLeast(version, min) {
     try {
       const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       const deny = (parsed.permissions && parsed.permissions.deny) || [];
-      const missing = PERMISSION_DENY.filter((r) => !deny.includes(r));
+      const trust = (cfg && cfg.trust) || 'owner';
+      const hostPath = cfg && cfg.hosting && cfg.hosting.hostPath;
+      const expected = denyFor(trust, { hostPaths: hostPath ? [hostPath] : [] });
+      const missing = expected.filter((r) => !deny.includes(r));
       ok = missing.length === 0;
-      detail = ok ? 'present with the full deny set'
-                 : `present but missing ${missing.length} deny rule(s): ${missing.join(', ')}`;
+      detail = ok ? `present with the full ${trust} deny set`
+                 : `present but missing ${missing.length} rule(s) from the ${trust} deny set: ${missing.join(', ')}`;
     } catch (err) {
       detail = `present but not valid JSON: ${err.message}`;
     }
@@ -103,6 +107,12 @@ const pluginVersion = JSON.parse(
     .replace(/^\uFEFF/, '')).version;
 check('workspace/plugin version', true,
   `workspace created by ${cfg && cfg.createdByPluginVersion || 'unknown'}, plugin is ${pluginVersion}`);
+
+const fv = cfg && cfg.formatVersion;
+check('format version', fv === FORMAT_VERSION,
+  fv === FORMAT_VERSION
+    ? `workspace is on format v${FORMAT_VERSION}`
+    : `workspace is on format v${fv || 1}, current is v${FORMAT_VERSION} \u2014 run: node tools/migrate.js ${root}`);
 
 // G1/K4-mech: the workspace's own copy of verify-links.js is written once at
 // scaffold time and never updated by anything after that. If it has drifted

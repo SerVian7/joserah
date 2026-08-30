@@ -63,7 +63,7 @@ test('I3: doctor fails when the deny set is a subset', (t) => {
   fs.writeFileSync(sPath, JSON.stringify(s, null, 2));
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 1);
-  assert.match(r.stdout, /missing \d+ deny rule/);
+  assert.match(r.stdout, /missing \d+ rule.*deny set/i);
 });
 
 test('I-K3: a 0.3.0-created workspace with .claude/ removed fails doctor', (t) => {
@@ -93,4 +93,32 @@ test('M3: a missing local checker is named, not reported as broken links', (t) =
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /local verify-links\.js current.*missing/i);
   assert.match(r.stdout, /ok\s+internal links resolve/);
+});
+
+test('doctor fails when a guest workspace carries only the owner deny set', (t) => {
+  const path2 = require('path');
+  const fs2 = require('fs');
+  const dir = path2.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path2.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs2.readFileSync(cfgPath, 'utf8'));
+  cfg.trust = 'guest';
+  fs2.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stdout, /deny set/i);
+});
+
+test('doctor reports a workspace still on an older format version', (t) => {
+  const path2 = require('path');
+  const fs2 = require('fs');
+  const dir = path2.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path2.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs2.readFileSync(cfgPath, 'utf8'));
+  delete cfg.formatVersion;
+  fs2.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.match(r.stdout, /format version/i);
+  assert.match(r.stdout, /migrate/i);
 });
