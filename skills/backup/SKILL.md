@@ -97,9 +97,15 @@ one-line description if one could be found — never invented.
 For each directory one level directly under `projects/` and one level
 directly under `docker-stack/`:
 
-- **Remote:** `git -C <dir> remote get-url origin`. If that fails (not a
-  repo, no `origin`, git itself missing), write "no remote" — never treat the
-  failure as an error, just an absent fact.
+- **Remote:** first confirm the directory is a repository *in its own right*:
+  `git -C <dir> rev-parse --show-toplevel` must print `<dir>` itself. If it
+  prints an ancestor — or fails — `<dir>` is not a repository of its own, and
+  git is answering for the parent: write "no remote (not a repository of its
+  own)" and do NOT run `remote get-url` there. A manifest line that borrows
+  the workspace's own remote says "this project is backed up" about a project
+  that has no copy anywhere — the worst lie a backup document can tell. Only
+  when the toplevel matches does `git -C <dir> remote get-url origin` mean
+  anything; if it then prints nothing, write "no remote".
 - **Description:** read `<dir>/README.md` first, then `<dir>/AGENTS.md` if
   there is no README, and take the first Markdown H1 (`# …`) if either file
   exists and has one. If neither file exists, or neither has a heading, write
@@ -480,6 +486,11 @@ node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.re
 
 ## Rules
 
+- Any `git -C <subdir>` inside a directory that is not a repository of its
+  own is silently answered by the nearest ancestor repository — `status`,
+  `log`, `rev-parse HEAD` and `remote get-url` alike. Verify
+  `rev-parse --show-toplevel` prints the directory itself before trusting
+  any of them.
 - Never write a zip inside the workspace it backs up.
 - Never restore over an existing workspace without explicit confirmation.
 - Never add or push to a repository remote the owner did not name — confirm
