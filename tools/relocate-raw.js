@@ -164,6 +164,20 @@ if (!dryRun) {
     } else {
       let remaining = [];
       try { remaining = fs.readdirSync(oldRaw); } catch (e2) { /* oldRaw itself is now unreadable or gone */ }
+      // Whether a re-run helps depends entirely on whether anything has
+      // actually landed in newRaw yet. If nothing has (the failure hit the
+      // very first entry the loop tried), newRaw still holds only the
+      // plugin's own README.md, the collision guard does not fire, and a
+      // real re-run succeeds — so the message must not claim otherwise. If
+      // at least one entry has landed, newRaw is no longer just that
+      // template file and the guard refuses every subsequent run by design;
+      // only then is "re-running will be refused" true.
+      const nextSteps = movedEntries.length > 0
+        ? 'Re-running relocate-raw will be refused by design (the destination raw/ is no longer empty) — ' +
+          'move the remaining entries into the destination by hand, then remove the old directory.'
+        : 'Nothing has actually moved yet, so this is safe to retry: fix the underlying issue and re-run ' +
+          'relocate-raw; the notes already rewritten are left alone, and the move is attempted again ' +
+          'from scratch.';
       console.error(
         'relocate-raw: the citing notes have already been rewritten to point at the new location, but ' +
         'moving raw/ itself failed partway.\n' +
@@ -171,8 +185,7 @@ if (!dryRun) {
         `  new (destination): ${newRaw}\n` +
         `  already moved:     ${movedEntries.length ? movedEntries.join(', ') : '(none)'}\n` +
         `  still under old:   ${remaining.length ? remaining.join(', ') : '(none)'}\n` +
-        'Re-running relocate-raw will be refused by design (the destination raw/ is no longer empty) — ' +
-        'move the remaining entries into the destination by hand, then remove the old directory.'
+        nextSteps
       );
     }
     process.exit(1);

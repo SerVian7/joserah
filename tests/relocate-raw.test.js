@@ -21,6 +21,38 @@ function legacyWs(t) {
   return dir;
 }
 
+// There is no portable, permission-based way to make fs.renameSync fail on
+// a specific entry (confirmed by experiment: a read-only file still renames
+// cleanly on this platform, and a read-only directory does not block
+// renaming entries out of it either), and pre-staging a real collision
+// under the root raw/ would trip the tool's own guard before the
+// moving-raw stage is ever reached. So the fault is injected directly via a
+// `-r` preload that makes renaming one specific, named entry throw — this
+// exercises the moving-raw catch branch itself, deterministically, without
+// depending on OS-specific locking behaviour.
+function writeRenameFault(scratchDir, targetName) {
+  const fault = path.join(scratchDir, 'inject-rename-fault.js');
+  fs.writeFileSync(fault, [
+    "'use strict';",
+    "const fs = require('fs');",
+    "const path = require('path');",
+    'const original = fs.renameSync;',
+    'fs.renameSync = function patched(from, to) {',
+    `  if (path.basename(String(from)) === ${JSON.stringify(targetName)}) {`,
+    "    throw new Error('SIMULATED-FAILURE: injected for test');",
+    '  }',
+    '  return original.call(fs, from, to);',
+    '};',
+  ].join('\n'));
+  return fault;
+}
+
+function runFaulted(dir, fault) {
+  return spawnSync(process.execPath,
+    ['-r', fault, path.join(PLUGIN_ROOT, 'tools', 'relocate-raw.js'), dir],
+    { encoding: 'utf8' });
+}
+
 test('relocates knowledge/raw to the root and rewrites citing links', (t) => {
   const dir = legacyWs(t);
   const r = runTool('relocate-raw.js', [dir]);
@@ -103,46 +135,52 @@ test('the .gitignore exclusion is written even when a later stage fails', (t) =>
   assert.ok(fs.existsSync(path.join(dir, '.joserah', 'knowledge', 'raw')), 'raw/ untouched by the failed run');
 });
 
-test('a moving-raw failure names both directories and does not promise a re-run will finish it', (t) => {
+test('a moving-raw failure on the very first entry says retrying is safe, and a real re-run succeeds', (t) => {
   const dir = legacyWs(t);
-  // An extra top-level entry under the old raw/ whose move this test will
-  // force to fail.
+  // 'explode.md' sorts before 'imports', so it is the entry the moving-raw
+  // loop reaches first: the injected failure hits before anything has
+  // actually moved into the destination.
   fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'raw', 'explode.md'), 'x\n');
+  const fault = writeRenameFault(tmpdir(t), 'explode.md');
 
-  // There is no portable, permission-based way to make fs.renameSync fail
-  // on a file it does not need write access to (confirmed: a read-only
-  // file still renames cleanly on this platform), and pre-staging a real
-  // collision under the root raw/ would trip the tool's own guard before
-  // the moving-raw stage is ever reached. So the fault is injected directly
-  // via a `-r` preload that makes renaming this one specific entry throw —
-  // this exercises the moving-raw catch branch itself, deterministically,
-  // without depending on OS-specific locking behaviour.
-  const scratch = tmpdir(t);
-  const fault = path.join(scratch, 'inject-rename-fault.js');
-  fs.writeFileSync(fault, [
-    "'use strict';",
-    "const fs = require('fs');",
-    "const path = require('path');",
-    'const original = fs.renameSync;',
-    'fs.renameSync = function patched(from, to) {',
-    "  if (path.basename(String(from)) === 'explode.md') {",
-    "    throw new Error('SIMULATED-FAILURE: injected for test');",
-    '  }',
-    '  return original.call(fs, from, to);',
-    '};',
-  ].join('\n'));
+  const faulted = runFaulted(dir, fault);
+  assert.strictEqual(faulted.status, 1, faulted.stdout + faulted.stderr);
+  assert.match(faulted.stderr, /moving raw\/ itself failed partway/);
+  assert.match(faulted.stderr, /already moved:\s*\(none\)/);
+  assert.match(faulted.stderr, /safe to retry/i, 'says retrying is safe when nothing has moved');
+  assert.doesNotMatch(faulted.stderr, /refused by design/,
+    'must not claim a re-run will be refused when nothing has actually moved');
 
-  const r = spawnSync(process.execPath,
-    ['-r', fault, path.join(PLUGIN_ROOT, 'tools', 'relocate-raw.js'), dir],
-    { encoding: 'utf8' });
+  // The claim only means something if a real re-run is checked against it,
+  // not just read off the message: run the real tool (no fault) and confirm
+  // it actually succeeds, exactly as promised.
+  const real = runTool('relocate-raw.js', [dir]);
+  assert.strictEqual(real.status, 0, real.stderr);
+  assert.strictEqual(JSON.parse(real.stdout).moved, true, 'the promised re-run genuinely succeeds');
+});
 
-  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+test('a moving-raw failure after an entry has moved says a re-run will be refused, and it is', (t) => {
+  const dir = legacyWs(t);
+  // 'zzz-explode.md' sorts after 'imports', so 'imports' has already landed
+  // in the destination by the time the loop reaches the entry made to fail.
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'raw', 'zzz-explode.md'), 'x\n');
+  const fault = writeRenameFault(tmpdir(t), 'zzz-explode.md');
+
+  const faulted = runFaulted(dir, fault);
+  assert.strictEqual(faulted.status, 1, faulted.stdout + faulted.stderr);
   const oldRaw = path.join(dir, '.joserah', 'knowledge', 'raw');
   const newRaw = path.join(dir, 'raw');
-  assert.match(r.stderr, /moving raw\/ itself failed partway/);
-  assert.ok(r.stderr.includes(oldRaw), 'names the old directory by absolute path');
-  assert.ok(r.stderr.includes(newRaw), 'names the new directory by absolute path');
-  assert.match(r.stderr, /by hand/i, 'tells the operator to finish manually');
-  assert.match(r.stderr, /refused by design/i, 'states plainly that a re-run will not help');
-  assert.doesNotMatch(r.stderr, /re-run relocate-raw to complete the move/, 'must not promise a re-run will finish it');
+  assert.match(faulted.stderr, /moving raw\/ itself failed partway/);
+  assert.ok(faulted.stderr.includes(oldRaw), 'names the old directory by absolute path');
+  assert.ok(faulted.stderr.includes(newRaw), 'names the new directory by absolute path');
+  assert.match(faulted.stderr, /already moved:\s*imports/);
+  assert.match(faulted.stderr, /by hand/i, 'tells the operator to finish manually');
+  assert.match(faulted.stderr, /refused by design/i, 'states plainly that a re-run will not help');
+  assert.doesNotMatch(faulted.stderr, /safe to retry/i, 'must not also claim retrying is safe');
+
+  // Check the claim against what a real re-run actually does, not just the
+  // message's wording: it must genuinely be refused by the collision guard.
+  const real = runTool('relocate-raw.js', [dir]);
+  assert.strictEqual(real.status, 1, 'the promised refusal genuinely happens');
+  assert.match(real.stderr, /already exists at the root and is not empty/);
 });
