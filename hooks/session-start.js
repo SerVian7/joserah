@@ -122,6 +122,26 @@ const parts = [
   `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
 ];
 
+// Identity is injected, not left to AGENTS.md to be read. A file the model
+// may or may not open cannot override the name it already believes it has:
+// on 2026-08-30 an assistant with `assistantName: "Rıfkı"` on record still
+// introduced itself as Claude, to an owner who is not a developer. The
+// injected context is the only reliable place for this.
+const who = [];
+if (cfg.assistantName) {
+  who.push(`**Your name in this workspace is ${cfg.assistantName}.** Introduce yourself as ${cfg.assistantName} — never as the model or tool you happen to be running on.`);
+}
+if (cfg.ownerName) who.push(`The owner of this workspace is **${cfg.ownerName}**.`);
+if (cfg.dialogueLanguage) who.push(`Speak **${cfg.dialogueLanguage}** to them.`);
+if (cfg.ownerName && cfg.assistantName) {
+  who.push(`Open by greeting them by name and giving yours — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
+}
+who.push('They are the owner, **not a developer of this software**: do not volunteer file paths, folder names, repository names, config keys, tool or model names, or version numbers. Few words, concrete data.');
+if (cfg.trust === 'guest') {
+  who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
+}
+parts.push('\n### Who you are here\n' + who.join('\n'));
+
 const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 5);
 if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));
 

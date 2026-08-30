@@ -55,3 +55,40 @@ test('M15: BOM in config.json does not blank the config', (t) => {
   const { readConfig } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'workspace'));
   assert.strictEqual(readConfig(ws).workspaceName, 'w');
 });
+
+// Identity must arrive through the injected context, not through a file the
+// model may never open. Regression guard for 2026-08-30: an assistant with
+// `assistantName: "Rıfkı"` on record still introduced itself as Claude.
+test('session-start injects the assistant name, owner and language', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w',
+    '--owner', 'Sevgi D. Akkaya', '--language', 'Turkish']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.assistantName = 'Rıfkı';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+
+  const r = runHook('session-start.js', dir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Your name in this workspace is Rıfkı/);
+  assert.match(ctx, /Sevgi D\. Akkaya/);
+  assert.match(ctx, /Speak \*\*Turkish\*\*/);
+  assert.match(ctx, /not a developer of this software/);
+  assert.match(ctx, /Open by greeting them by name/);
+});
+
+test('session-start adds the guest confinement line only for a guest workspace', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+
+  let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /Trust: \*\*guest\*\*/);
+
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.trust = 'guest';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Trust: \*\*guest\*\*/);
+});

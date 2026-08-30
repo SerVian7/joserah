@@ -20,8 +20,17 @@ const cfg = readConfig(root);
 check('workspace marker readable', !!cfg, root);
 check('node version >= 18', Number(process.versions.node.split('.')[0]) >= 18, process.version);
 
-for (const f of ['AGENTS.md', 'CLAUDE.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
-                 '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md', 'keys/AGENTS.md']) {
+// `CLAUDE.md` is deliberately NOT required: a workspace carries `AGENTS.md`
+// only, so it is not tied to one vendor's tool (owner, 2026-08-30: "CLAUDE.md
+// dosyası olmasına gerek yok, sonsuza dek claude ile çalışmayabiliriz").
+const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
+                  '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md'];
+
+// A hosted workspace runs on the host's accounts and the host's `keys/` by
+// design, so it has no `keys/` of its own and must not be told to grow one.
+if (cfg && cfg.kind !== 'hosted') required.push('keys/AGENTS.md');
+
+for (const f of required) {
   check(`exists: ${f}`, fs.existsSync(path.join(root, f)));
 }
 
