@@ -117,12 +117,14 @@ const cfg = readConfig(ROOT) || {};
 const staleness = backupStalenessLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
-// Context arrives in three layers, and the order is deliberate — it is how the
+// Context arrives in four layers, and the order is deliberate — it is how the
 // model weighs what it reads:
 //   1. AGENTS.md   the system prompt: the same in every workspace, never varies.
 //   2. this block   what is TRUE of this workspace: who it belongs to, who you
 //                   are in it, what language, what you may touch.
-//   3. next block   what happens to be true RIGHT NOW: the date, open tasks,
+//   3. agent block  the owner's overlay on the assistant's default character
+//                   (layer 4 below) — empty unless the owner wrote to it.
+//   4. next block   what happens to be true RIGHT NOW: the date, open tasks,
 //                   today's journal — computed per session, true of no other.
 // Identity belongs in layer 2 and is injected, never left to AGENTS.md to be
 // read: a file the model may or may not open cannot override the name it
@@ -141,15 +143,32 @@ who.push('They are the owner, **not a developer of this software**: do not volun
 if (cfg.trust === 'guest') {
   who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
 }
-// Layer 2 first, then layer 3. What is true of this workspace outranks what is
-// true only of this moment, so it is read first and never buried under a date.
+// Layer 2 first, then layer 3, then layer 4. What is true of this workspace
+// outranks what is true only of this moment, so it is read first and never
+// buried under a date.
 const parts = [
   '## This workspace',
   who.join('\n'),
+];
+
+// Layer 4 — the owner's overlay on the assistant's default character. Shipped
+// empty; injected only when it has real content, so an untouched workspace
+// spends no context on it. The shipped explanatory prose is stripped by
+// matching it as a literal block read straight from the plugin's own
+// template (the single source of truth for what "still shipped, still
+// empty" looks like) — never by discarding every line that starts with "#"
+// or ">", which would also swallow a heading or a quoted line the owner adds
+// as a real rule.
+const agentText = readText(path.join(ROOT, '.joserah', 'agent.md'));
+const agentTemplate = readText(path.join(__dirname, '..', 'templates', '.joserah', 'agent.md'));
+const agentBody = (agentText.startsWith(agentTemplate) ? agentText.slice(agentTemplate.length) : agentText).trim();
+if (agentBody) parts.push('\n## This assistant\n' + agentBody);
+
+parts.push(
   `\n## Right now (computed for this session)`,
   `${today} ${pad(now.getHours())}:${pad(now.getMinutes())}, ${weekday(now)}.`,
   `Workspace: ${cfg.workspaceName || path.basename(ROOT)} (${ROOT})`,
-];
+);
 
 const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.md'), 5);
 if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));

@@ -25,7 +25,8 @@ check('node version >= 18', Number(process.versions.node.split('.')[0]) >= 18, p
 // only, so it is not tied to one vendor's tool (owner, 2026-08-30: "CLAUDE.md
 // dosyası olmasına gerek yok, sonsuza dek claude ile çalışmayabiliriz").
 const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
-                  '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md'];
+                  '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md',
+                  '.joserah/agent.md'];
 
 // A hosted workspace runs on the host's accounts and the host's `keys/` by
 // design, so it has no `keys/` of its own and must not be told to grow one.

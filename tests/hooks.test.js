@@ -92,3 +92,29 @@ test('session-start adds the guest confinement line only for a guest workspace',
   ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /Trust: \*\*guest\*\*/);
 });
+
+test('scaffold ships an agent overlay that is empty of rules', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const text = fs.readFileSync(path.join(dir, '.joserah', 'agent.md'), 'utf8');
+  assert.match(text, /^#\s/m, 'has a heading explaining what it is for');
+  assert.doesNotMatch(text, /^\s*[-*]\s+\w/m, 'ships no rules of its own');
+});
+
+test('session-start injects the agent overlay only when it has content', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--assistant', 'Ada']);
+  const agentPath = path.join(dir, '.joserah', 'agent.md');
+
+  let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /## This assistant/, 'an empty overlay adds nothing');
+
+  fs.appendFileSync(agentPath, '\n- Always answer in bullet points.\n');
+  ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /## This assistant/);
+  assert.match(ctx, /Always answer in bullet points/);
+  assert.ok(ctx.indexOf('## This workspace') < ctx.indexOf('## This assistant'),
+    'agent overlay comes after the workspace block');
+  assert.ok(ctx.indexOf('## This assistant') < ctx.indexOf('## Right now'),
+    'agent overlay comes before the computed block');
+});
