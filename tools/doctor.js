@@ -6,7 +6,12 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
-const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
+const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
+
+// Duplicated from hooks/session-start.js (a script, not a module, so it has
+// nothing to require) — the exact byte sequence the session-start hook
+// looks for before it will inject anything from .joserah/agent.md at all.
+const AGENT_OVERLAY_MARKER = '<!-- joserah:agent-overlay-below -->';
 
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
@@ -114,6 +119,43 @@ function versionAtLeast(version, min) {
     detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding?`;
   }
   check('exists: JOSERAH-ROLE.md', ok, detail);
+}
+
+// R11: the session-start hook injects only the text sitting below this exact
+// marker (see AGENT_OVERLAY_MARKER above) — an owner who hand-edits
+// .joserah/agent.md and loses the marker gets a permanent, silent no-op,
+// while every check above this one still reports the file as present. Non-
+// fatal: a rewritten agent.md is the owner's own call, not a doctor failure,
+// so `ok` here is unconditional — only the detail carries the finding, gated
+// on the same boolean, so a healthy workspace's line reads clean.
+{
+  const agentPath = path.join(root, '.joserah', 'agent.md');
+  if (fs.existsSync(agentPath)) {
+    const hasMarker = fs.readFileSync(agentPath, 'utf8').includes(AGENT_OVERLAY_MARKER);
+    check('agent.md overlay marker present', true,
+      hasMarker ? '' : 'missing — the session-start hook injects only text below this marker, so nothing in this file reaches any session right now');
+  }
+}
+
+// Step 4/Task 19: informational only, like the check above — an unreported
+// feedback note is something to look at, not a broken workspace. Absent
+// .joserah/feedback/ prints nothing at all rather than a "0 notes" line no
+// one asked for.
+{
+  const feedbackDir = path.join(root, '.joserah', 'feedback');
+  if (fs.existsSync(feedbackDir)) {
+    const counts = FEEDBACK_AREAS.map((area) => {
+      const areaDir = path.join(feedbackDir, area);
+      if (!fs.existsSync(areaDir)) return `${area}: 0 unreported`;
+      const unreported = fs.readdirSync(areaDir).filter((f) => {
+        if (!f.endsWith('.md')) return false;
+        const { data } = parseFrontmatter(fs.readFileSync(path.join(areaDir, f), 'utf8'));
+        return !data.reported || data.reported === 'null';
+      }).length;
+      return `${area}: ${unreported} unreported`;
+    });
+    check('feedback notes', true, counts.join(', '));
+  }
 }
 
 // Informational only: a workspace merely created by an older plugin version

@@ -265,3 +265,53 @@ test('a later --identity-only call without --feedback/--identity-mode leaves exi
   assert.strictEqual(cfg.feedback.github, 'someuser');
   assert.strictEqual(cfg.identity.mode, 'manual');
 });
+
+// Task 19: tools/feedback.js — file it, or drop it without fuss.
+const FEEDBACK_REPO = 'SerVian7/joserah';
+
+function seedNote(root, area, name) {
+  const dir = path.join(root, '.joserah', 'feedback', area);
+  fs.mkdirSync(dir, { recursive: true });
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, nf.renderFeedbackNote(GOOD, []));
+  return p;
+}
+
+test('--list names only the notes that were never reported', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const a = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  const b = seedNote(dir, 'structure', '2026-08-30-b.md');
+  fs.writeFileSync(b, fs.readFileSync(b, 'utf8')
+    .replace('reported: null', 'reported: https://example.invalid/1'));
+  const out = runTool('feedback.js', ['--list', dir]).stdout;
+  assert.ok(out.includes(path.basename(a)), 'unreported note is listed');
+  assert.ok(!out.includes(path.basename(b)), 'reported note is not listed again');
+});
+
+test('--report exits 3, not 1, when gh cannot be used', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  // PATH emptied: `gh` cannot resolve, which is exactly the give-up case.
+  const r = runTool('feedback.js', ['--report', p, '--root', dir], { env: { PATH: '' } });
+  assert.strictEqual(r.status, 3, r.stderr);
+  assert.match(r.stderr + r.stdout, /gh|github/i);
+  assert.match(fs.readFileSync(p, 'utf8'), /reported: null/, 'the note is left alone');
+});
+
+test('--report refuses a note that would leak, even if it is on disk', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'Ada Lovelace']);
+  const p = seedNote(dir, 'prompt', '2026-08-30-a.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8')
+    .replace('## Symptom\n\nThe', '## Symptom\n\nAda Lovelace saw the'));
+  const r = runTool('feedback.js', ['--report', p, '--root', dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /redact/i);
+});
+
+test('the repository it reports to is the plugin repository, not the workspace', () => {
+  const src = fs.readFileSync(path.join(PLUGIN_ROOT, 'tools', 'feedback.js'), 'utf8');
+  assert.ok(src.includes(FEEDBACK_REPO), 'reports to ' + FEEDBACK_REPO);
+});

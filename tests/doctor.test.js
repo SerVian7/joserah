@@ -3,7 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { tmpdir, runTool } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
+const nf = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'note-format'));
 
 function freshWs(t) {
   const dir = path.join(tmpdir(t), 'ws');
@@ -107,6 +108,53 @@ test('doctor fails when a guest workspace carries only the owner deny set', (t) 
   const r = runTool('doctor.js', [dir]);
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stdout, /deny set/i);
+});
+
+// R11: the session-start hook injects only text below the overlay marker in
+// .joserah/agent.md — a hand-edit that loses the marker is a silent no-op
+// forever, and no other check would ever notice since the file is still
+// present. Non-fatal: an owner's hand-edit is their call, not a doctor
+// failure, so this must never turn `doctor` exit 1.
+test('R11: doctor flags a missing overlay marker in agent.md without failing', (t) => {
+  const dir = freshWs(t);
+  const p = path.join(dir, '.joserah', 'agent.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('<!-- joserah:agent-overlay-below -->', ''));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /ok\s+agent\.md overlay marker present.*missing/i);
+});
+
+// A passing check must not read like an active problem report (same
+// discipline as the legacy-keys check above): a healthy workspace's line
+// carries no detail text at all.
+test('R11: a healthy agent.md overlay marker line carries no problem-sounding text', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^ok\s+agent\.md overlay marker present\s*$/m);
+});
+
+// Step 4 of task 19: an informational line, never a failure, so an owner
+// sees at a glance whether anything is waiting on feedback.js --report.
+test('doctor prints nothing about feedback when the workspace has no feedback notes', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout, /feedback/i);
+});
+
+test('doctor counts unreported feedback notes per area, without failing', (t) => {
+  const dir = freshWs(t);
+  const GOOD = {
+    area: 'prompt', created: '2026-08-30',
+    symptom: 'The assistant restated a rule it had already been given, twice in one session.',
+    cause: 'The rule is injected in two layers and neither knows the other ran.',
+    suggestion: 'Inject the layer once and let the later layer reference it.',
+  };
+  const promptDir = path.join(dir, '.joserah', 'feedback', 'prompt');
+  fs.mkdirSync(promptDir, { recursive: true });
+  fs.writeFileSync(path.join(promptDir, 'a.md'), nf.renderFeedbackNote(GOOD, []));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /prompt.*1/i);
 });
 
 test('doctor reports a workspace still on an older format version', (t) => {
