@@ -6,7 +6,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
-const { FORMAT_VERSION } = require('./lib/note-format');
+const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
@@ -94,6 +94,25 @@ function versionAtLeast(version, min) {
   const legacy = fs.existsSync(path.join(root, '.joserah', 'keys'));
   check('no legacy .joserah/keys directory', !legacy,
     legacy ? 'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section' : '');
+}
+
+// JOSERAH-ROLE.md is copied verbatim from templates/roles/ by kind at
+// scaffold time, never re-rendered from config.json. A mismatch here means
+// the workspace was scaffolded under one role and its `kind` was changed
+// afterwards without re-scaffolding — the same class of drift the
+// verify-links.js check below catches for a different file.
+{
+  const rolePath = path.join(root, 'JOSERAH-ROLE.md');
+  const role = roleFor(cfg && cfg.kind);
+  const templatePath = path.join(__dirname, '..', 'templates', 'roles', `joserah-${role}.md`);
+  let ok = false, detail;
+  if (!fs.existsSync(rolePath)) {
+    detail = `missing — run: scaffold.js --target ${root} --kind ${(cfg && cfg.kind) || 'home'}`;
+  } else {
+    ok = fs.readFileSync(rolePath, 'utf8') === fs.readFileSync(templatePath, 'utf8');
+    detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding?`;
+  }
+  check('exists: JOSERAH-ROLE.md', ok, detail);
 }
 
 // Informational only: a workspace merely created by an older plugin version

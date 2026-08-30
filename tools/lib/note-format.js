@@ -157,7 +157,15 @@ function renderRelations(relations, eol = '\n') {
   return `${eol}## Relations${eol}${eol}${lines.join(eol)}${eol}`;
 }
 
+// A shared workspace is reached by several people over an access-controlled
+// connection; every other kind has one owner at the keyboard. The role is
+// derived, never asked separately — a second flag could contradict `kind`.
+function roleFor(kind) {
+  return kind === 'shared' ? 'server' : 'client';
+}
+
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
   extractWikilinks, renderRelations, FORMAT_VERSION, stripCode, detectEol,
+  roleFor,
 };

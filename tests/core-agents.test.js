@@ -63,3 +63,44 @@ test('scaffold --identity-only leaves an existing AGENTS.md byte-unchanged', (t)
     '--owner', 'Ada Lovelace', '--language', 'English', '--role', 'Founder']);
   assert.strictEqual(fs.readFileSync(agentsPath, 'utf8'), marked);
 });
+
+test('roleFor maps kind to a role', () => {
+  const nf = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'note-format'));
+  assert.strictEqual(nf.roleFor('shared'), 'server');
+  assert.strictEqual(nf.roleFor('home'), 'client');
+  assert.strictEqual(nf.roleFor('hosted'), 'client');
+  assert.strictEqual(nf.roleFor(undefined), 'client');
+});
+
+test('scaffold writes the client role file by default', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.strictEqual(
+    fs.readFileSync(path.join(dir, 'JOSERAH-ROLE.md'), 'utf8'),
+    fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-client.md'), 'utf8'));
+});
+
+test('scaffold writes the server role file for a shared workspace', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--kind', 'shared']);
+  assert.strictEqual(
+    fs.readFileSync(path.join(dir, 'JOSERAH-ROLE.md'), 'utf8'),
+    fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-server.md'), 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.kind, 'shared');
+});
+
+test('neither role file names anyone or carries tokens', () => {
+  for (const r of ['joserah-client.md', 'joserah-server.md']) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'roles', r), 'utf8');
+    assert.doesNotMatch(text, /\{\{/, r + ' has no tokens');
+    assert.doesNotMatch(text, /Sevgi|Serkan|akkaya|Zenger/, r + ' names no one');
+  }
+});
+
+test('scaffold rejects an unknown kind instead of guessing', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--kind', 'satellite']);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /kind/i);
+});

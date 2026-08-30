@@ -3,7 +3,8 @@
  * Create a Joserah workspace from templates/.
  * Usage: node scaffold.js --target DIR --workspace NAME
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
- *                         [--trust owner|guest] [--assistant NAME] [--host-path DIR]
+ *                         [--trust owner|guest] [--kind home|hosted|shared] [--assistant NAME]
+ *                         [--host-path DIR]
  *        node scaffold.js --settings-only --target DIR [--force]
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG] [--role LINE]
  *
@@ -44,7 +45,7 @@ const args = parseArgs(process.argv.slice(2));
 // `--settings-only` exists so a restore of an older backup can write exactly
 // these rules again rather than an agent inventing a plausible-looking set.
 const { PERMISSION_DENY, denyFor } = require('./lib/permission-deny');
-const { FORMAT_VERSION } = require('./lib/note-format');
+const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 
 // Permission rules are the workspace's guard on keys/ — they must exist from
 // the first minute, so scaffold creates .claude/ itself. (Claude Code also
@@ -173,6 +174,15 @@ if (args.trust !== 'owner' && args.trust !== 'guest') {
 }
 args.assistant = args.assistant || '';
 
+// `kind` picks the role supplement (see roleFor in lib/note-format) — never
+// asked as its own question, so it must be rejected up front rather than
+// silently coerced into a role that would then contradict it.
+args.kind = args.kind || 'home';
+if (!['home', 'hosted', 'shared'].includes(args.kind)) {
+  console.error(`scaffold: --kind must be "home", "hosted" or "shared" (got ${args.kind})`);
+  process.exit(1);
+}
+
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
   console.error(`scaffold: ${root} is already a Joserah workspace — refusing to overwrite`);
@@ -185,8 +195,15 @@ if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
 // Scaffolding into a directory that already holds the owner's own README.md,
 // CLAUDE.md, .gitignore or .claude/settings.json must not silently destroy
 // them — losing a .gitignore can expose whatever it was hiding.
+// templates/roles/ holds the client and server role supplements. Exactly one
+// is picked by kind and written explicitly as JOSERAH-ROLE.md (see below and
+// in copyTree) — the directory itself is never copied wholesale, so both the
+// collision check and the actual copy skip it by name.
+const COPY_SKIP_DIRS = ['roles'];
+
 function plannedTemplateFiles(from, to, acc) {
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) plannedTemplateFiles(src, dst, acc);
@@ -200,6 +217,7 @@ const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
   path.join(root, '.claude', 'settings.json'),
   path.join(root, '.gitignore'),
   path.join(root, '.joserah', 'tools', 'verify-links.js'),
+  path.join(root, 'JOSERAH-ROLE.md'),
 ]);
 
 const conflicts = PLANNED.filter((p) => fs.existsSync(p))
@@ -233,6 +251,7 @@ let filesCreated = 0;
 function copyTree(from, to) {
   fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) copyTree(src, dst);
@@ -256,6 +275,12 @@ function copyTree(from, to) {
 
 copyTree(TEMPLATES, root);
 
+// The role supplement is picked by kind, not copied as part of the tree
+// above — see COPY_SKIP_DIRS. Copied verbatim, like AGENTS.md: it is
+// plugin-owned and carries no tokens to substitute.
+fs.copyFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(args.kind)}.md`),
+  path.join(root, 'JOSERAH-ROLE.md'));
+
 // Journal year dir so the first session has somewhere to land.
 fs.mkdirSync(path.join(root, '.joserah', 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });
 
@@ -270,6 +295,7 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   createdByPluginVersion: readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
   formatVersion: FORMAT_VERSION,
   trust: args.trust,
+  kind: args.kind,
   lastBackup: null,
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in

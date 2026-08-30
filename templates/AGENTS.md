@@ -2,7 +2,8 @@
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic.
 > **This file is the same in every Joserah workspace** and is replaced wholesale on update —
-> never hand-edit it. What belongs to *this* workspace lives in two other places:
+> never hand-edit it. Read next, in order: **[JOSERAH-ROLE.md](JOSERAH-ROLE.md)** — who you are
+> talking to here, derived from the workspace's `kind` — then what belongs to *this* workspace:
 > **[.joserah/directives.md](.joserah/directives.md)** — its standing rules and character, yours,
 > never touched by an update — and **`.joserah/config.json`** — its identity.
 > On conflict, directives win.
