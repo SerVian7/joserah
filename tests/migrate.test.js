@@ -39,3 +39,58 @@ test('scan stops at a nested workspace and reports it as a boundary', (t) => {
   assert.ok(!files.some((f) => f.startsWith('guestws/')), 'nothing inside the nested workspace');
   assert.deepStrictEqual(boundaries, ['guestws']);
 });
+
+test('migrate --dry-run reports without writing', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/people/ada-lovelace.md', '# Ada Lovelace\n\nNotes.\n');
+  const r = runTool('migrate.js', [dir, '--dry-run']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.ok(out.changed > 0);
+  const text = fs.readFileSync(path.join(dir, '.joserah/knowledge/people/ada-lovelace.md'), 'utf8');
+  assert.strictEqual(text, '# Ada Lovelace\n\nNotes.\n', 'dry run wrote nothing');
+});
+
+test('migrate adds frontmatter, keeps the body byte-identical, and types by folder', (t) => {
+  const dir = ws(t);
+  const rel = '.joserah/knowledge/people/ada-lovelace.md';
+  const body = '# Ada Lovelace\n\nNotes about Ada.\n';
+  write(dir, rel, body);
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const text = fs.readFileSync(path.join(dir, rel), 'utf8');
+  assert.match(text, /^---\n/);
+  assert.match(text, /title: Ada Lovelace/);
+  assert.match(text, /type: person/);
+  assert.ok(text.endsWith(body), 'original body preserved byte-for-byte at the end');
+});
+
+test('migrate is idempotent: a second run changes nothing', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/people/ada-lovelace.md', '# Ada Lovelace\n\nNotes.\n');
+  runTool('migrate.js', [dir]);
+  const after1 = fs.readFileSync(path.join(dir, '.joserah/knowledge/people/ada-lovelace.md'), 'utf8');
+  const r2 = runTool('migrate.js', [dir]);
+  const out2 = JSON.parse(r2.stdout);
+  assert.strictEqual(out2.changed, 0);
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.joserah/knowledge/people/ada-lovelace.md'), 'utf8'), after1);
+});
+
+test('migrate sets formatVersion and removes CLAUDE.md', (t) => {
+  const dir = ws(t);
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), 'see AGENTS.md\n');
+  const r = runTool('migrate.js', [dir]);
+  const out = JSON.parse(r.stdout);
+  assert.ok(out.removed.includes('CLAUDE.md'));
+  assert.ok(!fs.existsSync(path.join(dir, 'CLAUDE.md')));
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.formatVersion, 2);
+});
+
+test('migrate refuses a directory that is not a workspace', (t) => {
+  const dir = path.join(tmpdir(t), 'plain');
+  fs.mkdirSync(dir, { recursive: true });
+  const r = runTool('migrate.js', [dir]);
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /not a Joserah workspace/i);
+});
