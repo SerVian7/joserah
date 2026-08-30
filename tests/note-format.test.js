@@ -43,3 +43,39 @@ test('ensureFrontmatter: never overwrites an existing managed key', () => {
   assert.match(r.text, /title: Owner Chosen/);
   assert.doesNotMatch(r.text, /title: Derived/);
 });
+
+test('ensureFrontmatter: preserves CRLF byte-for-byte on an existing block', () => {
+  const input = '---\r\ncustom_field: keep me\r\n---\r\n\r\nbody\r\n';
+  const r = nf.ensureFrontmatter(input, { title: 'Note', type: 'note' });
+  assert.strictEqual(r.changed, true);
+  assert.strictEqual(
+    r.text,
+    '---\r\ncustom_field: keep me\r\ntitle: Note\r\ntype: note\r\n---\r\n\r\nbody\r\n'
+  );
+  // No lone LF (an LF not preceded by CR) anywhere — the whole file stays CRLF.
+  assert.doesNotMatch(r.text, /[^\r]\n|^\n/);
+});
+
+test('ensureFrontmatter: is idempotent on CRLF input', () => {
+  const input = '---\r\ncustom_field: keep me\r\n---\r\n\r\nbody\r\n';
+  const first = nf.ensureFrontmatter(input, { title: 'Note', type: 'note' });
+  const second = nf.ensureFrontmatter(first.text, { title: 'Note', type: 'note' });
+  assert.strictEqual(second.changed, false);
+  assert.strictEqual(second.text, first.text);
+});
+
+test('ensureFrontmatter: a new block on a CRLF document uses CRLF, not LF', () => {
+  const r = nf.ensureFrontmatter('# Title\r\n\r\nbody\r\n', { title: 'Title', type: 'note' });
+  assert.strictEqual(r.changed, true);
+  assert.strictEqual(
+    r.text,
+    '---\r\ntitle: Title\r\ntype: note\r\n---\r\n\r\n# Title\r\n\r\nbody\r\n'
+  );
+});
+
+test('ensureFrontmatter: leaves an unterminated frontmatter block untouched', () => {
+  const input = '---\ntitle: X\nno closing delimiter\n';
+  const r = nf.ensureFrontmatter(input, { title: 'Note', type: 'note' });
+  assert.strictEqual(r.changed, false);
+  assert.strictEqual(r.text, input);
+});
