@@ -367,3 +367,57 @@ test('R17: role installed by migrate follows the workspace\'s own kind, not a ha
     path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-server.md'), 'utf8');
   assert.strictEqual(fs.readFileSync(rolePath, 'utf8'), template, 'kind "shared" maps to the "server" role, per roleFor');
 });
+
+// R19: JOSERAH-ROLE.md and .joserah/agent.md are plugin-owned and doctor-
+// compared byte-for-byte (JOSERAH-ROLE.md against its role template); a
+// fresh workspace's AGENTS.md is the fixed system prompt, byte-identical
+// everywhere by design. None of the three is the owner's prose, so a second
+// migrate run over a workspace that already has all three must leave every
+// byte of them exactly as scaffold (or R17's installer) left it.
+test('R19: a second migrate run does not touch AGENTS.md, JOSERAH-ROLE.md or .joserah/agent.md', (t) => {
+  const dir = ws(t);
+  const rel = ['AGENTS.md', 'JOSERAH-ROLE.md', path.join('.joserah', 'agent.md')];
+  const before = rel.map((r) => fs.readFileSync(path.join(dir, r), 'utf8'));
+  runTool('migrate.js', [dir]);
+  const r2 = runTool('migrate.js', [dir]);
+  assert.strictEqual(r2.status, 0, r2.stderr);
+  const out2 = JSON.parse(r2.stdout);
+  assert.strictEqual(out2.changed, 0, 'second run reports nothing changed');
+  rel.forEach((r, i) => {
+    assert.strictEqual(fs.readFileSync(path.join(dir, r), 'utf8'), before[i],
+      `${r} is byte-identical after two migrate runs`);
+  });
+});
+
+test('R19: JOSERAH-ROLE.md still matches its role template after two migrate runs', (t) => {
+  const dir = ws(t);
+  runTool('migrate.js', [dir]);
+  runTool('migrate.js', [dir]);
+  const rolePath = path.join(dir, 'JOSERAH-ROLE.md');
+  const template = fs.readFileSync(
+    path.join(PLUGIN_ROOT, 'templates', 'roles', 'joserah-client.md'), 'utf8');
+  assert.strictEqual(fs.readFileSync(rolePath, 'utf8'), template,
+    'still byte-identical to the template doctor compares it against');
+});
+
+test('R19: scanWorkspace excludes the workspace-root AGENTS.md, root JOSERAH-ROLE.md and .joserah/agent.md', (t) => {
+  const dir = ws(t);
+  const { files } = scanWorkspace(dir);
+  assert.ok(!files.includes('AGENTS.md'), 'root AGENTS.md excluded from scan');
+  assert.ok(!files.includes('JOSERAH-ROLE.md'), 'root JOSERAH-ROLE.md excluded from scan');
+  assert.ok(!files.includes('.joserah/agent.md'), '.joserah/agent.md excluded from scan');
+});
+
+test('R19: exclusion is anchored to the workspace root, not a bare filename match at any depth', (t) => {
+  const dir = ws(t);
+  write(dir, 'projects/some-repo/AGENTS.md', '# A nested repo\'s own AGENTS.md\n\nUnrelated to the workspace root one.\n');
+  const { files } = scanWorkspace(dir);
+  // projects/ is already excluded by directory rule — this proves the new
+  // root-anchored exclusion isn't why it's missing, by checking a path that
+  // directory-skips alone would NOT catch: a same-named file directly under
+  // a knowledge folder, one level deep, which must still be scanned normally.
+  write(dir, '.joserah/knowledge/wiki/AGENTS.md', '# Not the root one\n\nThis is an ordinary note that happens to share a filename.\n');
+  const { files: files2 } = scanWorkspace(dir);
+  assert.ok(files2.includes('.joserah/knowledge/wiki/AGENTS.md'),
+    'a same-named file that is not at the workspace root is scanned like any other note');
+});

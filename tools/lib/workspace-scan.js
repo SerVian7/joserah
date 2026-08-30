@@ -2,7 +2,7 @@
 /**
  * Enumerate the markdown files a migration may touch in one workspace.
  *
- * Two kinds of exclusion, and they are different in kind:
+ * Three kinds of exclusion, and they are different in kind:
  *  - IMMUTABILITY: raw/ is source material the AI never writes; directives.md
  *    is the workspace's own standing rules and survives every plugin update;
  *    keys/ is secret.
@@ -11,6 +11,20 @@
  *    on its own update and never at a neighbour's hand. .claude/ is Claude
  *    Code's own agent, command and skill definitions — not the owner's prose,
  *    and not this plugin's to splice frontmatter into.
+ *  - PLUGIN-OWNERSHIP (R19): the workspace-root AGENTS.md, the workspace-root
+ *    JOSERAH-ROLE.md and .joserah/agent.md are files the plugin itself writes
+ *    and, in two of the three cases, later compares byte-for-byte — AGENTS.md
+ *    is replaced wholesale on every update and must be identical everywhere,
+ *    JOSERAH-ROLE.md is checked by doctor.js against its role template. They
+ *    are not the owner's prose, so migrate must never add frontmatter to
+ *    them; a prior version of this tool did, and a second migration run over
+ *    a workspace holding all three then failed doctor on the very files it
+ *    had just carried forward. Anchored to the workspace root by relative
+ *    path, not by bare filename, so `keys/AGENTS.md` and `projects/AGENTS.md`
+ *    — already out of scan through their directory rules above — are never
+ *    mistaken for this one, and a same-named file elsewhere in the tree
+ *    (e.g. an ordinary note that happens to be called AGENTS.md) still scans
+ *    normally.
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +34,12 @@ const SKIP_REL = [
   'keys', 'projects', 'docker-stack', '.claude',
   '.joserah/knowledge/raw', '.joserah/tools', '.joserah/last-time-inject',
 ];
-const SKIP_FILE_REL = new Set(['.joserah/directives.md']);
+const SKIP_FILE_REL = new Set([
+  '.joserah/directives.md',
+  'AGENTS.md',
+  'JOSERAH-ROLE.md',
+  '.joserah/agent.md',
+]);
 
 function isSkippedRel(rel) {
   const low = rel.toLowerCase();
