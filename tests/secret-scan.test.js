@@ -57,6 +57,16 @@ test('secret-scan does not report clean on a fresh git init with an unstaged sec
   assert.ok(!r.stdout.includes(secret), 'secret never echoed whole');
 });
 
+test('root raw/ is never scanned — vendor docs full of api_key=… are not the owner\'s notes', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'raw', 'vendor-manual.md'), 'password: s3cr3t-9real-value\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+});
+
 test('secret-scan does not report a clean tree when a listed file cannot be read', (t) => {
   const d = path.join(tmpdir(t), 'ws');
   fs.mkdirSync(d, { recursive: true });
