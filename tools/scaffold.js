@@ -15,10 +15,17 @@
  *
  * `--feedback`/`--identity-mode` record whether the owner has been asked
  * about self-improvement feedback notes and about .joserah/agent.md keeping
- * itself current — same non-destructive rule as `--consent-model`: reachable
- * from both entry points (the install flow's create call runs before these
- * questions), and omitting a flag on a later --identity-only call leaves an
- * existing block untouched rather than clearing it.
+ * itself current — same non-destructive rule as `--consent-model`: both are
+ * accepted on both entry points, and omitting either flag on a later
+ * --identity-only call leaves an existing block untouched rather than
+ * clearing it. They differ on which entry point the install flow actually
+ * uses, because the two questions sit at different points in the interview:
+ * feedback is asked after consent, so the create call always runs first and
+ * --identity-only is the only path that ever carries it for real; the
+ * self-update question is asked before creation, alongside --trust and
+ * --assistant, so the install flow passes --identity-mode on the main
+ * create call instead — never held across the consent question, where a
+ * "no" would otherwise drop an answer the owner already gave.
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.

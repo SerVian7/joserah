@@ -576,5 +576,12 @@ test('install asks its questions in the agreed order', () => {
   assert.ok(at('only inside this folder') < at('what it is for here'),
     'reach before the assistant\'s definition');
   assert.ok(at('what it is for here') < at('--consent-model'), 'definition before consent');
-  assert.ok(at('--consent-model') < at('--feedback'), 'consent before the feedback question');
+  // Fix round 1 (controller review of 2e03ce5): '--consent-model' and
+  // '--feedback' both first occur in the SAME sentence in step 4 (the list
+  // of flags that call deliberately omits), so comparing their first
+  // occurrence proved nothing about which QUESTION comes first — swapping
+  // the real consent and feedback questions would not have touched that
+  // sentence at all. Asserted here against strings that occur only at the
+  // questions themselves, the way the other four assertions above already do.
+  assert.ok(at('Ask for consent') < at('Then offer feedback'), 'consent before the feedback question');
 });

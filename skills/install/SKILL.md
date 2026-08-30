@@ -69,9 +69,10 @@ list, asks for exactly that.
 
 ## 3. Ask before creating: language, name, reach, and the assistant's definition
 
-Ask these five in this order, each in the language the user is writing in. Three go straight into
-the next step's command — language, reach, and the assistant's name. The owner's name and the
-keep-up-to-date answer are held for step 7, once the workspace exists and consent has been given.
+Ask these five in this order, each in the language the user is writing in. Four go straight into
+the next step's command — language, reach, the assistant's name, and the keep-up-to-date answer.
+Only the owner's name is held, for step 7, once the workspace exists and consent has been given —
+it must not wait on consent: a "no" in step 6 must never cost the owner an answer already given.
 The one-or-two-sentence definition is never a flag at all — it goes straight into a file, in step 4.
 
 **Ask first: which dialogue language should it use with you?** → `--language LANG`, passed now.
@@ -104,25 +105,29 @@ write them, in the owner's own words, below the marker line in `.joserah/agent.m
 
 **Ask whether that definition should keep itself up to date.** Offer three answers: **automatic**
 (the assistant proposes amendments to `agent.md` as it learns how it is actually used, and applies
-them), **ask first** (it proposes, the owner decides), or **off**. Hold the answer; it is
-submitted in step 7 as `--identity-mode auto|manual|off`. If they do not answer, pass nothing —
-absent means never asked.
+them), **ask first** (it proposes, the owner decides), or **off**. Passed now, at creation, as
+`--identity-mode auto|manual|off` — do not hold it for step 7: that step only runs if consent is
+given in step 6, and an owner who answers this and then declines consent must not have the answer
+thrown away. If they do not answer, pass nothing — absent means never asked.
 
 ## 4. Create it
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name> --git \
-  --trust <owner|guest> --assistant <NAME> --language <LANG>
+  --trust <owner|guest> --assistant <NAME> --language <LANG> \
+  --identity-mode <auto|manual|off>
 ```
 
 If the answer from step 3 was "only inside this folder", add `--host-path <host workspace root>`
-to the command so the host tree is walled off.
+to the command so the host tree is walled off. Omit `--identity-mode` entirely if that question
+went unanswered — never pass a guessed default.
 
-This deliberately runs without `--owner`, `--role`, `--consent-model`, `--feedback` or
-`--identity-mode` — the owner's name was asked in step 3 but, along with role, consent, feedback
-and the identity-mode answer, is submitted in step 7, once consent has been given. The `--trust`,
-`--assistant` and `--language` known from step 3 are passed now. Empty assistant name is correct
-if the owner declined to answer; do not pass a placeholder guess.
+This deliberately runs without `--owner`, `--role`, `--consent-model` or `--feedback` — the
+owner's name was asked in step 3 but, along with role, consent and feedback, is submitted in step
+7, once consent has been given. `--trust`, `--assistant`, `--language` and `--identity-mode`, all
+known from step 3, are passed now: unlike the four deferred to step 7, none of these depend on
+what the owner decides in step 6, so none of them wait on it. Empty assistant name is correct if
+the owner declined to answer; do not pass a placeholder guess.
 
 If the owner gave the one-or-two-sentence definition in step 3, write it now, verbatim, below the
 marker line in `<path>/.joserah/agent.md` (`<!-- joserah:agent-overlay-below -->`) — nothing above
@@ -187,13 +192,13 @@ what was sent), **ask me** (mention it once when something comes up), **off**.
 
 Pass the answer through `--feedback auto|manual|off` and, when they give one, `--github <user>`.
 If they do not answer, pass nothing — an absent block means never asked, and the assistant then
-says nothing about feedback ever again. Pass step 3's keeps-up-to-date answer the same way, as
-`--identity-mode auto|manual|off` — nothing if that one went unanswered either.
+says nothing about feedback ever again. (Step 3's keeps-up-to-date answer already went in at
+creation, in step 4 — do not ask it again here, and do not pass `--identity-mode` on this call.)
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --identity-only --target <path> \
   --owner <name> --language <LANG> --role <line> --consent-model "<model name>" \
-  [--feedback auto|manual|off] [--github <user>] [--identity-mode auto|manual|off]
+  [--feedback auto|manual|off] [--github <user>]
 ```
 
 Pass the `--owner` from step 3 and the `--language <LANG>` from step 3 as-is — do not ask either
@@ -201,9 +206,9 @@ again. Pass `--consent-model` with the exact model name you gave in step 6 — t
 yes in step 6 count; never pass this flag on a no, and never pass a guessed or placeholder name.
 
 This rewrites `.joserah/personal/profile.md` and `.joserah/conventions.md` with the real values,
-and updates `.joserah/config.json`, including the feedback and identity-mode blocks when they were
-answered. Run it once, immediately after this step — running it again later, after the owner or an
-assistant has hand-edited any of those files, would overwrite that editing. Re-run
+and updates `.joserah/config.json`, including the feedback block when it was answered. Run it once,
+immediately after this step — running it again later, after the owner or an assistant has
+hand-edited any of those files, would overwrite that editing. Re-run
 `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm nothing broke.
 
 ## 8. Hand off
