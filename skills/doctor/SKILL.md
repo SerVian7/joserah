@@ -70,6 +70,9 @@ Never ask the owner to close and reopen the terminal, and never require `npx`. I
 available path needs either, say plainly that the update has to wait and report it to the
 developer instead.
 
+If `behind` is `null` — the check could not tell — say nothing to the owner about updates and
+carry on with whatever else brought you here; do not report it as a problem, and do not retry.
+
 ## Format version
 
 `doctor` reports the workspace's `formatVersion`. If it is behind, run:
