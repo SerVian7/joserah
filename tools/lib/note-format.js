@@ -52,9 +52,11 @@ function formatValue(v) {
   return Array.isArray(v) ? `[${v.join(', ')}]` : String(v);
 }
 
-// Line ending of the first line break found in `text`. Used only to pick the
-// eol for a brand-new frontmatter block on a document that has none yet, so a
-// CRLF document doesn't end up with an LF block glued onto CRLF content.
+// Line ending of the first line break found in `text`. Used to pick the eol
+// for a brand-new frontmatter block on a document that has none yet, and by
+// callers (e.g. migrate.js, before calling renderRelations) that append a new
+// block onto an existing document — either way, so a CRLF document doesn't
+// end up with an LF block glued onto CRLF content.
 function detectEol(text) {
   const idx = text.indexOf('\n');
   return idx > 0 && text[idx - 1] === '\r' ? '\r\n' : '\n';
@@ -145,13 +147,17 @@ function extractWikilinks(text) {
   return seen;
 }
 
-function renderRelations(relations) {
+// `eol` defaults to '\n' so every existing caller and test — none of which
+// pass a third argument — is unaffected. A caller appending this block onto
+// an existing note passes that note's own eol (see detectEol) so a CRLF file
+// does not end up with an LF-joined block glued onto CRLF content.
+function renderRelations(relations, eol = '\n') {
   const lines = relations.map((r) =>
     `- ${r.type} [[${r.target}]]${r.context ? ` (${r.context})` : ''}`);
-  return `\n## Relations\n\n${lines.join('\n')}\n`;
+  return `${eol}## Relations${eol}${eol}${lines.join(eol)}${eol}`;
 }
 
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
-  extractWikilinks, renderRelations, FORMAT_VERSION, stripCode,
+  extractWikilinks, renderRelations, FORMAT_VERSION, stripCode, detectEol,
 };

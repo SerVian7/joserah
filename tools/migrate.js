@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
-const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, FORMAT_VERSION } = require('./lib/note-format');
+const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION } = require('./lib/note-format');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -101,7 +101,14 @@ for (const rel of files) {
   const missing = mentionedEntities(original, entityIndex, title)
     .filter((e) => !already.has(e.toLowerCase()));
   if (missing.length) {
-    text += renderRelations(missing.map((e) => ({ type: 'mentions', target: e, context: null })));
+    // The appended block must match the note's own eol, not a hardcoded LF —
+    // otherwise a CRLF note ends up with an LF-joined block glued onto CRLF
+    // prose. detectEol reads it off the original bytes, before frontmatter
+    // (which reuses the same eol) is spliced in.
+    text += renderRelations(
+      missing.map((e) => ({ type: 'mentions', target: e, context: null })),
+      detectEol(original)
+    );
     touched = true;
   }
 

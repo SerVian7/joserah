@@ -129,11 +129,11 @@ test('migrate does not relate an entity note to itself', (t) => {
 test('R3: a wikilink-shaped mention inside a code fence produces no relation', (t) => {
   const dir = ws(t);
   write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\n\nA client.\n');
-  const journal = '# 2026-08-30\n\n```\nSpine switch fabric config\n```\n\nUnrelated notes today.\n';
+  const journal = '# 2026-08-30\n\n```\n[[Spine]] switch fabric config\n```\n\nUnrelated notes today.\n';
   write(dir, '.joserah/desk/daily/2026/2026-08-30.md', journal);
   runTool('migrate.js', [dir]);
   const text = fs.readFileSync(path.join(dir, '.joserah/desk/daily/2026/2026-08-30.md'), 'utf8');
-  assert.doesNotMatch(text, /## Relations/, 'a mention inside a fenced code block is not a relation');
+  assert.doesNotMatch(text, /## Relations/, 'a [[wikilink]]-shaped mention inside a fenced code block is not a relation');
 });
 
 test('migrate run twice produces a byte-identical file once Relations are appended', (t) => {
@@ -147,6 +147,21 @@ test('migrate run twice produces a byte-identical file once Relations are append
   const out2 = JSON.parse(r2.stdout);
   assert.strictEqual(out2.changed, 0, 'nothing left to change on the second run');
   assert.strictEqual(fs.readFileSync(journalPath, 'utf8'), after1, 'second run is byte-identical');
+});
+
+test('CRLF: an appended Relations block matches the note\'s own CRLF line endings', (t) => {
+  const dir = ws(t);
+  write(dir, '.joserah/knowledge/wiki/entities/spine.md', '# Spine\r\n\r\nA client.\r\n');
+  const journalPath = write(dir, '.joserah/desk/daily/2026/2026-08-30.md',
+    '# 2026-08-30\r\n\r\nFixed the Spine switch fabric today.\r\n');
+  runTool('migrate.js', [dir]);
+  const text = fs.readFileSync(journalPath, 'utf8');
+  assert.match(text, /## Relations/);
+  assert.match(text, /- mentions \[\[Spine\]\]/);
+  // No lone LF (an LF not preceded by CR) anywhere in the whole file — the
+  // frontmatter AND the appended Relations block must both match the CRLF
+  // the note's own prose already uses.
+  assert.doesNotMatch(text, /[^\r]\n|^\n/, 'no lone LF anywhere in the file');
 });
 
 test('R8: scan excludes .claude/ so agent and command definitions are not treated as notes', (t) => {
