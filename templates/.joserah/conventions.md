@@ -32,7 +32,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Quick unsorted capture | `.joserah/desk/inbox/captures.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |
 | Credentials | `keys/` — never echoed |
-| Immutable source material | `.joserah/knowledge/raw/` |
+| Immutable source material | `raw/` — workspace root, outside `.joserah/`, never in a repository backup |
 | AI-maintained synthesis | `.joserah/knowledge/wiki/` |
 | One file per person | `.joserah/knowledge/people/firstname-lastname.md` |
 | Learned preferences and corrections | `.joserah/learned.md` |

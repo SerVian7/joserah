@@ -73,3 +73,12 @@ test('R18: scaffold treats an existing workspace .gitattributes as a collision, 
   assert.match(r.stderr, /\.gitattributes/);
   assert.strictEqual(fs.readFileSync(path.join(dir, '.gitattributes'), 'utf8'), 'owner-written rules\n');
 });
+
+test('scaffold creates raw/README.md at the workspace root, not under knowledge/', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(dir, 'raw', 'README.md')), 'raw/README.md at root');
+  assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'knowledge', 'raw')),
+    'no .joserah/knowledge/raw in a fresh workspace');
+});

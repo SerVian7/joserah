@@ -10,9 +10,9 @@ without inventing anything.
 
 ## The rule that governs everything here
 
-**Sources are copied verbatim into `.joserah/knowledge/raw/`. Nothing else is.**
+**Sources are copied verbatim into `raw/` at the workspace root. Nothing else is.**
 
-`.joserah/knowledge/raw/` is normally off-limits to the AI, because a knowledge base
+`raw/` is normally off-limits to the AI, because a knowledge base
 that cites its own generated content rots. Import is the one sanctioned
 writer, and only for the owner's own source material, byte-for-byte. Anything
 you *derive* — summaries, extracted tasks, people pages — goes to its proper
@@ -36,7 +36,7 @@ something, say what and why.
 
 ## 2. Copy the sources in
 
-Create `.joserah/knowledge/raw/imports/<YYYY-MM-DD>-<short-label>/` and copy the
+Create `raw/imports/<YYYY-MM-DD>-<short-label>/` at the workspace root and copy the
 material there unchanged. Preserve the original folder structure. Never edit,
 reformat, or rename a source file. Binary formats (PDF, images, office docs)
 are copied as-is even when you cannot read them.
@@ -55,13 +55,13 @@ For each source, decide what it produces and write it to its home:
 | A commitment with a date | `.joserah/desk/tasks/next.md` (or `now.md` if it is live) |
 | A stated preference about how to work | `.joserah/learned.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |
-| Reference worth keeping but not actionable | leave in `.joserah/knowledge/raw/`, add a `.joserah/knowledge/wiki/` page pointing at it |
+| Reference worth keeping but not actionable | leave in `raw/` at the workspace root, add a `.joserah/knowledge/wiki/` page pointing at it |
 | Anything you cannot classify | `.joserah/desk/inbox/captures.md`, one line each |
 
 Every derived file cites its source: `Source: [text](path)`. Write the source
 link relative to the file you are writing it into — from
 `.joserah/knowledge/people/<name>.md` the raw import is
-`../raw/imports/<date>/<file>.md`, not `raw/imports/…`. Step 5's link check
+`../../../raw/imports/<date>/<file>.md`, not `raw/imports/…`. Step 5's link check
 is the referee.
 
 ### Anything under `projects/` is outside backup
@@ -76,8 +76,9 @@ So, before writing anything into `projects/`: **say that plainly and ask.**
 Offer the two honest alternatives — put the material in `.joserah/knowledge/` instead,
 where backup covers it, or keep it in `projects/` and give that
 project folder its own git repo. Do not decide for them, and never present the
-exclusion as harmless. The raw copy in `.joserah/knowledge/raw/` is backed up either
-way; the derived status note is not.
+exclusion as harmless. The raw copy in `raw/` at the workspace root is never
+backed up either way — that folder sits outside `.joserah/` by design; the
+derived status note's backup coverage is what actually depends on this choice.
 
 Merge rather than overwrite. If `.joserah/knowledge/people/ali-veli.md` already exists, add to it
 and keep the existing content — never replace a file you did not create in
@@ -85,7 +86,7 @@ this run.
 
 ## 4. Write the report
 
-`.joserah/knowledge/raw/imports/<date>-<label>/REPORT.md`. **Write the report in the
+`raw/imports/<date>-<label>/REPORT.md` at the workspace root. **Write the report in the
 owner's dialogue language** (`dialogueLanguage` in `.joserah/config.json`) —
 it is written for them to read, not for the repository. Keep the headings in
 English so the shape stays consistent across workspaces:
@@ -115,7 +116,7 @@ Run `node .joserah/tools/verify-links.js` from the workspace root — the worksp
 copy. (`doctor.js` runs the plugin's own copy of this script, not the
 workspace's, precisely so a stale or missing workspace copy can never blind
 that check — see its `local verify-links.js current` check.) Every citation
-you just wrote must resolve. `verify-links` deliberately does not scan `.joserah/knowledge/raw/`
+you just wrote must resolve. `verify-links` deliberately does not scan `raw/`
 — imported snapshots keep their broken internal links as historical fact.
 Only links **you wrote** in derived files count. Then show the owner the
 report's summary and ask them to check the unclassified pile.
