@@ -82,3 +82,10 @@ test('scaffold creates raw/README.md at the workspace root, not under knowledge/
   assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'knowledge', 'raw')),
     'no .joserah/knowledge/raw in a fresh workspace');
 });
+
+test('scaffold .gitignore excludes raw/ from the repository route', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const gi = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8');
+  assert.match(gi, /^raw\/$/m);
+});
