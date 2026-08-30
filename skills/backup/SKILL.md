@@ -25,6 +25,17 @@ before doing anything else.
 
 Three questions, before touching anything:
 
+0. **Read the standing decision first.** If `.joserah/config.json` has a
+   `backup` object, the scope was decided before: restate it in one line
+   ("backup scope: `<scope>`, decided <decidedOn> — <reason>") and do not
+   re-ask questions the object already answers. The owner can change it at
+   any time; changing it updates the object (see below). If there is no
+   `backup` object, ask the questions, then **write the answers down** so
+   the next backup never re-asks:
+
+   ```
+   node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.readFileSync(p,'utf8'));c.backup={scope:process.argv[2],decidedOn:new Date().toISOString().slice(0,10),reason:process.argv[3]||''};fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');" "<workspace>/.joserah/config.json" "<scope>" "<one-line reason in the owner's words>"
+   ```
 1. **Zip, or a private repository?** A zip is a one-time, local snapshot.
    A repository keeps two or more machines in sync going forward, and is
    opt-in and consequential — it puts the owner's journal, their notes about
@@ -528,6 +539,8 @@ session-start hook compares new content against:
 ```
 node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.readFileSync(p,'utf8'));c.lastBackup=new Date().toISOString();fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');" "<workspace>/.joserah/config.json"
 ```
+
+If the owner changed the scope during this run, update the `backup` object the same way — the config is the decision's home, not the conversation.
 
 ## Scope reset — when the history already carries what the backup must not
 
