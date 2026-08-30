@@ -59,6 +59,17 @@ Propose the specific repair for each failure and wait for a yes:
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 
+## Update notice
+
+Run `node "${CLAUDE_PLUGIN_ROOT}/tools/check-update.js" <workspace-root>`. If `behind` is true,
+tell the owner in **one line**, in their language — "Joserah'ın yeni sürümü var, güncelleyeyim
+mi?" — and nothing more. Do not explain plugins, marketplaces or versions unless asked.
+
+On yes: update, then run `migrate.js` immediately so the workspace matches the new version.
+Never ask the owner to close and reopen the terminal, and never require `npx`. If the only
+available path needs either, say plainly that the update has to wait and report it to the
+developer instead.
+
 ## Format version
 
 `doctor` reports the workspace's `formatVersion`. If it is behind, run:
