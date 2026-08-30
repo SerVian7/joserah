@@ -75,6 +75,72 @@ test('scanForIdentifiers catches a Turkish name with letters outside Latin-1', (
   assert.ok(nf.scanForIdentifiers('mail from İrem Yaşar', []).length, 'name starting with İ');
 });
 
+// Fix round 1 — the forbidden-word loop still used a plain \b...\b after the
+// name pattern had already been fixed to not rely on it. \b is defined
+// against ASCII \w only, so it never fires next to a non-ASCII letter: a
+// forbidden word beginning or ending with a Turkish letter was invisible in
+// every context, not just the name check. This is the case that matters
+// most, since the caller passes the workspace's own vocabulary — the
+// owner's name, the workspace name, host names — and this workspace's data
+// is Turkish.
+test('scanForIdentifiers catches a forbidden word that starts with a Turkish letter', () => {
+  assert.ok(nf.scanForIdentifiers('İrem geldi', ['İrem']).length, 'forbidden word starting with İ');
+  assert.ok(nf.scanForIdentifiers('mail from Şahin', ['Şahin']).length, 'forbidden word starting with Ş');
+  assert.ok(nf.scanForIdentifiers('cc Özgür on this', ['Özgür']).length, 'forbidden word starting with Ö');
+});
+
+// Same boundary bug, different trigger: \b cannot fire between two
+// non-word characters, so a forbidden word whose first or last character is
+// a symbol never matches either, regardless of script.
+test('scanForIdentifiers catches a forbidden word with a symbol at either edge', () => {
+  assert.ok(nf.scanForIdentifiers('the c++ tool broke', ['c++']).length, 'symbol-suffixed forbidden word');
+});
+
+// Regression guard: fixing the boundary must not turn the forbidden-word
+// check into a bare substring search — "Atayland" contains "atay" but is a
+// different word and must not trip the scan.
+test('scanForIdentifiers does not flag a forbidden word as a mere substring', () => {
+  assert.strictEqual(nf.scanForIdentifiers('Atayland is a theme park', ['atay']).length, 0,
+    'substring match must not count as a whole-word hit');
+});
+
+// A shouted name has no lowercase run for the old [A-Z][a-z]+-only word
+// pattern to find — a quoted subject line or signature block is exactly
+// where this shows up.
+test('scanForIdentifiers catches a name written in ALL CAPS', () => {
+  assert.ok(nf.scanForIdentifiers('mail from SEVGI AKKAYA about the file', []).length,
+    'all-caps two-word name');
+});
+
+// A social/GitHub handle identifies a person as surely as their name does,
+// and the address check only fires on a dotted email domain — a bare @handle
+// needs its own check.
+test('scanForIdentifiers catches a bare @handle', () => {
+  assert.ok(nf.scanForIdentifiers('ping @sevgiakkaya about this', []).length, 'a handle, not an email');
+});
+
+// Scheme-less domains: a link check that only recognises http(s):// misses
+// exactly the links people paste without a scheme.
+test('scanForIdentifiers catches a scheme-less domain', () => {
+  assert.ok(nf.scanForIdentifiers('see example.com/x for details', []).length, 'bare domain with a path');
+  assert.ok(nf.scanForIdentifiers('see www.example.com for details', []).length, 'www.-prefixed domain');
+});
+
+// A long quotation delimited only by curly single quotes must be caught too
+// — the fix for the double-quote/apostrophe conflict did not extend to this
+// quote family.
+test('scanForIdentifiers catches a long quotation in curly single quotes', () => {
+  const quoted = '‘' + 'x'.repeat(130) + '’';
+  assert.ok(nf.scanForIdentifiers(quoted, []).length, 'curly single-quoted long quote');
+});
+
+// forbidden is documented as optional in practice (a caller with no
+// workspace vocabulary yet should still be able to render a clean note) —
+// must not throw just because the second argument was never passed.
+test('renderFeedbackNote works with forbidden left undefined', () => {
+  assert.doesNotThrow(() => nf.renderFeedbackNote(GOOD, undefined));
+});
+
 test('scaffold records the feedback choice', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   const r = runTool('scaffold.js',

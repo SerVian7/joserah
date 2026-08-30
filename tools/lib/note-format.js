@@ -178,15 +178,26 @@ const FEEDBACK_AREAS = ['prompt', 'structure'];
 // own working language could slip past the scan that a Western name could not.
 const TR_UPPER = 'ĞİŞ';
 const TR_LOWER = 'ğış';
+const CAP = `A-ZÀ-Þ${TR_UPPER}`;
+const LOW = `a-zß-ÿ${TR_LOWER}`;
 
-// `\b` is defined against ASCII `\w` only, even here: a name starting with a
-// non-ASCII letter (İrem, Şahin, ...) is *never* a word character to `\b`, so
-// a plain `\bTR_UPPER...` still fails to match at the start of a string or
-// after a space — the exact leak this whole scan exists to catch. Using our
-// own boundary via lookaround, built from the same letter set the name
-// pattern itself matches, sidesteps that rather than re-adding the gap this
-// block was written to close.
-const NAME_BOUNDARY_CHARS = `A-Za-zÀ-ÿ${TR_UPPER}${TR_LOWER}`;
+// `\b` is defined against ASCII `\w` only: it never fires next to a
+// non-ASCII letter (İrem, Şahin, ...), and it never fires between two
+// non-word characters either (the trailing edge of "c++" sits between '+'
+// and a space — both non-word to `\b`, so no boundary exists there at all).
+// One shared boundary, used everywhere below a hand-written `\b` used to be,
+// closes both gaps at once: it only checks the character actually adjacent
+// to the match, in either direction, against this extended "is a letter"
+// set — never the ASCII-only, transition-based logic `\b` relies on.
+const WORD_CHARS = `0-9A-Za-zÀ-ÿ${TR_UPPER}${TR_LOWER}_`;
+const NOT_BEFORE = `(?<![${WORD_CHARS}])`;
+const NOT_AFTER = `(?![${WORD_CHARS}])`;
+
+// A name-shaped word is either TitleCase (one capital, then lowercase) or
+// ALL CAPS (two or more capitals with no lowercase at all) — a shouted name
+// in a quoted subject line or a signature block has no lowercase run for a
+// TitleCase-only pattern to find.
+const NAME_WORD = `(?:[${CAP}][${LOW}]+|[${CAP}]{2,})`;
 
 // What a leak out of a real workspace actually looks like. This is a
 // guardrail, not a redactor: it refuses text that looks like it carries
@@ -197,20 +208,36 @@ const NAME_BOUNDARY_CHARS = `A-Za-zÀ-ÿ${TR_UPPER}${TR_LOWER}`;
 function scanForIdentifiers(text, forbidden) {
   const found = [];
   if (/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(text)) found.push('an address');
-  if (/\bhttps?:\/\/\S+/.test(text)) found.push('a link');
-  if (new RegExp(`(?<![${NAME_BOUNDARY_CHARS}])[A-ZÀ-Þ${TR_UPPER}][a-zß-ÿ${TR_LOWER}]+\\s+`
-    + `[A-ZÀ-Þ${TR_UPPER}][a-zß-ÿ${TR_LOWER}]+(?![${NAME_BOUNDARY_CHARS}])`)
-    .test(text)) found.push('a personal name');
-  // Matched per quote family (", curly “...”, ') rather than one class that
-  // excludes all four delimiter characters from the content: the original
-  // draft excluded the straight apostrophe from *content* too, so a quoted
-  // sentence with a contraction ("don't", "it's" — nearly all of them) broke
-  // the 120-char run and slipped through unflagged. Matching each family on
-  // its own keeps that false negative from happening for the two quote kinds
-  // that don't also serve double duty as an apostrophe.
-  if (/"[^"]{120,}"|“[^”]{120,}”|'[^']{120,}'/.test(text)) found.push('a long quotation');
+  // A bare @handle (a social or GitHub mention, no dotted domain after it)
+  // identifies a person as surely as an email does, and the address check
+  // above never fires for one — it needs its own. The lookbehind excludes
+  // the local-part case ("user@example.com") so a real email isn't also
+  // double-tagged as a handle; that's cosmetic, not a correctness issue.
+  if (/(?<![A-Za-z0-9._%+-])@[A-Za-z0-9_-]{2,}\b/.test(text)) found.push('a handle');
+  // Scheme-less links, in addition to http(s)://: either a www.-prefixed
+  // host, or a dotted host immediately followed by a path. The bare-domain
+  // alternative is deliberately narrower than "any dotted.word" — that would
+  // also flag ordinary filenames like note-format.js or SKILL.md, which are
+  // exactly the kind of thing structure feedback needs to be able to name.
+  if (/\bhttps?:\/\/\S+/.test(text)
+    || /\bwww\.[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\S*/i.test(text)
+    || /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/\S+/i.test(text)) found.push('a link');
+  if (new RegExp(NOT_BEFORE + NAME_WORD + '\\s+' + NAME_WORD + NOT_AFTER).test(text)) {
+    found.push('a personal name');
+  }
+  // Matched per quote family (straight ", curly “...”, straight ', curly
+  // '...') rather than one class that excludes all delimiter characters
+  // from the content: the original draft excluded the straight apostrophe
+  // from *content* too, so a quoted sentence with a contraction ("don't",
+  // "it's" — nearly all of them) broke the 120-char run and slipped through
+  // unflagged. Matching each family on its own keeps that false negative
+  // from happening for the quote kinds that don't also serve double duty as
+  // an apostrophe.
+  if (/"[^"]{120,}"|“[^”]{120,}”|'[^']{120,}'|‘[^’]{120,}’/.test(text)) found.push('a long quotation');
   for (const w of forbidden || []) {
-    if (w && new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(text)) {
+    if (!w) continue;
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(NOT_BEFORE + escaped + NOT_AFTER, 'i').test(text)) {
       found.push('a workspace word (' + w + ')');
     }
   }
