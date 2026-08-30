@@ -335,3 +335,97 @@ test('doctor does not claim a remote for a non-repo subdir inside a repo workspa
   assert.ok(!/sub.*parent\.git/.test(r.stdout), 'parent remote never attributed to the subdir');
   assert.match(r.stdout, /^warn {2}.*projects\/Own\/sub.*no repository/m);
 });
+
+// A repo can sit directly at projects/<Name> with no Owner/Project split.
+// Its own .git-containing working tree must be audited as itself, never by
+// walking into its subdirectories (`.git`, `docs/`, ...) as if they were
+// separate unbacked projects — that would both miss the real project's
+// warning and print false "no repository of its own" claims about content
+// that is in fact versioned one directory up (Important 1 from review).
+test('a project that is itself a repo directly under projects/ is audited as itself, not via its internals', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const g = (cwd, a) => require('child_process').spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8' });
+  if (g(dir, ['--version']).status !== 0) return t.skip('git unavailable');
+  const projDir = path.join(dir, 'projects', 'Zenger-SDWAN');
+  fs.mkdirSync(path.join(projDir, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(projDir, 'docs', 'notes.md'), 'x\n');
+  g(projDir, ['init']);
+  g(projDir, ['config', 'user.email', 'a@b.c']);
+  g(projDir, ['config', 'user.name', 'a']);
+  g(projDir, ['add', '.']);
+  g(projDir, ['commit', '-m', 'init']);
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn {2}.*projects\/Zenger-SDWAN\s+—.*no remote/m,
+    'the project itself is audited and reported for having no remote');
+  assert.ok(!/projects\/Zenger-SDWAN\/\.git/.test(r.stdout), 'never audits the repo\'s own .git directory');
+  assert.ok(!/projects\/Zenger-SDWAN\/docs/.test(r.stdout), 'never audits the repo\'s own subfolders as separate projects');
+});
+
+test('doctor warns when a project repo has no remote at all', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const g = (cwd, a) => require('child_process').spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8' });
+  if (g(dir, ['--version']).status !== 0) return t.skip('git unavailable');
+  const projDir = path.join(dir, 'projects', 'Own', 'noremote');
+  fs.mkdirSync(projDir, { recursive: true });
+  fs.writeFileSync(path.join(projDir, 'w.md'), 'x\n');
+  g(projDir, ['init']);
+  g(projDir, ['config', 'user.email', 'a@b.c']);
+  g(projDir, ['config', 'user.name', 'a']);
+  g(projDir, ['add', '.']);
+  g(projDir, ['commit', '-m', 'init']);
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn {2}.*projects\/Own\/noremote\s+—.*no remote.*only on this machine/m);
+});
+
+test('doctor warns about unpushed commits when a project repo has a remote', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const g = (cwd, a) => require('child_process').spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8' });
+  if (g(dir, ['--version']).status !== 0) return t.skip('git unavailable');
+  const projDir = path.join(dir, 'projects', 'Own', 'ahead');
+  fs.mkdirSync(projDir, { recursive: true });
+  fs.writeFileSync(path.join(projDir, 'w.md'), 'x\n');
+  g(projDir, ['init']);
+  g(projDir, ['config', 'user.email', 'a@b.c']);
+  g(projDir, ['config', 'user.name', 'a']);
+  g(projDir, ['add', '.']);
+  g(projDir, ['commit', '-m', 'init']);
+  g(projDir, ['remote', 'add', 'origin', 'https://example.invalid/ahead.git']);
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout,
+    /^warn {2}.*projects\/Own\/ahead\s+—.*1 commit\(s\) not pushed to https:\/\/example\.invalid\/ahead\.git/m);
+});
+
+// git normalises the drive letter it prints on Windows regardless of how it
+// was invoked, but path.resolve() preserves whatever case it was given — and
+// the workspace root here comes from an uncanonicalised argv/cwd. A genuine
+// repo with a remote must not be reported as "no repository of its own" just
+// because the path doctor was invoked with happens to carry a lowercase
+// drive letter (Important 2 from review; this environment's own cwd is
+// lowercase, so this is not a hypothetical).
+test('a lowercase drive letter in the workspace path does not misreport a genuine repo as unbacked', (t) => {
+  if (process.platform !== 'win32') return t.skip('drive-letter casing only applies on Windows');
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const g = (cwd, a) => require('child_process').spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8' });
+  if (g(dir, ['--version']).status !== 0) return t.skip('git unavailable');
+  const projDir = path.join(dir, 'projects', 'Own', 'proj');
+  fs.mkdirSync(projDir, { recursive: true });
+  fs.writeFileSync(path.join(projDir, 'w.md'), 'x\n');
+  g(projDir, ['init']);
+  g(projDir, ['config', 'user.email', 'a@b.c']);
+  g(projDir, ['config', 'user.name', 'a']);
+  g(projDir, ['add', '.']);
+  g(projDir, ['commit', '-m', 'init']);
+  g(projDir, ['remote', 'add', 'origin', 'https://example.invalid/proj.git']);
+  const lowerDir = dir.charAt(0).toLowerCase() + dir.slice(1);
+  const r = runTool('doctor.js', [lowerDir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.ok(!/no repository of its own/.test(r.stdout),
+    'a genuine repo with a remote must not be reported as unbacked due to drive-letter case alone');
+});

@@ -342,21 +342,48 @@ function gitIn(dir, argv) {
   const r = spawnSync('git', ['-C', dir, ...argv], { encoding: 'utf8' });
   return r.status === 0 ? r.stdout.trim() : null;
 }
+// git normalises the drive letter it prints on Windows (always e.g. `C:/...`,
+// regardless of how it was invoked) but `path.resolve()` preserves whatever
+// case it was given, and `root` here comes from an uncanonicalised argv/cwd.
+// A workspace path with a lowercase drive letter — this environment's cwd
+// among them — would otherwise compare unequal to git's own answer for a
+// directory that genuinely IS its own repo, misreporting it as unbacked in
+// the trust-critical direction. One helper so this can only be gotten wrong
+// once.
+function sameRepoPath(a, b) {
+  let ra = path.resolve(a), rb = path.resolve(b);
+  if (process.platform === 'win32') { ra = ra.toLowerCase(); rb = rb.toLowerCase(); }
+  return ra === rb;
+}
 const projectsDir = path.join(root, 'projects');
 const gitOk = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
 if (gitOk && fs.existsSync(projectsDir)) {
   const level1 = fs.readdirSync(projectsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
   for (const owner of level1) {
     const ownerDir = path.join(projectsDir, owner.name);
-    const entries = fs.readdirSync(ownerDir, { withFileTypes: true }).filter((e) => e.isDirectory());
-    const candidates = entries.length ? entries.map((e) => path.join(ownerDir, e.name)) : [ownerDir];
+    // A project can sit directly at projects/<Name> as a repo in its own
+    // right — its working tree already contains a `.git` directory, so it
+    // never has zero subdirectories, and treating its subdirectories as
+    // candidates would audit a repo's own internals (`.git`, `docs/`, ...) as
+    // if they were separate unbacked projects while never checking the repo
+    // itself. So: only descend into the Owner/Project layout when the owner
+    // directory is NOT itself a repository of its own.
+    const ownerTop = gitIn(ownerDir, ['rev-parse', '--show-toplevel']);
+    const ownerIsRepo = ownerTop !== null && sameRepoPath(ownerTop, ownerDir);
+    let candidates;
+    if (ownerIsRepo) {
+      candidates = [ownerDir];
+    } else {
+      const entries = fs.readdirSync(ownerDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+      candidates = entries.length ? entries.map((e) => path.join(ownerDir, e.name)) : [ownerDir];
+    }
     for (const dir of candidates) {
       const rel = path.relative(root, dir).split(path.sep).join('/');
       // A directory is a repository of its own ONLY if git names it as its own
       // toplevel. Anything else means git is answering for an ancestor — the
       // exact lie the backup manifest once told (P0-1).
       const top = gitIn(dir, ['rev-parse', '--show-toplevel']);
-      const isOwnRepo = top !== null && path.resolve(top) === path.resolve(dir);
+      const isOwnRepo = top !== null && sameRepoPath(top, dir);
       if (!isOwnRepo) { warn(`${rel}`, 'no repository of its own — no copy of this work exists anywhere else'); continue; }
       const remote = gitIn(dir, ['remote', 'get-url', 'origin']);
       if (!remote) { warn(`${rel}`, 'repository with no remote — history exists only on this machine'); continue; }
