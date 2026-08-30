@@ -59,6 +59,18 @@ Propose the specific repair for each failure and wait for a yes:
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 
+## Format version
+
+`doctor` reports the workspace's `formatVersion`. If it is behind, run:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace-root> --dry-run
+```
+
+Show the owner the counts and the `boundaries` list (nested workspaces that were refused — each
+migrates on its own update), then run it again without `--dry-run` once they agree. Migration is
+additive and idempotent: it adds frontmatter and a `## Relations` block, and never edits prose.
+
 ## Migrate a pre-0.3.0 workspace
 
 Doctor's `no legacy .joserah/keys directory` check fails on workspaces

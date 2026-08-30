@@ -67,7 +67,27 @@ pick an empty directory, or move the conflicting files aside first. **Never
 add `--force` on your own initiative** — only when the user, having seen the
 list, asks for exactly that.
 
-## 3. Create it
+## 3. Ask about access and identity
+
+**Ask: whose machine is this?**
+
+> "Bu workspace bu bilgisayara tam erişimi olan birinin mi, yoksa yalnız kendi klasörüyle çalışacak misafir bir hafızanın mı?"
+
+- Owner → `--trust owner` (the default).
+- Guest → `--trust guest`, plus `--host-path <host workspace root>` so the host tree is walled off.
+
+Say plainly, once, when guest is chosen: the deny rules are a guardrail, not a sandbox. If the
+guest must be genuinely unable to reach the rest of the machine, the answer is a separate OS user
+account or a container — offer that rather than implying the rules are airtight.
+
+**Ask: what is the assistant called here?** → `--assistant NAME`. Default: leave empty; do not
+invent a name. This is what the assistant will call itself in this workspace, so it matters:
+without it, it falls back to whatever model is running and the owner gets a stranger.
+
+**Ask: which language should it speak to you?** → `--language LANG`. Already part of the
+identity questions; keep it explicit and ask it of every install, including guest workspaces.
+
+## 4. Create it
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --target <path> --workspace <name> --git
@@ -78,7 +98,7 @@ about the owner is known yet, and the scaffold does not invent it. Those
 tokens are written as empty for now and filled in by step 5, after doctor has
 passed. Empty is correct; do not pass a placeholder guess.
 
-## 4. Verify before moving on
+## 5. Verify before moving on
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>
@@ -87,7 +107,7 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>
 Every check must print `ok`. If any fails, fix it and re-run — do not move on
 to identity questions on a failing doctor.
 
-## 5. Now ask who they are
+## 6. Now ask who they are
 
 Three questions, once the workspace itself is proven to work: **owner name**,
 **dialogue language**, and **one line about who they are**. Ask in whatever
@@ -116,7 +136,7 @@ three files, would overwrite that editing. Re-run
 `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` once more to confirm
 nothing broke.
 
-## 6. Hand off
+## 7. Hand off
 
 Tell the user, in their language:
 
