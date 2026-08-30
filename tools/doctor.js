@@ -13,6 +13,16 @@ const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('.
 // looks for before it will inject anything from .joserah/agent.md at all.
 const AGENT_OVERLAY_MARKER = '<!-- joserah:agent-overlay-below -->';
 
+// Shared by every check below that byte-compares a plugin-owned file against
+// its canonical copy or template (JOSERAH-ROLE.md, verify-links.js): a
+// workspace with no .gitattributes of its own checks out under whatever the
+// owner's global core.autocrlf says, and Windows with autocrlf=true — the
+// plugin's own target platform — rewrites the checkout to CRLF while the
+// plugin's own copy on disk stays LF. That is a checkout convention, not
+// evidence of drift, so every such comparison normalises line endings first;
+// a genuine content difference still differs after normalising.
+function normalizeEol(s) { return s.replace(/\r\n/g, '\n'); }
+
 const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
 function check(name, ok, detail) { checks.push({ name, ok, detail: detail || '' }); }
@@ -115,7 +125,13 @@ function versionAtLeast(version, min) {
   if (!fs.existsSync(rolePath)) {
     detail = `missing — run: scaffold.js --target ${root} --kind ${(cfg && cfg.kind) || 'home'}`;
   } else {
-    ok = fs.readFileSync(rolePath, 'utf8') === fs.readFileSync(templatePath, 'utf8');
+    // R20: same cause as the verify-links.js check below — a workspace with
+    // no .gitattributes checks this file out as CRLF on Windows with
+    // autocrlf=true while the plugin's template on disk stays LF, so the
+    // comparison runs through the shared normalizeEol helper too. A genuine
+    // role mismatch (kind changed after scaffolding) still differs once
+    // normalised, so this still catches the case the check exists for.
+    ok = normalizeEol(fs.readFileSync(rolePath, 'utf8')) === normalizeEol(fs.readFileSync(templatePath, 'utf8'));
     detail = ok ? '' : `does not match the "${role}" role template for kind "${(cfg && cfg.kind) || 'home'}" — was kind changed after scaffolding?`;
   }
   check('exists: JOSERAH-ROLE.md', ok, detail);
@@ -192,9 +208,9 @@ check('format version', fv === FORMAT_VERSION,
   // canonical copy on disk stays LF, so a copy re-taken minutes ago still
   // differs byte-for-byte from `canonical`, on every such workspace, always.
   // That is a checkout convention, not evidence of staleness, so the
-  // comparison is normalised to LF; a genuine content difference still
-  // differs after normalising and still fails below.
-  const normalizeEol = (s) => s.replace(/\r\n/g, '\n');
+  // comparison runs through the shared normalizeEol above (R20) — same
+  // helper, same reason, as the JOSERAH-ROLE.md check; a genuine content
+  // difference still differs after normalising and still fails below.
   let ok = false, detail;
   if (!fs.existsSync(localPath)) detail = 'missing — copy it from the plugin: tools/verify-links.js';
   else if (normalizeEol(fs.readFileSync(localPath, 'utf8')) !== normalizeEol(canonical)) detail = 'stale — differs from the plugin copy; re-copy it';

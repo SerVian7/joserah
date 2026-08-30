@@ -85,6 +85,35 @@ test('R18: doctor still fails on genuine drift even when the drifted copy is CRL
   assert.match(r.stdout, /verify-links\.js/);
 });
 
+// R20: the same autocrlf cause R18 diagnosed for verify-links.js applies
+// here too — a workspace with no .gitattributes checks out JOSERAH-ROLE.md
+// as CRLF on Windows with autocrlf=true while the plugin's role template on
+// disk stays LF, so this byte-for-byte comparison must be normalised the
+// same way, or every such workspace fails a check whose content is actually
+// identical.
+test('R20: doctor does not fail when JOSERAH-ROLE.md differs from its role template only by CRLF line endings', (t) => {
+  const dir = freshWs(t);
+  const rolePath = path.join(dir, 'JOSERAH-ROLE.md');
+  const crlf = fs.readFileSync(rolePath, 'utf8').replace(/\n/g, '\r\n');
+  fs.writeFileSync(rolePath, crlf, 'utf8');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /ok\s+exists: JOSERAH-ROLE\.md/);
+});
+
+// The check exists to catch exactly this: a workspace scaffolded under one
+// role whose `kind` was changed afterwards without re-scaffolding. That must
+// still fail even once the comparison is CRLF-tolerant — normalising line
+// endings must not blind the check to a genuinely different role file.
+test('R20: doctor still fails when JOSERAH-ROLE.md genuinely does not match its role template', (t) => {
+  const dir = freshWs(t);
+  const rolePath = path.join(dir, 'JOSERAH-ROLE.md');
+  fs.appendFileSync(rolePath, '\nHand-edited after scaffolding.\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /does not match the "client" role template/);
+});
+
 test('I3: doctor fails when the deny set is a subset', (t) => {
   const dir = freshWs(t);
   const sPath = path.join(dir, '.claude', 'settings.json');
