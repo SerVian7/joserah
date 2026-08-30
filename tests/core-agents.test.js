@@ -32,6 +32,17 @@ test('the shipped core AGENTS.md states the audience and privilege rules', () =>
   }
 });
 
+test('the shipped core AGENTS.md forbids starving the machine, inline or delegated', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  for (const phrase of [
+    "bottlenecks the machine's RAM, CPU or GPU",
+    'delegation is not an excuse',
+    'run heavy work one at a time',
+  ]) {
+    assert.ok(text.includes(phrase), `core AGENTS.md mentions ${phrase}`);
+  }
+});
+
 // The two tests above compare workspaces to each other, or check for absence
 // of tokens — both pass as soon as the template itself is token-free, even if
 // scaffold.js stopped bypassing substitution for AGENTS.md entirely. This one

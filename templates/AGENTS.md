@@ -211,6 +211,7 @@ restructuring conventions.
 5. Never read `keys/` content unless explicitly asked.
 6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.
+8. Never start work that bottlenecks the machine's RAM, CPU or GPU — inline or handed to a subagent; delegation is not an excuse, and several small jobs run in parallel can starve a machine as thoroughly as one large one. Prefer the smaller job, run heavy work one at a time, and when something genuinely needs the machine's full capacity, say so and ask first.
 
 ---
 
