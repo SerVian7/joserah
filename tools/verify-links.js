@@ -116,6 +116,11 @@ for (const file of ALL_FILES) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]}`);
       }
     }
+    // Case-insensitive on purpose, unlike existsExact above: a path names a
+    // filesystem entry, where case is part of its identity and a mismatch is
+    // a real break on a case-sensitive host; a wikilink names a note's title,
+    // a human-written reference where case carries no meaning and enforcing
+    // it would only manufacture false breaks.
     for (const m of line.matchAll(WIKILINK_RE)) {
       const target = m[1].split('|')[0].trim();
       if (!TITLES.has(target.toLowerCase())) {
