@@ -93,20 +93,39 @@ test('scaffold .gitignore excludes raw/ from the repository route', (t) => {
 test('--root-shell-only regenerates missing root files from a .joserah-only restore', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
-  // simulate a .joserah-only clone: root shell files are gone
+  // simulate a .joserah-only clone: root shell files are gone, raw/ included
+  // (raw/ is gitignored by construction, so a .joserah-only backup never
+  // carried it either)
   fs.rmSync(path.join(dir, 'AGENTS.md'));
   fs.rmSync(path.join(dir, 'JOSERAH-ROLE.md'));
   fs.rmSync(path.join(dir, '.gitignore'));
   fs.rmSync(path.join(dir, '.claude'), { recursive: true });
+  fs.rmSync(path.join(dir, 'raw'), { recursive: true });
   const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
   assert.strictEqual(r.status, 0, r.stderr);
-  for (const f of ['AGENTS.md', 'JOSERAH-ROLE.md', '.gitignore', path.join('.claude', 'settings.json')]) {
+  for (const f of ['AGENTS.md', 'JOSERAH-ROLE.md', '.gitignore', path.join('.claude', 'settings.json'),
+                   path.join('raw', 'README.md')]) {
     assert.ok(fs.existsSync(path.join(dir, f)), `${f} regenerated`);
   }
   // AGENTS.md is the template byte-for-byte (modulo EOL):
   const tpl = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
   const got = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
   assert.strictEqual(got, tpl);
+  // raw/README.md is the template too — the explanation of why the folder
+  // is empty and outside the backup, not silence:
+  const rawTpl = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'raw', 'README.md'), 'utf8').replace(/\r\n/g, '\n');
+  const rawGot = fs.readFileSync(path.join(dir, 'raw', 'README.md'), 'utf8').replace(/\r\n/g, '\n');
+  assert.strictEqual(rawGot, rawTpl);
+});
+
+test('--root-shell-only never overwrites an existing raw/README.md', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.writeFileSync(path.join(dir, 'raw', 'README.md'), '# owner-edited\n');
+  const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'raw', 'README.md'), 'utf8'), '# owner-edited\n');
+  assert.match(r.stdout, /kept raw[\\/]README\.md/);
 });
 
 test('--root-shell-only never overwrites files that exist', (t) => {

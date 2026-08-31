@@ -88,6 +88,32 @@ function existsExact(baseDir, target) {
   return true;
 }
 
+// SKIP_REL (above) stops this tool WALKING into raw/ — it does not stop a
+// link written elsewhere from RESOLVING into it, and existsExact runs on
+// every link target regardless of where it lives. raw/ is gitignored by
+// construction (relocate-raw.js, 2026-08-31), so a fresh clone or restore
+// has none on disk at all — and every wiki citation written the documented
+// way (templates/.joserah/knowledge/wiki/README.md,
+// templates/.joserah/conventions.md) would go red on the very first machine
+// that doesn't have the source material, teaching the owner that doctor red
+// is normal. So: a target that resolves under one of these roots is only
+// exempted from the existence check when that top-level tree is itself
+// absent. Conditioned on absence, not on the child path, on purpose — a
+// genuinely mistyped raw/ citation is still caught on the authoring
+// machine, where raw/ is present.
+const RAW_ROOTS = [
+  { rel: 'raw', abs: path.join(ROOT, 'raw') },
+  { rel: '.joserah/knowledge/raw', abs: path.join(ROOT, '.joserah', 'knowledge', 'raw') },
+];
+function targetsAbsentRaw(fromDir, target) {
+  const abs = path.resolve(fromDir, target);
+  const rel = path.relative(ROOT, abs).split(path.sep).join('/').toLowerCase();
+  for (const r of RAW_ROOTS) {
+    if (rel === r.rel || rel.startsWith(r.rel + '/')) return !fs.existsSync(r.abs);
+  }
+  return false;
+}
+
 // Wikilink targets resolve against note TITLES inside this vault — never
 // against a path, and never outside the workspace. That containment is the
 // point: a hosted workspace's links cannot reach its host.
@@ -114,7 +140,7 @@ for (const file of ALL_FILES) {
       try { target = decodeURIComponent(target.split('#')[0]); }
       catch { /* a literal %, e.g. %USERPROFILE% — check the raw text */ target = target.split('#')[0]; }
       if (!target) continue;
-      if (!existsExact(path.dirname(file), target)) {
+      if (!existsExact(path.dirname(file), target) && !targetsAbsentRaw(path.dirname(file), target)) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]}`);
       }
     }

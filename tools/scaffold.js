@@ -211,6 +211,11 @@ if (args.rootShellOnly) {
   writeIfMissing('JOSERAH-ROLE.md',
     fs.readFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(cfg.kind)}.md`)));
   writeIfMissing('.gitignore', GITIGNORE_LINES.join('\n'));
+  // raw/ is a root shell path too (outside .joserah/, gitignored by
+  // construction) — a `.joserah`-only backup never carried it, so a restore
+  // leaves the owner with an empty, unexplained folder unless this writes
+  // the template's explanation back in.
+  writeIfMissing('raw/README.md', fs.readFileSync(path.join(TEMPLATES, 'raw', 'README.md')));
   if (!fs.existsSync(path.join(root, '.claude', 'settings.json'))) {
     writeSettings(root, true, denyFor(trust, { hostPaths: hostPathsFor(cfg, root) }));
     console.log('wrote .claude/settings.json');

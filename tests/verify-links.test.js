@@ -33,6 +33,32 @@ test('root raw/ is not scanned — relocate-raw.js moves the legacy dir here and
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
 });
 
+test('a wiki citation into raw/ is not broken when raw/ is absent (a clone before import, or before a machine ever ran /joserah:import)', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../raw/imports/2026-08-30/statement.pdf)\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a wiki citation into the pre-migration .joserah/knowledge/raw is not broken when that tree is absent', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../raw/statement.pdf)\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a genuinely mistyped raw/ citation is still caught when raw/ IS present', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../raw/imports/2026-08-30/statement.pdf)\n',
+    'raw/imports/2026-08-30/other-file.md': 'x\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /statement\.pdf/);
+});
+
 test('M16: link targets containing spaces are checked', (t) => {
   const d = ws(t, { 'a.md': '[n](My Notes.md)\n', 'My Notes.md': 'x\n' });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
