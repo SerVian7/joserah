@@ -23,7 +23,7 @@ before doing anything else.
 
 ## 1. Ask first, always
 
-Three questions, before touching anything:
+Questions, before touching anything (item 0 only when there is a standing decision to read back):
 
 0. **Read the standing decision first.** If `.joserah/config.json` has a
    `backup` object, the scope was decided before: restate it in one line
@@ -74,7 +74,7 @@ Three questions, before touching anything:
    Their data, their call — but the consequences, and this route-specific
    difference, are said out loud first, every time.
 
-Never produce an artifact before all three answers are in.
+Never produce an artifact before questions 1-3 are answered (question 0 only applies when there was a standing decision to restate).
 
 ## 2. Write the skipped-work manifest
 
@@ -327,14 +327,33 @@ them twice — once cheaply before staging, and once for real, after.
    plus the root shell files — never project work, runtime state or source
    material:
 
-   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
+   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "raw/" ".joserah/knowledge/raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
 
    → must print nothing. Anything listed means the repository already tracks
    out-of-scope content — from before the exclusions existed, or from a
-   hand-run `git add`. Deleting the files now would not remove them from
-   history. Stop, show the owner the list, and offer the **scope reset**
-   (last section of this skill). Do not take a new snapshot on top of a
-   contaminated history.
+   hand-run `git add`. `.joserah/knowledge/raw/` is in this pathspec because
+   every workspace this branch migrates carried its source material there
+   before `raw/` existed, and its `.gitignore` never excluded that path —
+   so `git add -A` tracked it, commit after commit, for as long as the
+   workspace existed, and pushed it.
+
+   That is also why `ls-files` alone is not enough here: it only answers for
+   what is tracked **right now**. `relocate-raw.js` moves the files to
+   `raw/` and the next `add -A` stages only the deletion — `ls-files` then
+   prints nothing forever, while every past commit still serves the very
+   material this scope exists to keep out. So also run:
+
+   `git -C <workspace> log --all --oneline -- ".joserah/knowledge/raw/" "raw/"`
+
+   → must print nothing either. A hit here means source material is sitting
+   in a commit reachable from some branch in this repository's history,
+   even on a workspace whose working tree and `ls-files` output are clean
+   today. **Source material in the history is not fixed by deleting the
+   files** — anyone with a clone, or access to the remote, still has every
+   commit. Either check failing: stop, show the owner the list, and offer
+   the **scope reset** (last section of this skill) — that is not a
+   fallback for something worse, it is exactly the right procedure for this
+   case. Do not take a new snapshot on top of a contaminated history.
 
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
    to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
@@ -521,7 +540,9 @@ Measure-Object -Line).Lines`), or on the zip route
    is regenerated, a `git add -A` on the restored machine would stage
    `keys/`. Then re-run doctor and confirm the check named
    `.claude/settings.json (present)` says `ok — present with the full deny
-   set`.
+   set`. These rules are one layer of the `keys/` protection, not a wall —
+   the others are the workspace's AGENTS.md instruction and the owner's own
+   caution, and Bash access can never be fully denied by pattern rules.
 
 ## 5. Record the backup
 
@@ -551,7 +572,12 @@ explicit yes, since every old version disappears from the backup:
 
 1. Say what the reset discards (old versions of everything) and what it
    keeps (every file as it is right now, untouched on disk). Get the yes.
-2. `git -C <workspace> checkout --orphan clean-scope`
+2. `git -C <workspace> checkout --orphan clean-scope` — fails outright if a
+   `clean-scope` branch already exists, which happens when an earlier reset
+   was aborted partway. Check for it first (`git -C <workspace> branch --list
+   clean-scope`); if it is there, pick a fresh name (`clean-scope-2`, and use
+   that name in every step below instead) or delete it first, but only with
+   the owner's explicit yes — it may hold work from that earlier attempt.
 3. `git -C <workspace> read-tree --empty` — **never `git rm -r --cached .`**:
    that command refuses files whose staged content differs from both HEAD
    and the working tree, removes *nothing* when it refuses, and the flow
