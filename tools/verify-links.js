@@ -101,15 +101,32 @@ function existsExact(baseDir, target) {
 // absent. Conditioned on absence, not on the child path, on purpose — a
 // genuinely mistyped raw/ citation is still caught on the authoring
 // machine, where raw/ is present.
+//
+// "Absent" tolerates a raw/ that holds nothing but its own template
+// README.md, not only a raw/ missing outright. scaffold.js's
+// --root-shell-only writes raw/README.md on a restore whose backup scope
+// never carried raw/ at all (see its own comment) — that write
+// materialises the directory, and a bare existsSync would flip every
+// citation back to broken on exactly the restore this exemption exists
+// for, with the confirming doctor re-run in skills/backup/SKILL.md's own
+// restore step landing on the newly-red result. A raw/ holding only that
+// one file carries no source material either way, so it is treated the
+// same as a raw/ that does not exist yet.
 const RAW_ROOTS = [
   { rel: 'raw', abs: path.join(ROOT, 'raw') },
   { rel: '.joserah/knowledge/raw', abs: path.join(ROOT, '.joserah', 'knowledge', 'raw') },
 ];
+function isEffectivelyAbsent(abs) {
+  let entries;
+  try { entries = fs.readdirSync(abs); }
+  catch { return true; } // does not exist (or is not a directory) — absent
+  return entries.length === 0 || (entries.length === 1 && entries[0] === 'README.md');
+}
 function targetsAbsentRaw(fromDir, target) {
   const abs = path.resolve(fromDir, target);
   const rel = path.relative(ROOT, abs).split(path.sep).join('/').toLowerCase();
   for (const r of RAW_ROOTS) {
-    if (rel === r.rel || rel.startsWith(r.rel + '/')) return !fs.existsSync(r.abs);
+    if (rel === r.rel || rel.startsWith(r.rel + '/')) return isEffectivelyAbsent(r.abs);
   }
   return false;
 }

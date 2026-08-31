@@ -526,9 +526,9 @@ Measure-Object -Line).Lines`), or on the zip route
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
 5. A `.joserah`-only backup restores no root shell: `AGENTS.md`,
-   `JOSERAH-ROLE.md`, `.gitignore` and `.claude/settings.json` are not in it
-   by design. Regenerate them — never by hand, never copied from another
-   workspace:
+   `JOSERAH-ROLE.md`, `.gitignore`, `raw/README.md` and
+   `.claude/settings.json` are not in it by design. Regenerate them — never
+   by hand, never copied from another workspace:
 
    ```
    node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --root-shell-only --target <target>
@@ -538,11 +538,15 @@ Measure-Object -Line).Lines`), or on the zip route
    restore report: these files came from the plugin's template, not from the
    backup. The missing `.gitignore` is the security-relevant one — until it
    is regenerated, a `git add -A` on the restored machine would stage
-   `keys/`. Then re-run doctor and confirm the check named
-   `.claude/settings.json (present)` says `ok — present with the full deny
-   set`. These rules are one layer of the `keys/` protection, not a wall —
-   the others are the workspace's AGENTS.md instruction and the owner's own
-   caution, and Bash access can never be fully denied by pattern rules.
+   `keys/`. `raw/README.md` arrives empty of anything but its own
+   explanation: the backup route never carries `raw/` by design, so there is
+   no source material to restore into it — say that plainly too, rather than
+   leaving the owner to wonder why the folder came back empty. Then re-run
+   doctor and confirm the check named `.claude/settings.json (present)` says
+   `ok — present with the full deny set`. These rules are one layer of the
+   `keys/` protection, not a wall — the others are the workspace's
+   AGENTS.md instruction and the owner's own caution, and Bash access can
+   never be fully denied by pattern rules.
 
 ## 5. Record the backup
 
