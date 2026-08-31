@@ -22,8 +22,10 @@ const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dis
 // Contracts about the workspace root — matched by workspace-relative path,
 // case-insensitively (Windows/macOS filesystems are). `raw/` holds imported
 // snapshots that are immutable by rule: their internal links are historical
-// facts, not workspace health.
-const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', '.joserah/knowledge/raw'];
+// facts, not workspace health. `.joserah/knowledge/raw` is the pre-2026-08-31
+// location, skipped forever for workspaces relocate-raw.js has not yet
+// touched.
+const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'raw', '.joserah/knowledge/raw'];
 
 function isSkippedRel(rel) {
   const low = rel.split(path.sep).join('/').toLowerCase();
@@ -86,6 +88,49 @@ function existsExact(baseDir, target) {
   return true;
 }
 
+// SKIP_REL (above) stops this tool WALKING into raw/ — it does not stop a
+// link written elsewhere from RESOLVING into it, and existsExact runs on
+// every link target regardless of where it lives. raw/ is gitignored by
+// construction (relocate-raw.js, 2026-08-31), so a fresh clone or restore
+// has none on disk at all — and every wiki citation written the documented
+// way (templates/.joserah/knowledge/wiki/README.md,
+// templates/.joserah/conventions.md) would go red on the very first machine
+// that doesn't have the source material, teaching the owner that doctor red
+// is normal. So: a target that resolves under one of these roots is only
+// exempted from the existence check when that top-level tree is itself
+// absent. Conditioned on absence, not on the child path, on purpose — a
+// genuinely mistyped raw/ citation is still caught on the authoring
+// machine, where raw/ is present.
+//
+// "Absent" tolerates a raw/ that holds nothing but its own template
+// README.md, not only a raw/ missing outright. scaffold.js's
+// --root-shell-only writes raw/README.md on a restore whose backup scope
+// never carried raw/ at all (see its own comment) — that write
+// materialises the directory, and a bare existsSync would flip every
+// citation back to broken on exactly the restore this exemption exists
+// for, with the confirming doctor re-run in skills/backup/SKILL.md's own
+// restore step landing on the newly-red result. A raw/ holding only that
+// one file carries no source material either way, so it is treated the
+// same as a raw/ that does not exist yet.
+const RAW_ROOTS = [
+  { rel: 'raw', abs: path.join(ROOT, 'raw') },
+  { rel: '.joserah/knowledge/raw', abs: path.join(ROOT, '.joserah', 'knowledge', 'raw') },
+];
+function isEffectivelyAbsent(abs) {
+  let entries;
+  try { entries = fs.readdirSync(abs); }
+  catch { return true; } // does not exist (or is not a directory) — absent
+  return entries.length === 0 || (entries.length === 1 && entries[0] === 'README.md');
+}
+function targetsAbsentRaw(fromDir, target) {
+  const abs = path.resolve(fromDir, target);
+  const rel = path.relative(ROOT, abs).split(path.sep).join('/').toLowerCase();
+  for (const r of RAW_ROOTS) {
+    if (rel === r.rel || rel.startsWith(r.rel + '/')) return isEffectivelyAbsent(r.abs);
+  }
+  return false;
+}
+
 // Wikilink targets resolve against note TITLES inside this vault — never
 // against a path, and never outside the workspace. That containment is the
 // point: a hosted workspace's links cannot reach its host.
@@ -112,7 +157,7 @@ for (const file of ALL_FILES) {
       try { target = decodeURIComponent(target.split('#')[0]); }
       catch { /* a literal %, e.g. %USERPROFILE% — check the raw text */ target = target.split('#')[0]; }
       if (!target) continue;
-      if (!existsExact(path.dirname(file), target)) {
+      if (!existsExact(path.dirname(file), target) && !targetsAbsentRaw(path.dirname(file), target)) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]}`);
       }
     }

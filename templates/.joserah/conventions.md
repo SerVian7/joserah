@@ -32,7 +32,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Quick unsorted capture | `.joserah/desk/inbox/captures.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |
 | Credentials | `keys/` — never echoed |
-| Immutable source material | `.joserah/knowledge/raw/` |
+| Immutable source material | `raw/` — workspace root, outside `.joserah/`, never in a repository backup |
 | AI-maintained synthesis | `.joserah/knowledge/wiki/` |
 | One file per person | `.joserah/knowledge/people/firstname-lastname.md` |
 | Learned preferences and corrections | `.joserah/learned.md` |
@@ -44,11 +44,15 @@ The format for `.joserah/learned.md`. It lives here, not there: the
 session-start hook injects the three most recent `##` sections of that file
 into every session, so a format example sitting in it would be read as a real
 learning — including from inside a code fence or an HTML comment, since the
-hook matches raw lines.
+hook matches raw lines. Every field below is a placeholder to fill in,
+`**Scope:**` included: `workspace` scopes the rule to this workspace,
+`universal` means it belongs to the plugin itself and should route to
+`/joserah:feedback` rather than staying trapped here.
 
 ```markdown
 ## YYYY-MM-DD — short title
 **Rule:** what to do differently.
+**Scope:** <workspace | universal>
 **Reason:** the feedback that caused it.
 **Edge:** where it does not apply.
 ```

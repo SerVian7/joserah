@@ -14,15 +14,50 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { SPECIFIC } = require('../hooks/lib/redactions');
+const { isOwnRepoRoot } = require('./lib/git-root');
 
 const root = path.resolve(process.argv[2] || process.cwd());
-const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'node_modules', '.git',
+const staged = process.argv.includes('--staged');
+const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'raw', 'node_modules', '.git',
   '.venv', '.superpowers', 'dist', 'build'];
 const TEXT_EXT = new Set(['.md', '.json', '.txt', '.yml', '.yaml', '.toml']);
 
 function isSkipped(rel) {
   const low = rel.split(path.sep).join('/').toLowerCase();
   return SKIP.some((p) => low === p || low.startsWith(p + '/'));
+}
+
+// A placeholder has the SHAPE of a secret slot, not of a secret: the vendor
+// doc's `api_key=bbbbbb`, the wiki's `<SIFRE>`, the sample's `changeme`.
+// 474 of Yusuf's 478 hits were these (P2-1) — a scan nobody reads protects nobody.
+function isPlaceholder(rawValue) {
+  const v = String(rawValue).trim().replace(/^["']|["']$/g, '');
+  if (!v) return true;
+  if (/^(.)\1+$/.test(v)) return true;                       // bbbbbb, xxxx, ******
+  if (/^[<[{].*[>\]}]$/.test(v)) return true;                // <SIFRE>, [api_key], {token}
+  if (/^\$\{?[A-Za-z0-9_]+\}?$/.test(v)) return true;         // $VAR, ${VAR}
+  if (/^(YOUR|MY|EXAMPLE|SAMPLE|DUMMY|TEST|CHANGE|REPLACE|INSERT|TODO|PLACEHOLDER)[_-]/i.test(v)) return true;
+  // Exact-word list: every entry here must be a word that CANNOT be a live
+  // credential, not merely a word that often ISN'T one. "changeme",
+  // "change-me", "password" and "secret" were deliberately dropped from this
+  // list (review, 2026-08-31): they are dictionary words at the top of every
+  // published weak-password list, and `password: password` / `secret: secret`
+  // / `passwd: changeme` are real, working credentials — reporting them
+  // clean is the exact failure this tool exists to prevent. Do not re-add
+  // them "for symmetry" with `admin`; the same reasoning that keeps `admin`
+  // out keeps these out too. A false negative here costs more than a false
+  // positive.
+  if (/^(redacted|masked|placeholder|todo|tbd|none|null|empty)$/i.test(v)) return true;
+  return false;
+}
+
+// Returns null — not an empty array — when `git diff --cached` itself fails
+// (not a repository, or git unavailable): the caller must exit 2, not treat
+// "nothing staged" and "can't tell what's staged" as the same thing.
+function stagedFiles() {
+  const r = spawnSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8' });
+  if (r.status !== 0) return null;
+  return r.stdout.split('\0').filter(Boolean);
 }
 
 // Returns null — not an empty array — whenever the tracked-file list would
@@ -53,8 +88,32 @@ function walkedFiles() {
 
 let files;
 try {
-  files = (trackedFiles() || walkedFiles())
-    .filter((f) => !isSkipped(f) && TEXT_EXT.has(path.extname(f).toLowerCase()));
+  if (staged) {
+    // `git diff --cached --name-only` reports paths relative to the
+    // repository ROOT, not to `root` here — unlike `git ls-files` below,
+    // which is cwd-relative and so already scoped correctly even when
+    // nested. A workspace that is not its repository's own toplevel (nested
+    // inside an ancestor repo, e.g. a `.joserah` folder living a few levels
+    // under some other project's git root) would have every staged path
+    // miss `path.join(root, rel)`, read as ENOENT, and get silently dropped
+    // by the staged-deletion allowance below — scanning zero files while
+    // reporting clean. "Cannot scan" must win over "clean" here too.
+    if (!isOwnRepoRoot(root)) {
+      console.error(`secret-scan: --staged requires ${root} to be a git repository's own toplevel ` +
+        '— it is either not a repository at all, or nested inside an ancestor repository, in which ' +
+        'case staged file paths would not resolve against it. Nothing was scanned.');
+      process.exit(2);
+    }
+    const list = stagedFiles();
+    if (list === null) {
+      console.error('secret-scan: --staged needs a git repository — nothing was scanned.');
+      process.exit(2);
+    }
+    files = list.filter((f) => !isSkipped(f) && TEXT_EXT.has(path.extname(f).toLowerCase()));
+  } else {
+    files = (trackedFiles() || walkedFiles())
+      .filter((f) => !isSkipped(f) && TEXT_EXT.has(path.extname(f).toLowerCase()));
+  }
 } catch (err) {
   console.error(`secret-scan: cannot scan: ${err.message}`);
   process.exit(2);
@@ -66,7 +125,15 @@ for (const rel of files) {
   let text;
   try {
     text = fs.readFileSync(path.join(root, rel), 'utf8');
-  } catch {
+  } catch (err) {
+    // `--staged` lists `git diff --cached --name-only`, which includes a
+    // path staged for deletion — it has no working-tree content because the
+    // owner deleted it on purpose, not because something went wrong. Skip it
+    // silently rather than calling it unreadable, or a plain "delete a note,
+    // stage it" turns into a false "exit 2, could not scan" for the backup
+    // gate. Outside --staged, a tracked file missing from disk is exactly
+    // the corruption case exit 2 exists to catch, so that path is untouched.
+    if (staged && err.code === 'ENOENT') continue;
     unreadable.push(rel);
     continue;
   }
@@ -75,6 +142,11 @@ for (const rel of files) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(line)) !== null) {
+        const value = m[3] !== undefined ? m[3] : m[0].replace(/^\S+\s+/, '');
+        if (isPlaceholder(value)) {
+          if (m[0].length === 0) re.lastIndex++;
+          continue;
+        }
         hits++;
         const shown = m[0].slice(0, 4) + '…[masked]';
         console.log(`${rel}:${i + 1}: ${shown}`);

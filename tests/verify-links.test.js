@@ -28,6 +28,76 @@ test('I10: markdown under .joserah/knowledge/raw is not scanned', (t) => {
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
 });
 
+test('root raw/ is not scanned — relocate-raw.js moves the legacy dir here and its stale links must not fail the gate', (t) => {
+  const d = ws(t, { 'raw/imports/x.md': '[gone](nope.md)\n', 'ok.md': 'hi\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
+test('a wiki citation into raw/ is not broken when raw/ is absent (a clone before import, or before a machine ever ran /joserah:import)', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../raw/imports/2026-08-30/statement.pdf)\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a wiki citation into the pre-migration .joserah/knowledge/raw is not broken when that tree is absent', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../raw/statement.pdf)\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a genuinely mistyped raw/ citation is still caught when raw/ IS present', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../raw/imports/2026-08-30/statement.pdf)\n',
+    'raw/imports/2026-08-30/other-file.md': 'x\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /statement\.pdf/);
+});
+
+// Regression: --root-shell-only writing raw/README.md (added so a restored
+// workspace gets the folder's explanation) materialises raw/ on disk, which
+// used to flip a bare fs.existsSync check back to "present" and re-break
+// every citation into it — undoing the fix above on exactly the restore
+// route skills/backup/SKILL.md's own restore step exercises (doctor →
+// --root-shell-only → re-run doctor). This walks that actual order.
+test('--root-shell-only writing raw/README.md does not re-break a raw/ citation on restore', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', d, '--workspace', 'w']);
+  fs.mkdirSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics', 'x.md'),
+    '# X\n\n[source](../../../../raw/imports/statement.pdf)\n');
+  // simulate a restore that never carried raw/ at all:
+  fs.rmSync(path.join(d, 'raw'), { recursive: true, force: true });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0, 'clean before --root-shell-only');
+
+  const rso = runTool('scaffold.js', ['--root-shell-only', '--target', d]);
+  assert.strictEqual(rso.status, 0, rso.stderr);
+  assert.ok(fs.existsSync(path.join(d, 'raw', 'README.md')), 'precondition: raw/README.md now exists');
+
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout + ' — a raw/ holding only its own template README.md must still count as absent');
+});
+
+test('a raw/ holding real content alongside the template README.md still catches a mistyped citation', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', d, '--workspace', 'w']);
+  fs.mkdirSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics', 'x.md'),
+    '# X\n\n[source](../../../../raw/imports/statement.pdf)\n');
+  // raw/README.md is already there from scaffold; add real content beside it
+  // without the file the citation actually names:
+  fs.mkdirSync(path.join(d, 'raw', 'imports'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'raw', 'imports', 'other-file.md'), 'x\n');
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /statement\.pdf/);
+});
+
 test('M16: link targets containing spaces are checked', (t) => {
   const d = ws(t, { 'a.md': '[n](My Notes.md)\n', 'My Notes.md': 'x\n' });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);

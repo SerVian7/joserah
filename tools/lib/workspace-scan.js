@@ -38,7 +38,7 @@ const path = require('path');
 const SKIP_DIR_ANY = new Set(['.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']);
 const SKIP_REL = [
   'keys', 'projects', 'docker-stack', '.claude',
-  '.joserah/knowledge/raw', '.joserah/user', '.joserah/feedback',
+  '.joserah/knowledge/raw', 'raw', '.joserah/user', '.joserah/feedback',
   '.joserah/tools', '.joserah/last-time-inject',
 ];
 const SKIP_FILE_REL = new Set([

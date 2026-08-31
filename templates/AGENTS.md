@@ -124,15 +124,15 @@ A knowledge file is a record, not a conversation. Four rules:
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/          {Owner}/{ProjectName}/ — never tracked; each has its own git
+├── raw/               immutable source material — owner's originals, excluded from repository backups
 ├── keys/              SENSITIVE — never read or echo contents
-│
 └── .joserah/
     ├── config.json          workspace marker
     ├── directives.md        this workspace's own rules — overrides AGENTS.md, survives updates
     ├── conventions.md · learned.md · skill-candidates.md
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
-    ├── knowledge/           people/ · raw/ · wiki/ · archive/
+    ├── knowledge/           people/ · wiki/ · archive/
     ├── personal/            private — read on demand only
     └── user/                drop folder — files the owner leaves for import
 ```
@@ -207,7 +207,7 @@ restructuring conventions.
 1. Read before writing.
 2. No silent deletions or moves — confirm first.
 3. No secrets in markdown. If a key or token is pasted, say it belongs in `keys/` and do not repeat it.
-4. Never write to `.joserah/knowledge/raw/` — immutable source material. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
+4. Never write to `raw/` at the workspace root — immutable source material, and never part of a repository backup. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
 5. Never read `keys/` content unless explicitly asked.
 6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.

@@ -8,6 +8,7 @@
  *                         [--feedback auto|manual|off] [--github USER]
  *                         [--identity-mode auto|manual|off]
  *        node scaffold.js --settings-only --target DIR [--force]
+ *        node scaffold.js --root-shell-only --target DIR
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
  *                         [--role LINE] [--consent-model NAME]
  *                         [--feedback auto|manual|off] [--github USER]
@@ -44,6 +45,54 @@ const path = require('path');
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const TEMPLATES = path.join(PLUGIN_ROOT, 'templates');
 
+// Workspace .gitignore. The project/runtime rule is expressed as a pattern,
+// never an enumerated list, so it holds in anyone's workspace. Shared
+// between the main create path and `--root-shell-only` (a .joserah-only
+// restore has no other way to get this file back) — one source of truth,
+// so the two paths cannot silently drift apart.
+const GITIGNORE_LINES = [
+  '# secrets — never in history',
+  'keys/*',
+  '!keys/AGENTS.md',
+  '# pre-0.3.0 legacy location — excluded forever, belt-and-braces',
+  '.joserah/keys/*',
+  '.env',
+  '.env.*',
+  '*.env',
+  '*.env.*',
+  '.envrc',
+  '*.envrc',
+  '!.env.example',
+  '!*.env.example',
+  '',
+  '# Project and runtime trees: contents are never tracked here. Each project',
+  '# carries its own git history; runtime stacks hold state, not knowledge.',
+  '# Only the file documenting each tree\'s convention is kept.',
+  'projects/*',
+  '!projects/AGENTS.md',
+  'docker-stack/*',
+  '# docker-stack/README.md is created by the owner if they adopt that convention',
+  '!docker-stack/README.md',
+  '',
+  '# Source material: originals the owner already holds elsewhere (statements,',
+  '# vendor PDFs, firmware). Root location, outside .joserah/ — never in a',
+  '# repository backup; the zip route still carries it.',
+  'raw/',
+  '',
+  '# scratch directories tools create unbidden',
+  '.superpowers/',
+  '',
+  '# machine-local',
+  '.joserah/last-time-inject',
+  'node_modules/',
+  '.venv/',
+  '',
+  '# OS noise',
+  '.DS_Store',
+  'Thumbs.db',
+  '',
+];
+
 function parseArgs(argv) {
   const out = { git: false, force: false };
   for (let i = 0; i < argv.length; i++) {
@@ -51,6 +100,7 @@ function parseArgs(argv) {
     if (a === '--git') { out.git = true; continue; }
     if (a === '--force') { out.force = true; continue; }
     if (a === '--settings-only') { out.settingsOnly = true; continue; }
+    if (a === '--root-shell-only') { out.rootShellOnly = true; continue; }
     if (a === '--identity-only') { out.identityOnly = true; continue; }
     if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
   }
@@ -129,6 +179,49 @@ if (args.settingsOnly) {
   const rules = denyFor(cfgForSettings.trust || defaultTrustFor(cfgForSettings.kind),
     { hostPaths: hostPathsFor(cfgForSettings, dir) });
   console.log(JSON.stringify({ settings: writeSettings(dir, args.force, rules), rules: rules.length }));
+  process.exit(0);
+}
+
+// `--root-shell-only --target DIR`: used by the backup skill's restore path
+// when the backup scope was `.joserah/` only. That scope carries the
+// knowledge base but none of the root shell — AGENTS.md, JOSERAH-ROLE.md,
+// .gitignore, .claude/settings.json — because none of those live under
+// .joserah/. Writes only what is missing (never overwrites an owner-edited
+// file) and reports one line per file. Scoped to actual Joserah workspaces,
+// same as --settings-only: this restores a shell around an existing
+// knowledge base, it does not create one.
+if (args.rootShellOnly) {
+  if (!args.target) { console.error('scaffold: --root-shell-only needs --target DIR'); process.exit(1); }
+  const root = path.resolve(args.target);
+  const cfgPath = path.join(root, '.joserah', 'config.json');
+  if (!fs.existsSync(cfgPath)) {
+    console.error(`scaffold: ${root} is not a Joserah workspace (no .joserah/config.json found) — refusing to write a root shell`);
+    process.exit(1);
+  }
+  const cfg = readJson(cfgPath);
+  const trust = cfg.trust || defaultTrustFor(cfg.kind);
+  const writeIfMissing = (rel, content) => {
+    const abs = path.join(root, rel);
+    if (fs.existsSync(abs)) { console.log(`kept ${rel} (already present)`); return; }
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content);
+    console.log(`wrote ${rel}`);
+  };
+  writeIfMissing('AGENTS.md', fs.readFileSync(path.join(TEMPLATES, 'AGENTS.md')));
+  writeIfMissing('JOSERAH-ROLE.md',
+    fs.readFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(cfg.kind)}.md`)));
+  writeIfMissing('.gitignore', GITIGNORE_LINES.join('\n'));
+  // raw/ is a root shell path too (outside .joserah/, gitignored by
+  // construction) — a `.joserah`-only backup never carried it, so a restore
+  // leaves the owner with an empty, unexplained folder unless this writes
+  // the template's explanation back in.
+  writeIfMissing('raw/README.md', fs.readFileSync(path.join(TEMPLATES, 'raw', 'README.md')));
+  if (!fs.existsSync(path.join(root, '.claude', 'settings.json'))) {
+    writeSettings(root, true, denyFor(trust, { hostPaths: hostPathsFor(cfg, root) }));
+    console.log('wrote .claude/settings.json');
+  } else {
+    console.log('kept .claude/settings.json (already present)');
+  }
   process.exit(0);
 }
 
@@ -398,45 +491,8 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
 // Permission rules (see PERMISSION_DENY above — the one source of truth).
 writeSettings(root, true, denyFor(args.trust, { hostPaths: hostPathsFor({ hosting }, root) }));
 
-// Workspace .gitignore. The project/runtime rule is expressed as a pattern,
-// never an enumerated list, so it holds in anyone's workspace.
-fs.writeFileSync(path.join(root, '.gitignore'), [
-  '# secrets — never in history',
-  'keys/*',
-  '!keys/AGENTS.md',
-  '# pre-0.3.0 legacy location — excluded forever, belt-and-braces',
-  '.joserah/keys/*',
-  '.env',
-  '.env.*',
-  '*.env',
-  '*.env.*',
-  '.envrc',
-  '*.envrc',
-  '!.env.example',
-  '!*.env.example',
-  '',
-  '# Project and runtime trees: contents are never tracked here. Each project',
-  '# carries its own git history; runtime stacks hold state, not knowledge.',
-  '# Only the file documenting each tree\'s convention is kept.',
-  'projects/*',
-  '!projects/AGENTS.md',
-  'docker-stack/*',
-  '# docker-stack/README.md is created by the owner if they adopt that convention',
-  '!docker-stack/README.md',
-  '',
-  '# scratch directories tools create unbidden',
-  '.superpowers/',
-  '',
-  '# machine-local',
-  '.joserah/last-time-inject',
-  'node_modules/',
-  '.venv/',
-  '',
-  '# OS noise',
-  '.DS_Store',
-  'Thumbs.db',
-  '',
-].join('\n'), 'utf8');
+// Workspace .gitignore (see GITIGNORE_LINES above).
+fs.writeFileSync(path.join(root, '.gitignore'), GITIGNORE_LINES.join('\n'), 'utf8');
 
 // Local copy of the link checker so the workspace can verify itself.
 fs.mkdirSync(path.join(root, '.joserah', 'tools'), { recursive: true });

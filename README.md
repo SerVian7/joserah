@@ -62,10 +62,11 @@ once, keep as many workspaces as you like, and updating the plugin updates all
 of them at once.
 
 Two rules keep the knowledge honest. Source material you bring in is copied
-**verbatim** into `.joserah/knowledge/raw/` and never edited; anything the
-assistant writes lives elsewhere and cites the source it came from. A
-knowledge base that quotes its own guesses back at you is worse than no
-knowledge base.
+**verbatim** into `raw/` at the workspace root — outside `.joserah/`, so a
+repository backup does not carry your bank statements and vendor PDFs along
+with your notes — and never edited; anything the assistant writes lives
+elsewhere and cites the source it came from. A knowledge base that quotes its
+own guesses back at you is worse than no knowledge base.
 
 ## Layout
 
@@ -76,13 +77,14 @@ knowledge base.
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
 ├── keys/               SENSITIVE — never read or echoed
+├── raw/                source material, verbatim — outside .joserah/, excluded from repo backups
 │
 └── .joserah/
     ├── config.json          workspace marker
     ├── conventions.md · learned.md · skill-candidates.md
     ├── tools/               verify-links.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
-    ├── knowledge/           people/ · raw/ · wiki/ · archive/
+    ├── knowledge/           people/ · wiki/ · archive/
     ├── personal/            private — read on demand only
     └── user/                drop folder — files the owner leaves for import
 ```

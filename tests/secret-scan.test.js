@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { tmpdir, runTool } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
 
 test('secret-scan finds a pasted key in markdown and masks it in output', (t) => {
   const d = path.join(tmpdir(t), 'ws');
@@ -57,6 +57,16 @@ test('secret-scan does not report clean on a fresh git init with an unstaged sec
   assert.ok(!r.stdout.includes(secret), 'secret never echoed whole');
 });
 
+test('root raw/ is never scanned — vendor docs full of api_key=… are not the owner\'s notes', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'raw', 'vendor-manual.md'), 'password: s3cr3t-9real-value\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+});
+
 test('secret-scan does not report a clean tree when a listed file cannot be read', (t) => {
   const d = path.join(tmpdir(t), 'ws');
   fs.mkdirSync(d, { recursive: true });
@@ -69,4 +79,130 @@ test('secret-scan does not report a clean tree when a listed file cannot be read
   assert.strictEqual(r.status, 2, 'an unreadable tracked file must not report exit 0');
   assert.match(r.stderr, /ghost\.md/);
   assert.ok(!r.stdout.includes('No credential-shaped content found'), 'must not claim clean');
+});
+
+test('placeholder values are not findings', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), [
+    'api_key=bbbbbb',            // repeated single character
+    'Password: <SIFRE>',         // angle-bracket placeholder
+    'token = ${API_TOKEN}',      // env-var reference
+    'secret: [api_key]',         // bracketed field name
+    'password=YOUR_PASSWORD_HERE',
+    'token: TBD',                // exact-word placeholder that stays on the list
+    // NOTE: 'passwd: changeme' is deliberately NOT in this fixture — see the
+    // "literal word password" test below. "changeme" is a real, working
+    // credential when nobody rotates it, so it was dropped from
+    // isPlaceholder()'s exact-word list and must trip the scan.
+  ].join('\n') + '\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a real credential value still trips the scan', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), 'password: k9$Tr0uv-real\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 1);
+});
+
+test('prose starting with the word Basic is not a basic-auth hit', () => {
+  const { SPECIFIC } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'redactions'));
+  const line = 'Basic Configuration overview for the router';
+  const hit = SPECIFIC.some(([re]) => { re.lastIndex = 0; return re.test(line); });
+  assert.strictEqual(hit, false);
+});
+
+test('a real bearer token is still redacted', () => {
+  const { redact } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'redactions'));
+  assert.match(redact('Bearer x8f3-KQ9zW2mP0aH1').text, /\[redacted\]/);
+});
+
+test('--staged scans only what is staged', (t) => {
+  const dir = tmpdir(t);
+  const g = (a) => require('child_process').spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+  if (g(['--version']).status !== 0) return t.skip('git unavailable');
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  g(['init']);
+  fs.writeFileSync(path.join(dir, 'staged.md'), 'password: k9$Tr0uv-real\n');
+  fs.writeFileSync(path.join(dir, 'unstaged.md'), 'password: a7!Wq2xx-real\n');
+  g(['add', 'staged.md']);
+  const r = runTool('secret-scan.js', [dir, '--staged']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /staged\.md/);
+  assert.ok(!/unstaged\.md/.test(r.stdout), 'unstaged file not scanned');
+});
+
+test('--staged outside a git repository exits 2, never clean', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  const r = runTool('secret-scan.js', [dir, '--staged'], { env: {} });
+  assert.strictEqual(r.status, 2);
+});
+
+test('the literal word "password" as a value is a hit, not a placeholder', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), 'password: password\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 1, 'a dictionary-word "password" value is a real, working credential, not a placeholder');
+});
+
+test('dictionary weak-password words are hits, not placeholders — regression for the dropped exact-word entries', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'note.md'), [
+    'secret: secret',
+    'passwd: changeme',
+  ].join('\n') + '\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /2 credential-shaped strings found/);
+});
+
+test('--staged refuses on a workspace nested inside an ancestor repository, instead of scanning zero files and reporting clean', (t) => {
+  // `git diff --cached --name-only` reports paths relative to the repo ROOT
+  // (the outer repo here), not to the nested workspace directory — the
+  // ancestor-repository defect this branch exists to prevent, reproduced
+  // inside secret-scan.js itself.
+  const outer = tmpdir(t);
+  const go = (a) => require('child_process').spawnSync('git', ['-C', outer, ...a], { encoding: 'utf8' });
+  if (go(['--version']).status !== 0) return t.skip('git unavailable');
+  go(['init']);
+  const nested = path.join(outer, 'workspace');
+  fs.mkdirSync(path.join(nested, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(nested, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(nested, 'note.md'), 'password: k9$Tr0uv-real\n');
+  go(['add', 'workspace/note.md']);
+  const r = runTool('secret-scan.js', [nested, '--staged']);
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /nested inside an ancestor repository|own toplevel/i);
+  assert.ok(!r.stdout.includes('No credential-shaped content found'), 'must not claim clean');
+});
+
+test('--staged skips a file staged for deletion instead of calling it unreadable', (t) => {
+  const dir = tmpdir(t);
+  const g = (a) => require('child_process').spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+  if (g(['--version']).status !== 0) return t.skip('git unavailable');
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  g(['init']);
+  g(['config', 'user.email', 'test@example.com']);
+  g(['config', 'user.name', 'Test']);
+  fs.writeFileSync(path.join(dir, 'gone.md'), 'nothing suspicious here\n');
+  g(['add', 'gone.md']);
+  g(['commit', '-m', 'initial']);
+  fs.unlinkSync(path.join(dir, 'gone.md'));
+  g(['add', 'gone.md']); // stages the deletion
+  const r = runTool('secret-scan.js', [dir, '--staged']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.ok(!/could not read/.test(r.stderr), 'a staged deletion must not be treated as unreadable');
 });

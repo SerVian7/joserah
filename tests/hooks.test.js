@@ -22,6 +22,26 @@ test('M1: session-start on a fresh workspace reports no changed files', (t) => {
   assert.doesNotMatch(r.stdout, /\[backup\]/, 'own journal stub must not count as a change');
 });
 
+// P2-2 regression guard: the staleness counter's scope IS the backup scope
+// (.joserah/desk, .joserah/knowledge, .joserah/personal). Root raw/ is
+// outside that scope on purpose — it is immutable source material, never
+// carried by the repository backup route — so a file dropped there must
+// never inflate "[backup] N file(s) changed".
+test('staleness counter ignores the root raw/ tree', (t) => {
+  const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.lastBackup = new Date().toISOString();
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'raw', 'huge-vendor.pdf.md'), 'new source material\n');
+
+  const r = runHook('session-start.js', dir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(!/\[backup\] 1 file/.test(r.stdout), 'raw/ must not inflate the counter');
+});
+
 test('M11: trigger inside a longer word does not capture', (t) => {
   const ws = hookWs(t);
   const r = runHook('user-prompt-submit.js', ws, JSON.stringify({ prompt: 'dosyayı kaydettim az önce' }));

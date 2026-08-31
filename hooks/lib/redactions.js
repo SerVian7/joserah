@@ -3,7 +3,10 @@
 // a tracked file. Best-effort, not a guarantee.
 const SPECIFIC = [
   [/\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|auth[_-]?token|client[_-]?secret)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi, '$1$2[redacted]'],
-  [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]'],
+  // Requires at least one digit/symbol in the token so a capitalised English
+  // word ("Basic Configuration...") never matches (P2-1: "Basi" was matched
+  // out of "Basic Configuration" by the old word-boundary-free pattern).
+  [/\b(bearer|basic)\s+(?=[A-Za-z0-9._~+/=-]*[\d+/=~-])[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]'],
   [/\b(?:sk|pk)[-_][A-Za-z0-9_-]{8,}/gi, '[redacted]'],
   [/\b(?:AKIA|ASIA)[0-9A-Z]{8,}/g, '[redacted]'],
   [/\bxox[baprs]-[A-Za-z0-9-]{8,}/gi, '[redacted]'],

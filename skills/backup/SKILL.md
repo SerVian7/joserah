@@ -23,8 +23,19 @@ before doing anything else.
 
 ## 1. Ask first, always
 
-Three questions, before touching anything:
+Questions, before touching anything (item 0 only when there is a standing decision to read back):
 
+0. **Read the standing decision first.** If `.joserah/config.json` has a
+   `backup` object, the scope was decided before: restate it in one line
+   ("backup scope: `<scope>`, decided <decidedOn> — <reason>") and do not
+   re-ask questions the object already answers. The owner can change it at
+   any time; changing it updates the object (see below). If there is no
+   `backup` object, ask the questions, then **write the answers down** so
+   the next backup never re-asks:
+
+   ```
+   node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.readFileSync(p,'utf8'));c.backup={scope:process.argv[2],decidedOn:new Date().toISOString().slice(0,10),reason:process.argv[3]||''};fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');" "<workspace>/.joserah/config.json" "<scope>" "<one-line reason in the owner's words>"
+   ```
 1. **Zip, or a private repository?** A zip is a one-time, local snapshot.
    A repository keeps two or more machines in sync going forward, and is
    opt-in and consequential — it puts the owner's journal, their notes about
@@ -63,7 +74,7 @@ Three questions, before touching anything:
    Their data, their call — but the consequences, and this route-specific
    difference, are said out loud first, every time.
 
-Never produce an artifact before all three answers are in.
+Never produce an artifact before questions 1-3 are answered (question 0 only applies when there was a standing decision to restate).
 
 ## 2. Write the skipped-work manifest
 
@@ -97,9 +108,15 @@ one-line description if one could be found — never invented.
 For each directory one level directly under `projects/` and one level
 directly under `docker-stack/`:
 
-- **Remote:** `git -C <dir> remote get-url origin`. If that fails (not a
-  repo, no `origin`, git itself missing), write "no remote" — never treat the
-  failure as an error, just an absent fact.
+- **Remote:** first confirm the directory is a repository *in its own right*:
+  `git -C <dir> rev-parse --show-toplevel` must print `<dir>` itself. If it
+  prints an ancestor — or fails — `<dir>` is not a repository of its own, and
+  git is answering for the parent: write "no remote (not a repository of its
+  own)" and do NOT run `remote get-url` there. A manifest line that borrows
+  the workspace's own remote says "this project is backed up" about a project
+  that has no copy anywhere — the worst lie a backup document can tell. Only
+  when the toplevel matches does `git -C <dir> remote get-url origin` mean
+  anything; if it then prints nothing, write "no remote".
 - **Description:** read `<dir>/README.md` first, then `<dir>/AGENTS.md` if
   there is no README, and take the first Markdown H1 (`# …`) if either file
   exists and has one. If neither file exists, or neither has a heading, write
@@ -212,7 +229,11 @@ one:
    separately for any `.env`-family file inside `keys/`**, because
    `--include-keys` never takes those; name it if one was left behind. Point
    at the manifest (section 2) for exactly what the `projects/`/`docker-stack/`
-   exclusion left out by name.
+   exclusion left out by name. `raw/` is excluded by default on the
+   **repository** route (the scaffold's own `.gitignore` covers it) — but
+   the zip route still includes `raw/`: a zip carries binaries without
+   consequence, so say plainly that it's IN here, unlike on the repository
+   route.
 
 ## 3b. Repository route
 
@@ -267,7 +288,13 @@ them twice — once cheaply before staging, and once for real, after.
       on a repeat backup where one is already tracked from an earlier,
       informed decision.
    3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `*.env.*`,
-      `.envrc`, `*.envrc`, `projects/*` and `docker-stack/*`.
+      `.envrc`, `*.envrc`, `projects/*`, `docker-stack/*` and `raw/` — the last
+      of these keeps source material that never belongs in a repository
+      backup out from under `git add -A` in the first place, the same way
+      the others keep credentials and project checkouts out. A `raw/` line
+      missing here is exactly how step 2.6 later finds tracked `raw/`
+      content instead of never seeing any: this check exists to catch that
+      before it happens, not after.
    4. If no remote is configured yet
       (`git -C <workspace> remote get-url origin` prints nothing), ask the
       owner which private remote to use, confirm directly that it is
@@ -280,6 +307,54 @@ them twice — once cheaply before staging, and once for real, after.
       runs, a remote is always already configured, either from an earlier
       backup or from this step just now, so it never needs to add one
       itself (this is step 2.4, referenced there by that name).
+
+2.5. **Measure what staging would take — before `git add` writes a single
+   object.** `git add` copies file contents into the repository's object
+   store immediately, commit or no commit; a workspace once carried 3.5 GB
+   of orphaned blobs from exactly this. So measure from the working tree:
+
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/measure-stage.js" <workspace>`
+
+   Report to the owner, before anything is staged: the total size, every
+   single file over 10 MB by name and size, and the count of non-text files.
+   **If any single file exceeds 10 MB, or the total exceeds 50 MB, STOP and
+   ask whether it belongs in the backup at all** — a binary that enters a
+   history cannot be taken out of it without rewriting the history. GitHub
+   additionally refuses any file over 100 MB outright: a push that would
+   carry one is not going to work, say so here, not at push time.
+
+2.6. **The history itself must be inside scope.** The backup is `.joserah/`
+   plus the root shell files — never project work, runtime state or source
+   material:
+
+   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "raw/" ".joserah/knowledge/raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
+
+   → must print nothing. Anything listed means the repository already tracks
+   out-of-scope content — from before the exclusions existed, or from a
+   hand-run `git add`. `.joserah/knowledge/raw/` is in this pathspec because
+   every workspace this branch migrates carried its source material there
+   before `raw/` existed, and its `.gitignore` never excluded that path —
+   so `git add -A` tracked it, commit after commit, for as long as the
+   workspace existed, and pushed it.
+
+   That is also why `ls-files` alone is not enough here: it only answers for
+   what is tracked **right now**. `relocate-raw.js` moves the files to
+   `raw/` and the next `add -A` stages only the deletion — `ls-files` then
+   prints nothing forever, while every past commit still serves the very
+   material this scope exists to keep out. So also run:
+
+   `git -C <workspace> log --all --oneline -- ".joserah/knowledge/raw/" "raw/"`
+
+   → must print nothing either. A hit here means source material is sitting
+   in a commit reachable from some branch in this repository's history,
+   even on a workspace whose working tree and `ls-files` output are clean
+   today. **Source material in the history is not fixed by deleting the
+   files** — anyone with a clone, or access to the remote, still has every
+   commit. Either check failing: stop, show the owner the list, and offer
+   the **scope reset** (last section of this skill) — that is not a
+   fallback for something worse, it is exactly the right procedure for this
+   case. Do not take a new snapshot on top of a contaminated history.
+
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
    to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
    needs the explicit `-f`, since `add -A` alone never reaches a gitignored
@@ -347,7 +422,7 @@ them twice — once cheaply before staging, and once for real, after.
    ```
    (PowerShell: `$branch = git -C <workspace> rev-parse --abbrev-ref HEAD; git -C <workspace> push -u origin $branch`)
 
-   **This document does not rename branches, and never runs
+   **This flow does not rename branches, and never runs
    `git branch -M main`.** A rename-then-push can silently push the wrong
    content: verified — on a repo where `master` holds a brand-new snapshot
    commit and an older, unrelated `main` branch already exists, a guard
@@ -359,7 +434,13 @@ them twice — once cheaply before staging, and once for real, after.
    mode: whatever `git init` produced — `main` on current git, `master` on
    older git, or a name from `init.defaultBranch` — is what holds the
    commit, so it's what gets pushed, every time, first backup or
-   thousandth.
+   thousandth. The **scope reset** (last section of this skill) is the one
+   documented exception: it renames deliberately, onto the *recorded
+   original* branch name rather than a guessed or hardcoded one, only with
+   the owner's fresh consent for that specific push — the failure mode
+   above is a rename that guesses wrong or only sometimes fires; the scope
+   reset's rename always fires and always targets the name read from git
+   a moment before, so it does not reintroduce it.
 
 **Pushing is the owner's decision every time.** Show the command and let them
 run it, or ask before running it yourself. Never push unprompted.
@@ -403,8 +484,8 @@ Measure-Object -Line).Lines`), or on the zip route
 
 - Before working: `git -C <workspace> pull --rebase`
 - After working: show the diff summary, then run **every step of the
-  safety gate above** before committing and offering to push — the whole
-  numbered sequence, not a subset. Step 2.4 naturally has nothing to ask
+  safety gate above, including 2.5 and 2.6,** before committing and offering
+  to push — the whole numbered sequence, not a subset. Step 2.4 naturally has nothing to ask
   once a remote is configured (it isn't skipped by a remembered flag, it's
   just moot). Everything else — the `keys/` listing in step 3, the
   secret-scan re-check in step 4, step 6's fresh remote confirmation, step
@@ -444,22 +525,28 @@ Measure-Object -Line).Lines`), or on the zip route
    reaching for it.
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
-5. If `.claude/settings.json` is missing from the restore (older backup), do
-   not write the permission rules by hand and do not copy them out of another
-   workspace — re-run the scaffold's own settings step, which is where the
-   rules actually live (`tools/scaffold.js`, `PERMISSION_DENY`):
+5. A `.joserah`-only backup restores no root shell: `AGENTS.md`,
+   `JOSERAH-ROLE.md`, `.gitignore`, `raw/README.md` and
+   `.claude/settings.json` are not in it by design. Regenerate them — never
+   by hand, never copied from another workspace:
 
    ```
-   node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --settings-only --target <target>
+   node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --root-shell-only --target <target>
    ```
 
-   It writes nothing else, and refuses if a `settings.json` is already there.
-   The command exits 1 if it could not write — that is a failure to report,
-   not to paper over. Then re-run doctor and confirm the check named
-   `.claude/settings.json (present)` says `ok — present with the full deny
-   set`. These rules are one layer of the keys/ protection (the others are
-   the workspace's AGENTS.md instruction and the owner's own caution — Bash
-   access can never be fully denied by pattern rules).
+   It writes only what is missing and never overwrites. Say plainly in the
+   restore report: these files came from the plugin's template, not from the
+   backup. The missing `.gitignore` is the security-relevant one — until it
+   is regenerated, a `git add -A` on the restored machine would stage
+   `keys/`. `raw/README.md` arrives empty of anything but its own
+   explanation: the backup route never carries `raw/` by design, so there is
+   no source material to restore into it — say that plainly too, rather than
+   leaving the owner to wonder why the folder came back empty. Then re-run
+   doctor and confirm the check named `.claude/settings.json (present)` says
+   `ok — present with the full deny set`. These rules are one layer of the
+   `keys/` protection, not a wall — the others are the workspace's
+   AGENTS.md instruction and the owner's own caution, and Bash access can
+   never be fully denied by pattern rules.
 
 ## 5. Record the backup
 
@@ -478,8 +565,89 @@ session-start hook compares new content against:
 node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.readFileSync(p,'utf8'));c.lastBackup=new Date().toISOString();fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');" "<workspace>/.joserah/config.json"
 ```
 
+If the owner changed the scope during this run, update the `backup` object the same way — the config is the decision's home, not the conversation.
+
+## Scope reset — when the history already carries what the backup must not
+
+Deleting a file removes it from the next snapshot, never from history; every
+past commit still serves it. When gate step 2.6 finds tracked out-of-scope
+content, the history is rebuilt from the current tree — with the owner's
+explicit yes, since every old version disappears from the backup:
+
+1. Say what the reset discards (old versions of everything) and what it
+   keeps (every file as it is right now, untouched on disk). Get the yes.
+2. `git -C <workspace> checkout --orphan clean-scope` — fails outright if a
+   `clean-scope` branch already exists, which happens when an earlier reset
+   was aborted partway. Check for it first (`git -C <workspace> branch --list
+   clean-scope`); if it is there, pick a fresh name (`clean-scope-2`, and use
+   that name in every step below instead) or delete it first, but only with
+   the owner's explicit yes — it may hold work from that earlier attempt.
+3. `git -C <workspace> read-tree --empty` — **never `git rm -r --cached .`**:
+   that command refuses files whose staged content differs from both HEAD
+   and the working tree, removes *nothing* when it refuses, and the flow
+   continues as if it had worked. `read-tree --empty` clears the index
+   unconditionally and touches no file on disk. In general: **a git command
+   whose output contains `error:` has failed — the failure is handled
+   before the next command runs, never scrolled past.**
+4. Measure before staging, exactly as gate step 2.5 does and for the same
+   reason: the index is empty after step 3, but `git add` still writes
+   blobs into the object store the instant it runs, so this has to happen
+   *before* staging here too — folding it into the checks that come after
+   staging would be the same mistake gate step 2.5 exists to prevent, just
+   relocated:
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/measure-stage.js" <workspace>`
+   Report the total size, every file over 10 MB by name and size, and the
+   non-text count to the owner before anything is staged — the same stop
+   conditions as gate step 2.5 apply unchanged (any single file over 10 MB,
+   or a 50 MB total, means stop and ask; a file over 100 MB means the
+   eventual push will not work regardless).
+5. Stage exactly the way gate step 3 does — this is not a lighter version
+   of that step, it is that step: `git -C <workspace> add -A`, then, if the
+   owner's standing answer to question 3 is yes, `git -C <workspace> add -f
+   keys/`. `add -A` alone never reaches a gitignored path, so on its own it
+   silently drops `keys/` from the rebuilt history even for an owner who
+   deliberately included it before — they would not find out until they
+   needed a credential the backup no longer has. Read what actually got
+   staged with `git -C <workspace> diff --cached --name-only -- keys/` and
+   decide the `.env`-family question the same way gate step 3 does, file by
+   file.
+6. Run the post-staging checks against what is now actually staged: the
+   scope check (2.6, now against the new tree instead of the old one) and
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace> --staged`.
+7. Commit and write the manifest exactly as section 2's repository-route
+   two-pass describes — a reset is still a backup, and a backup without a
+   manifest silently loses the record of what it deliberately left out:
+   `git -C <workspace> commit -m "workspace snapshot"`, read the real
+   numbers, write `.joserah/backup-manifest.md`,
+   `git -C <workspace> add .joserah/backup-manifest.md`, then
+   `git -C <workspace> commit --amend --no-edit`. On this orphan branch
+   that commit is always the "new commit made in this same run" case from
+   section 2 — there is no earlier commit on `clean-scope` that could
+   already be on the remote — so the amend always applies here, never the
+   separate-commit alternative.
+8. Only now point the branch name at the new root:
+   `git -C <workspace> branch -M clean-scope <branch>` where `<branch>` is
+   what `git -C <workspace> rev-parse --abbrev-ref HEAD` printed **before**
+   step 2 (record it then; a workspace that was on `master` stays `master`).
+9. Push is force-only from here (`git -C <workspace> push --force origin <branch>`) and
+   needs the owner's explicit yes for THIS push — section 3b's steps 6–8
+   apply unchanged otherwise. If the remote was never pushed to, a plain
+   push works and say so instead.
+10. The old history still occupies the local object store until pruned:
+    `git -C <workspace> reflog expire --expire=now --expire-unreachable=now --all`
+    then `git -C <workspace> gc --prune=now` — run only with the owner's
+    explicit consent, only after confirming the working tree holds
+    everything (`git -C <workspace> status` clean, spot-check the files the
+    owner cares about). Pruned objects are unrecoverable; that is the point,
+    and the reason for the confirmation.
+
 ## Rules
 
+- Any `git -C <subdir>` inside a directory that is not a repository of its
+  own is silently answered by the nearest ancestor repository — `status`,
+  `log`, `rev-parse HEAD` and `remote get-url` alike. Verify
+  `rev-parse --show-toplevel` prints the directory itself before trusting
+  any of them.
 - Never write a zip inside the workspace it backs up.
 - Never restore over an existing workspace without explicit confirmation.
 - Never add or push to a repository remote the owner did not name — confirm
