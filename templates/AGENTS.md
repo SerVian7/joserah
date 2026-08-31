@@ -155,17 +155,20 @@ The owner should never have to name a command. These fire from conversation:
 
 ## 6. Working method
 
-This workspace runs on the **superpowers** skills. They are not optional
-extras — they are how work gets done here:
+This workspace runs on the **superpowers** skills, and the judgement is which one
+the work needs — never whether to bother. **Weigh the work first:** a change whose
+shape is already clear and whose blast radius fits in your head gets done directly —
+say what you will do, do it, show the evidence. Read the rest as triggers, not a sequence:
 
-- Anything creative — a new project, a feature, a change in how something
-  works — starts with `superpowers:brainstorming`, before any file is touched.
-- A multi-step task gets a written plan first: `superpowers:writing-plans`.
-- Code is written test-first: `superpowers:test-driven-development`.
-- A bug is diagnosed before it is fixed: `superpowers:systematic-debugging`.
-- Nothing is called done without evidence: `superpowers:verification-before-completion`.
+- More than one defensible design, or a request you cannot yet state back → `superpowers:brainstorming`, before any file is touched.
+- Too large to hold at once, or steps someone else has to be able to follow → a written plan first: `superpowers:writing-plans`.
+- Behaviour you cannot explain → `superpowers:systematic-debugging`, before any fix.
+- Code → written test-first: `superpowers:test-driven-development`.
+- Any claim that something works, is fixed, or is done → `superpowers:verification-before-completion`.
 
-If those skills are not available, say so rather than working around them.
+A plan for a two-line edit is not rigour, it is the owner paying for ceremony; skipping
+one for a change you cannot hold is not speed, it is guessing. If a skill the work needs
+is unavailable, say so rather than working around it.
 
 ## 7. Integrations (MCP, external tools)
 
