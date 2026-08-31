@@ -88,8 +88,14 @@ this run.
 
 `raw/imports/<date>-<label>/REPORT.md` at the workspace root. **Write the report in the
 owner's dialogue language** (`dialogueLanguage` in `.joserah/config.json`) —
-it is written for them to read, not for the repository. Keep the headings in
-English so the shape stays consistent across workspaces:
+it is written for them to read, not for the repository. This is a deliberate
+choice, not an oversight: `raw/` sits outside the repository backup, so this
+report — the only durable record of what an import took and skipped — is not
+carried by the repository route either. It stays here anyway, next to the
+sources it describes, rather than being split into `.joserah/` where the
+backup would reach it; splitting one import bundle across two trees costs
+more than it buys. Keep the headings in English so the shape stays consistent
+across workspaces:
 
 ```markdown
 # Import — <date> — <label>

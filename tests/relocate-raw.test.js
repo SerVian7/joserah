@@ -83,6 +83,28 @@ test('preserves an owner-edited README.md under the old raw/ instead of discardi
   assert.ok(fs.existsSync(path.join(dir, 'raw', 'README.md')), 'root README.md still present');
 });
 
+test('a genuinely pre-branch workspace (no root raw/ yet) gets the current README template, not the legacy three-line one', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  // Simulate a workspace scaffolded before this branch existed: no root
+  // raw/ was ever created (scaffold.js pre-dating this branch never wrote
+  // one), and the source material — with its own legacy three-line
+  // README.md — still sits under .joserah/knowledge/raw/.
+  fs.rmSync(path.join(dir, 'raw'), { recursive: true, force: true });
+  const old = path.join(dir, '.joserah', 'knowledge', 'raw');
+  fs.mkdirSync(old, { recursive: true });
+  fs.writeFileSync(path.join(old, 'README.md'),
+    '# raw/\n\nImmutable source material. Never edited, never summarized in place.\n');
+  fs.writeFileSync(path.join(old, 'statement.pdf'), 'x');
+  const r = runTool('relocate-raw.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const got = fs.readFileSync(path.join(dir, 'raw', 'README.md'), 'utf8');
+  const current = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'raw', 'README.md'), 'utf8');
+  assert.strictEqual(got, current, 'gets the current template explaining the backup exclusion, not the legacy one');
+  assert.doesNotMatch(got, /Never edited, never summarized in place\./,
+    'the legacy three-line boilerplate does not survive the move');
+});
+
 test('is a no-op when there is nothing to relocate, exit 0', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);

@@ -26,6 +26,17 @@ if (!fs.existsSync(path.join(root, '.joserah', 'config.json'))) {
 const oldRaw = path.join(root, '.joserah', 'knowledge', 'raw');
 const newRaw = path.join(root, 'raw');
 
+// The exact pre-2026-08-31 template content for .joserah/knowledge/raw/
+// README.md (templates/knowledge/raw/README.md at 6594f2e, later
+// templates/.joserah/knowledge/raw/README.md at 6b761f8) — the three-line
+// boilerplate every workspace scaffolded before this branch carries, versus
+// the fifteen-line current template that explains raw/'s backup exclusion.
+// EOL-normalised before comparing: a workspace with no .gitattributes of its
+// own checks this out as CRLF on Windows.
+const OLD_RAW_README = '# raw/\n\nImmutable source material. Never edited, never summarized in place.\n';
+const CURRENT_RAW_README = fs.readFileSync(path.join(__dirname, '..', 'templates', 'raw', 'README.md'), 'utf8');
+function normalizeEol(s) { return s.replace(/\r\n/g, '\n'); }
+
 if (!fs.existsSync(oldRaw)) {
   console.log(JSON.stringify({ moved: false, linksRewritten: 0, notesTouched: 0 }));
   process.exit(0);
@@ -117,23 +128,42 @@ if (!dryRun) {
     for (const entry of fs.readdirSync(oldRaw)) {
       const from = path.join(oldRaw, entry);
       const to = path.join(newRaw, entry);
-      if (entry === 'README.md' && fs.existsSync(to)) {
-        // The old tree may carry its own README.md from the pre-migration
-        // template describing the old location — plugin-owned boilerplate,
-        // safe to drop once it is byte-identical to the one already at the
-        // new root. But .joserah/knowledge/ is otherwise owner-editable
-        // prose everywhere else in this codebase, so a README.md that
-        // differs (the owner annotated or extended it) is never deleted:
-        // it is kept, under a name that cannot collide, and reported.
-        if (sameContent(from, to)) {
+      if (entry === 'README.md') {
+        const isKnownOldTemplate = normalizeEol(fs.readFileSync(from, 'utf8')) === normalizeEol(OLD_RAW_README);
+        if (fs.existsSync(to)) {
+          // The old tree may carry its own README.md from the pre-migration
+          // template describing the old location — plugin-owned boilerplate,
+          // safe to drop once it is byte-identical to the one already at the
+          // new root, or once it recognisably IS that known old template
+          // (whatever scaffold.js already put at the destination is
+          // presumably current). But .joserah/knowledge/ is otherwise
+          // owner-editable prose everywhere else in this codebase, so a
+          // README.md that matches neither (the owner annotated or extended
+          // it) is never deleted: it is kept, under a name that cannot
+          // collide, and reported.
+          if (sameContent(from, to) || isKnownOldTemplate) {
+            fs.rmSync(from);
+          } else {
+            const altTo = path.join(newRaw, 'README.old.md');
+            if (fs.existsSync(altTo)) {
+              throw new Error(`cannot preserve old raw/README.md — ${altTo} already exists; resolve by hand`);
+            }
+            fs.renameSync(from, altTo);
+            preservedReadme = path.relative(root, altTo).split(path.sep).join('/');
+          }
+        } else if (isKnownOldTemplate) {
+          // No root raw/README.md exists yet — a genuine pre-branch
+          // workspace that scaffold.js never wrote one into. Install the
+          // CURRENT template instead of carrying the three-line legacy one
+          // forward: the owner should end up with the explanation of why
+          // raw/ sits outside the backup, not silence.
+          fs.writeFileSync(to, CURRENT_RAW_README);
           fs.rmSync(from);
         } else {
-          const altTo = path.join(newRaw, 'README.old.md');
-          if (fs.existsSync(altTo)) {
-            throw new Error(`cannot preserve old raw/README.md — ${altTo} already exists; resolve by hand`);
-          }
-          fs.renameSync(from, altTo);
-          preservedReadme = path.relative(root, altTo).split(path.sep).join('/');
+          // Unrecognised content and nothing at the destination: this is
+          // either the owner's own file or an unknown template variant —
+          // move it across unchanged rather than guessing at its origin.
+          fs.renameSync(from, to);
         }
         movedEntries.push(entry);
         continue;
