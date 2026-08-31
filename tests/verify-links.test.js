@@ -28,6 +28,11 @@ test('I10: markdown under .joserah/knowledge/raw is not scanned', (t) => {
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
 });
 
+test('root raw/ is not scanned — relocate-raw.js moves the legacy dir here and its stale links must not fail the gate', (t) => {
+  const d = ws(t, { 'raw/imports/x.md': '[gone](nope.md)\n', 'ok.md': 'hi\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
 test('M16: link targets containing spaces are checked', (t) => {
   const d = ws(t, { 'a.md': '[n](My Notes.md)\n', 'My Notes.md': 'x\n' });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);

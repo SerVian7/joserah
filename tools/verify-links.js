@@ -22,8 +22,10 @@ const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dis
 // Contracts about the workspace root — matched by workspace-relative path,
 // case-insensitively (Windows/macOS filesystems are). `raw/` holds imported
 // snapshots that are immutable by rule: their internal links are historical
-// facts, not workspace health.
-const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', '.joserah/knowledge/raw'];
+// facts, not workspace health. `.joserah/knowledge/raw` is the pre-2026-08-31
+// location, skipped forever for workspaces relocate-raw.js has not yet
+// touched.
+const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'raw', '.joserah/knowledge/raw'];
 
 function isSkippedRel(rel) {
   const low = rel.split(path.sep).join('/').toLowerCase();
