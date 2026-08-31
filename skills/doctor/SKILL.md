@@ -42,7 +42,13 @@ block. If it is absent in a workspace that doctor says is healthy:
 ## 3. Report
 
 One line per failed check, in the owner's language, saying what is broken and
-what fixes it. If everything passes, say so in one sentence and stop.
+what fixes it. Report every `warn` line the same way, not just every FAIL —
+`warn` only means the check does not fail doctor's exit code, never that the
+finding is optional to say out loud. The legacy-raw and unbacked-project
+warns below are exactly the case this matters for: doctor's summary line
+names how many warnings exist so this step is never reached with warnings
+present and nothing to say. Only once every FAIL and every `warn` has been
+reported, if there were none of either, say so in one sentence and stop.
 
 ## 4. Fix, with permission
 
@@ -56,6 +62,8 @@ Propose the specific repair for each failure and wait for a yes:
 | Broken link | Find the moved target and repoint the link |
 | `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
 | `local verify-links.js current` FAIL | Copy the plugin's `tools/verify-links.js` over `.joserah/tools/verify-links.js`, then re-run doctor. |
+| `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate-raw.js" <workspace>` — moves the source material to `raw/` at the workspace root and rewrites the links that cited the old location. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate-raw.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
+| `projects/<Owner>/<Project>` warn (no repository of its own / no remote / N commit(s) not pushed) | Not something doctor can fix by itself — it means no copy of that work exists anywhere else, or its history is incomplete everywhere but this machine. Say so plainly and ask the owner whether to `git init`, add a remote, or push, from inside that project's own directory — never proceed as if the workspace were fully backed up while one of these is open. |
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 

@@ -301,6 +301,25 @@ test('an unparsable config.json is not reported as a home workspace with no trus
     'never claims a kind it could not read');
 });
 
+test('doctor summary reports a warning count so a "warn" line is never silently skipped by a reader told to skim past passing checks', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.mkdirSync(path.join(dir, '.joserah', 'knowledge', 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'raw', 'old.pdf'), 'x');
+  fs.mkdirSync(path.join(dir, 'projects', 'Own', 'orphan'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'projects', 'Own', 'orphan', 'work.md'), 'unsaved work\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /All checks passed\.\s*2 warning\(s\)\.\s*$/);
+});
+
+test('doctor summary carries no warning count when nothing warned', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /All checks passed\.\s*$/);
+  assert.ok(!/warning\(s\)/.test(r.stdout));
+});
+
 test('doctor warns about the legacy knowledge/raw location, exit stays 0', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);

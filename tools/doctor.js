@@ -342,19 +342,9 @@ function gitIn(dir, argv) {
   const r = spawnSync('git', ['-C', dir, ...argv], { encoding: 'utf8' });
   return r.status === 0 ? r.stdout.trim() : null;
 }
-// git normalises the drive letter it prints on Windows (always e.g. `C:/...`,
-// regardless of how it was invoked) but `path.resolve()` preserves whatever
-// case it was given, and `root` here comes from an uncanonicalised argv/cwd.
-// A workspace path with a lowercase drive letter — this environment's cwd
-// among them — would otherwise compare unequal to git's own answer for a
-// directory that genuinely IS its own repo, misreporting it as unbacked in
-// the trust-critical direction. One helper so this can only be gotten wrong
-// once.
-function sameRepoPath(a, b) {
-  let ra = path.resolve(a), rb = path.resolve(b);
-  if (process.platform === 'win32') { ra = ra.toLowerCase(); rb = rb.toLowerCase(); }
-  return ra === rb;
-}
+// Shared with secret-scan.js and measure-stage.js — see its comment for why
+// the drive-letter case matters here.
+const { sameRepoPath } = require('./lib/git-root');
 const projectsDir = path.join(root, 'projects');
 const gitOk = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
 if (gitOk && fs.existsSync(projectsDir)) {
@@ -393,11 +383,20 @@ if (gitOk && fs.existsSync(projectsDir)) {
   }
 }
 
-let failed = 0;
+let failed = 0, warned = 0;
 for (const c of checks) {
   if (!c.ok) failed++;
+  else if (c.warn) warned++;
   const tag = c.warn ? 'warn' : c.ok ? 'ok  ' : 'FAIL';
   console.log(`${tag}  ${c.name}${c.detail ? '  — ' + c.detail : ''}`);
 }
-console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
+// A `warn` line sits in a channel the reader is told to skim past ("One line
+// per failed check... if everything passes, say so and stop" — doctor
+// SKILL.md §3): the summary carries the count so a clean-exit report can
+// never be read as "nothing to say" when warnings exist. Appended in both
+// branches, not only the passing one — a run with failures can still carry
+// warnings the owner needs to hear, and this is the one line guaranteed to
+// be read.
+const warnSuffix = warned ? ` ${warned} warning(s).` : '';
+console.log(failed ? `\n${failed} check(s) failed.${warnSuffix}` : `\nAll checks passed.${warnSuffix}`);
 process.exit(failed ? 1 : 0);
