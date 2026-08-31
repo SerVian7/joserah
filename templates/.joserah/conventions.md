@@ -44,13 +44,15 @@ The format for `.joserah/learned.md`. It lives here, not there: the
 session-start hook injects the three most recent `##` sections of that file
 into every session, so a format example sitting in it would be read as a real
 learning — including from inside a code fence or an HTML comment, since the
-hook matches raw lines.
+hook matches raw lines. Every field below is a placeholder to fill in,
+`**Scope:**` included: `workspace` scopes the rule to this workspace,
+`universal` means it belongs to the plugin itself and should route to
+`/joserah:feedback` rather than staying trapped here.
 
 ```markdown
 ## YYYY-MM-DD — short title
 **Rule:** what to do differently.
-**Scope:** workspace, or `universal` when the rule belongs to the plugin itself, not just this
-workspace — route those to `/joserah:feedback` rather than leaving them here.
+**Scope:** <workspace | universal>
 **Reason:** the feedback that caused it.
 **Edge:** where it does not apply.
 ```

@@ -22,16 +22,20 @@ relative to the workspace root you found.
 
 1. Read `.joserah/learned.md` in the workspace root — check for duplicates / related entries.
 2. If the new entry is about the **user themselves** (identity, role, preference), also read `.joserah/personal/profile.md` in the workspace root.
-3. Append a dated entry under the right file:
+3. Append a dated entry under the right file, using this exact shape — every
+   field is a placeholder to fill in, `**Scope:**` included, since this
+   fenced block is copied verbatim and the session-start hook injects the
+   three most recent `##` sections of `learned.md` into every session by
+   matching raw lines, fence or no fence: `workspace` scopes the rule to
+   this workspace; `universal` means the rule would hold in ANY Joserah
+   workspace, and marks it a candidate for `/joserah:feedback` so it reaches
+   the developer instead of staying trapped here. Mark `universal` sparingly:
 
 ```markdown
 ## YYYY-MM-DD — <one-line title>
 
 **Rule:** <what to do or avoid>
-**Scope:** workspace — or `universal`, when the rule would hold in ANY Joserah
-workspace, not just this one. Mark `universal` sparingly: it means "the plugin
-itself should behave this way", and such entries are candidates for
-`/joserah:feedback` so they reach the developer instead of staying trapped here.
+**Scope:** <workspace | universal>
 **Reason:** <why — quote the user if possible>
 **Edge:** <when this might not apply / when to revisit>
 ```
