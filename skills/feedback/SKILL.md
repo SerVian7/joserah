@@ -18,6 +18,14 @@ Two kinds only:
 
 Anything else is not feedback. Say nothing and move on.
 
+A `learned.md` entry marked `Scope: universal` is a new *source* for a `structure` note, not a
+third kind: check `.joserah/learned.md` for them — each is a finding the plugin's developer never
+saw. Offer to send them, one issue per rule. Quoting the entry's rule and reason verbatim is for
+that owner-facing offer only, so they see exactly what is proposed — the note that actually gets
+filed still goes through the normal build in [Writing a note](#writing-a-note) below: the same
+field-build and `renderFeedbackNote` scrub as any other note. What travels is the shape of the
+rule, never the literal Reason text.
+
 ## The three modes
 
 Read `feedback.mode` from `config.json`:

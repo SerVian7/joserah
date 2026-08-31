@@ -28,6 +28,10 @@ relative to the workspace root you found.
 ## YYYY-MM-DD — <one-line title>
 
 **Rule:** <what to do or avoid>
+**Scope:** workspace — or `universal`, when the rule would hold in ANY Joserah
+workspace, not just this one. Mark `universal` sparingly: it means "the plugin
+itself should behave this way", and such entries are candidates for
+`/joserah:feedback` so they reach the developer instead of staying trapped here.
 **Reason:** <why — quote the user if possible>
 **Edge:** <when this might not apply / when to revisit>
 ```

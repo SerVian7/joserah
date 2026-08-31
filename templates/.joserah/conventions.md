@@ -49,6 +49,8 @@ hook matches raw lines.
 ```markdown
 ## YYYY-MM-DD — short title
 **Rule:** what to do differently.
+**Scope:** workspace, or `universal` when the rule belongs to the plugin itself, not just this
+workspace — route those to `/joserah:feedback` rather than leaving them here.
 **Reason:** the feedback that caused it.
 **Edge:** where it does not apply.
 ```
