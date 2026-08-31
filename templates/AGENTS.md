@@ -124,13 +124,13 @@ A knowledge file is a record, not a conversation. Four rules:
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/          {Owner}/{ProjectName}/ — never tracked; each has its own git
-├── raw/               immutable source material — owner's originals, excluded from repository backups
+├── raw/               source material and working files — excluded from repository backups
 ├── keys/              SENSITIVE — never read or echo contents
 └── .joserah/
     ├── config.json          workspace marker
     ├── directives.md        this workspace's own rules — overrides AGENTS.md, survives updates
     ├── conventions.md · learned.md · skill-candidates.md
-    ├── tools/               verify-links.js
+    ├── tools/               scripts only, backed up — plugin's verify-links.js + the owner's
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · wiki/ · archive/
     ├── personal/            private — read on demand only
@@ -207,7 +207,7 @@ restructuring conventions.
 1. Read before writing.
 2. No silent deletions or moves — confirm first.
 3. No secrets in markdown. If a key or token is pasted, say it belongs in `keys/` and do not repeat it.
-4. Never write to `raw/` at the workspace root — immutable source material, and never part of a repository backup. The one exception is `/joserah:import`, which copies the owner's own sources in verbatim.
+4. Never rewrite, edit or summarize anything in `raw/` in place — it is the owner's source material and the record synthesis is checked against; that is the rule, and it is what keeps a knowledge base from citing itself. Reading it is free. A tool the owner owns may read from `raw/` and write its outputs there, because `raw/` is also the working area: it is excluded from a repository backup, so build inputs and generated artifacts belong in it rather than in the backed-up tree. The owner's scripts themselves live in `.joserah/tools/`, which is backed up with the rest of `.joserah/` — code travels, data does not. Keep that folder scripts only and tidy, grouped into subfolders once there are more than a handful: never a spreadsheet, a binary, an archive or a generated document. `/joserah:import` writes there too, copying the owner's sources in verbatim.
 5. Never read `keys/` content unless explicitly asked.
 6. After moving or renaming any file, run `node .joserah/tools/verify-links.js` and fix every break.
 7. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures.
