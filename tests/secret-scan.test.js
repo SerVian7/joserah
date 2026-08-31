@@ -168,6 +168,26 @@ test('dictionary weak-password words are hits, not placeholders — regression f
   assert.match(r.stdout, /2 credential-shaped strings found/);
 });
 
+test('--staged refuses on a workspace nested inside an ancestor repository, instead of scanning zero files and reporting clean', (t) => {
+  // `git diff --cached --name-only` reports paths relative to the repo ROOT
+  // (the outer repo here), not to the nested workspace directory — the
+  // ancestor-repository defect this branch exists to prevent, reproduced
+  // inside secret-scan.js itself.
+  const outer = tmpdir(t);
+  const go = (a) => require('child_process').spawnSync('git', ['-C', outer, ...a], { encoding: 'utf8' });
+  if (go(['--version']).status !== 0) return t.skip('git unavailable');
+  go(['init']);
+  const nested = path.join(outer, 'workspace');
+  fs.mkdirSync(path.join(nested, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(nested, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(nested, 'note.md'), 'password: k9$Tr0uv-real\n');
+  go(['add', 'workspace/note.md']);
+  const r = runTool('secret-scan.js', [nested, '--staged']);
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /nested inside an ancestor repository|own toplevel/i);
+  assert.ok(!r.stdout.includes('No credential-shaped content found'), 'must not claim clean');
+});
+
 test('--staged skips a file staged for deletion instead of calling it unreadable', (t) => {
   const dir = tmpdir(t);
   const g = (a) => require('child_process').spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });

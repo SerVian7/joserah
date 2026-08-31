@@ -32,3 +32,20 @@ test('measure-stage exits 1 outside a repository', (t) => {
   const r = runTool('measure-stage.js', [dir]);
   assert.strictEqual(r.status, 1);
 });
+
+test('measure-stage refuses on a workspace nested inside an ancestor repository, instead of reporting an all-zero measurement', (t) => {
+  // `git status --porcelain` reports paths relative to the repo ROOT (the
+  // outer repo here), not to the nested workspace directory passed in — the
+  // ancestor-repository defect this branch exists to prevent, reproduced
+  // inside measure-stage.js itself.
+  const outer = tmpdir(t);
+  const go = (a) => require('child_process').spawnSync('git', ['-C', outer, ...a], { encoding: 'utf8' });
+  if (go(['--version']).status !== 0) return t.skip('git unavailable');
+  go(['init']);
+  const nested = path.join(outer, 'workspace');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(nested, 'note.md'), 'some content\n');
+  const r = runTool('measure-stage.js', [nested]);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /nested inside an ancestor repository|own toplevel/i);
+});

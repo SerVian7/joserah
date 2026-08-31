@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { SPECIFIC } = require('../hooks/lib/redactions');
+const { isOwnRepoRoot } = require('./lib/git-root');
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const staged = process.argv.includes('--staged');
@@ -88,6 +89,21 @@ function walkedFiles() {
 let files;
 try {
   if (staged) {
+    // `git diff --cached --name-only` reports paths relative to the
+    // repository ROOT, not to `root` here — unlike `git ls-files` below,
+    // which is cwd-relative and so already scoped correctly even when
+    // nested. A workspace that is not its repository's own toplevel (nested
+    // inside an ancestor repo, e.g. a `.joserah` folder living a few levels
+    // under some other project's git root) would have every staged path
+    // miss `path.join(root, rel)`, read as ENOENT, and get silently dropped
+    // by the staged-deletion allowance below — scanning zero files while
+    // reporting clean. "Cannot scan" must win over "clean" here too.
+    if (!isOwnRepoRoot(root)) {
+      console.error(`secret-scan: --staged requires ${root} to be a git repository's own toplevel ` +
+        '— it is either not a repository at all, or nested inside an ancestor repository, in which ' +
+        'case staged file paths would not resolve against it. Nothing was scanned.');
+      process.exit(2);
+    }
     const list = stagedFiles();
     if (list === null) {
       console.error('secret-scan: --staged needs a git repository — nothing was scanned.');

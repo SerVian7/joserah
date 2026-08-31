@@ -21,9 +21,25 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { isOwnRepoRoot } = require('./lib/git-root');
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const TEXT_EXT = new Set(['.md', '.txt', '.json', '.yml', '.yaml', '.toml']);
+
+// `git status --porcelain` reports paths relative to the repository ROOT,
+// not to `root` here. A workspace nested inside an ancestor repository would
+// have every path miss `path.join(root, rel)` below, get statSync'd as
+// deleted (see the try/catch in the loop), and this would report an
+// all-zero measurement as if the tree really were empty — the exact ancestor
+// -repository defect this branch exists to prevent, reproduced inside the
+// tool meant to guard against it. So: refuse up front, the same way "not a
+// repository at all" already refuses below.
+if (!isOwnRepoRoot(root)) {
+  console.error(`measure-stage: ${root} is not a git repository's own toplevel — either not a ` +
+    'repository at all, or nested inside an ancestor repository, in which case status paths would ' +
+    'not resolve against it. Cannot measure.');
+  process.exit(1);
+}
 
 const r = spawnSync('git',
   ['-C', root, 'status', '--porcelain', '-z', '--untracked-files=all'],
