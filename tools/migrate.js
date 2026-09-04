@@ -6,7 +6,9 @@
  * Additive by contract: it may add a frontmatter block and append a
  * `## Relations` section. It never edits a line of the owner's prose, never
  * enters a nested workspace, and never touches raw/, directives.md or keys/.
- * Running it twice in a row must produce no second-run change.
+ * It creates directives.md when it is missing, and brings AGENTS.md current
+ * when that is safe (see lib/prompt.js) — the two files an update is supposed
+ * to carry. Running it twice in a row must produce no second-run change.
  *
  * A note whose bytes are not plain UTF-8 is refused rather than migrated —
  * see byteOrderMark below. The contract is "never mangle", not "always
@@ -19,6 +21,7 @@ const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
 const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION, roleFor } = require('./lib/note-format');
 const { stampKey } = require('./lib/config-stamp');
+const { resolvePromptSource, promptState, decidePromptAction, installPrompt } = require('./lib/prompt');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 
@@ -220,7 +223,47 @@ if (!fs.existsSync(agentPath)) {
   }
 }
 
+// directives.md is the owner's file — the one place a workspace-specific rule
+// belongs, which is exactly why a plugin update must never rewrite it. But a
+// workspace scaffolded before the file existed never got one, and AGENTS.md
+// now points at it by name, so the missing case is installed from the
+// template here (the only token it carries is the workspace name) and an
+// existing file is never opened for writing at all.
+const directivesPath = path.join(root, '.joserah', 'directives.md');
+if (!fs.existsSync(directivesPath)) {
+  created.push('.joserah/directives.md');
+  if (!dryRun) {
+    const tpl = fs.readFileSync(path.join(TEMPLATES, '.joserah', 'directives.md'), 'utf8');
+    const name = (cfgForKind && cfgForKind.workspaceName) || path.basename(root);
+    fs.writeFileSync(directivesPath, tpl.replace(/{{WORKSPACE_NAME}}/g, name), 'utf8');
+  }
+}
+
+// AGENTS.md is plugin-owned and versioned apart from the plugin (lib/prompt.js).
+// The decision is shared with refresh-prompt.js so the two tools agree: a
+// missing or pristine-but-behind file is brought current, an unrecorded file
+// that already matches is merely recorded, and anything that differs from what
+// was recorded is left alone and reported — migrate has no --force, because
+// overwriting text it cannot account for is the owner's call, made with the
+// diff in front of them, through refresh-prompt.js.
+const promptSource = resolvePromptSource();
+const promptBefore = promptState(root, cfgForKind, promptSource);
+const promptAction = promptSource ? decidePromptAction(promptBefore, { force: false }) : 'none';
+const prompt = {
+  state: promptBefore.state,
+  action: promptAction,
+  version: promptBefore.version,
+  available: promptSource ? promptSource.version : null,
+  reason: promptAction === 'refused'
+    ? `AGENTS.md differs from the recorded install (${promptBefore.state}) — compare it with the current prompt, move anything workspace-specific to .joserah/directives.md, then run: node tools/refresh-prompt.js ${root} --force`
+    : null,
+};
+if (promptAction === 'install' && promptBefore.state === 'missing') created.push('AGENTS.md');
+if (!dryRun && (promptAction === 'install' || promptAction === 'record')) {
+  installPrompt(root, promptSource, { recordOnly: promptAction === 'record' });
+}
+
 // `skipped` sits beside changed/removed/created so a --dry-run tells the
 // owner what this tool refused to touch and why, rather than leaving the
 // refusal silent and indistinguishable from "nothing needed doing".
-console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created, skipped }));
+console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created, skipped, prompt }));

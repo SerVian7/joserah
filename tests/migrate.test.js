@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, fakeMarketplace } = require('./helpers');
 const { scanWorkspace } = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'workspace-scan'));
 
 function ws(t) {
@@ -16,6 +16,15 @@ function write(dir, rel, text) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, text, 'utf8');
   return p;
+}
+// The two lines migrate adds when it records an unrecorded-but-matching
+// AGENTS.md: inserted one after the other as the first property, so the sha
+// ends up above the version. Computed from the template, never hardcoded.
+const promptLib = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'prompt'));
+function promptRecordLines(indent, eol) {
+  const tpl = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  return `${indent}"promptSha256": "${promptLib.promptSha(tpl)}",${eol}` +
+         `${indent}"promptVersion": ${promptLib.readPromptVersion(tpl)},${eol}`;
 }
 
 test('scan includes knowledge notes and excludes raw/, directives and keys', (t) => {
@@ -188,15 +197,19 @@ test('config.json: formatVersion is stamped with a targeted edit, not a re-seria
   const r = runTool('migrate.js', [dir]);
   assert.strictEqual(r.status, 0, r.stderr);
   const after = fs.readFileSync(cfgPath, 'utf8');
+  // Three inserted lines, each in the file's own 4-space style: the prompt
+  // record (the scaffolded AGENTS.md matched the current prompt but this
+  // hand-written config did not record it) and formatVersion.
   assert.strictEqual(
     after,
     '{\n' +
+    promptRecordLines('    ', '\n') +
     '    "formatVersion": 2,\n' +
     '    "workspace": "w",\n' +
     '    "hosts": ["../akkaya"],\n' +
     '    "kind": "home"\n' +
     '}\n',
-    'byte-identical apart from the single inserted formatVersion line'
+    'byte-identical apart from the inserted formatVersion and prompt-record lines'
   );
 });
 
@@ -221,7 +234,7 @@ test('config.json: CRLF file keeps CRLF after formatVersion is inserted', (t) =>
   const after = fs.readFileSync(cfgPath, 'utf8');
   assert.strictEqual(
     after,
-    '{\r\n  "formatVersion": 2,\r\n  "workspace": "w",\r\n  "kind": "home"\r\n}\r\n'
+    '{\r\n' + promptRecordLines('  ', '\r\n') + '  "formatVersion": 2,\r\n  "workspace": "w",\r\n  "kind": "home"\r\n}\r\n'
   );
   assert.doesNotMatch(after, /[^\r]\n|^\n/, 'no lone LF anywhere in the file');
 });
@@ -233,7 +246,7 @@ test('config.json: no trailing newline is preserved as no trailing newline', (t)
   fs.writeFileSync(cfgPath, noTrailing, 'utf8');
   runTool('migrate.js', [dir]);
   const after = fs.readFileSync(cfgPath, 'utf8');
-  assert.strictEqual(after, '{\n  "formatVersion": 2,\n  "workspace": "w",\n  "kind": "home"\n}');
+  assert.strictEqual(after, '{\n' + promptRecordLines('  ', '\n') + '  "formatVersion": 2,\n  "workspace": "w",\n  "kind": "home"\n}');
 });
 
 test('config.json: a second run over an already-stamped awkward config is byte-identical', (t) => {
@@ -554,4 +567,72 @@ test('migrate does not glue an appended Relations block onto the note\'s last pr
   const text = fs.readFileSync(path.join(dir, rel), 'utf8');
   assert.match(text, /Spoke to Ada Lovelace today\.\n\n## Relations\n/,
     'the owner\'s last line stays a line of its own');
+});
+
+test('migrate creates a missing .joserah/directives.md from the template with the workspace name filled in', (t) => {
+  const dir = ws(t);
+  fs.unlinkSync(path.join(dir, '.joserah', 'directives.md'));
+  const dry = JSON.parse(runTool('migrate.js', [dir, '--dry-run']).stdout);
+  assert.ok(dry.created.includes('.joserah/directives.md'));
+  assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'directives.md')), 'dry-run must not write');
+
+  const out = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.ok(out.created.includes('.joserah/directives.md'));
+  const text = fs.readFileSync(path.join(dir, '.joserah', 'directives.md'), 'utf8');
+  assert.match(text, /^# Directives — w$/m);
+  assert.doesNotMatch(text, /{{[A-Z_]+}}/);
+});
+
+test('migrate never touches an existing directives.md', (t) => {
+  const dir = ws(t);
+  const p = path.join(dir, '.joserah', 'directives.md');
+  fs.writeFileSync(p, '# mine\n\nowner rules\n');
+  runTool('migrate.js', [dir]);
+  assert.strictEqual(fs.readFileSync(p, 'utf8'), '# mine\n\nowner rules\n');
+});
+
+test('migrate installs a missing AGENTS.md and records it', (t) => {
+  const dir = ws(t);
+  fs.unlinkSync(path.join(dir, 'AGENTS.md'));
+  const out = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.strictEqual(out.prompt.action, 'install');
+  assert.ok(out.created.includes('AGENTS.md'));
+  assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')));
+});
+
+test('migrate brings a pristine-but-behind AGENTS.md to the newer source', (t) => {
+  const dir = ws(t);
+  const configDir = fakeMarketplace(t, 42);
+  const out = JSON.parse(runTool('migrate.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } }).stdout);
+  assert.strictEqual(out.prompt.action, 'install');
+  assert.strictEqual(out.prompt.available, 42);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /prompt-version 42/);
+});
+
+test('migrate records a pre-versioning AGENTS.md that matches, and refuses one that differs', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  delete cfg.promptVersion; delete cfg.promptSha256;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  assert.strictEqual(JSON.parse(runTool('migrate.js', [dir]).stdout).prompt.action, 'record');
+  assert.ok(Number.isInteger(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).promptVersion));
+
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# AGENTS.md — Core AI Folder\n\nold generation\n');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, 'migrate still exits 0 — the refusal is reported, not fatal');
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.prompt.action, 'refused');
+  assert.match(out.prompt.reason, /refresh-prompt\.js .*--force/);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /Core AI Folder/);
+});
+
+test('migrate leaves a hand-edited AGENTS.md alone and says so', (t) => {
+  const dir = ws(t);
+  fs.appendFileSync(path.join(dir, 'AGENTS.md'), '\nmy own rule\n');
+  const out = JSON.parse(runTool('migrate.js', [dir], { env: { CLAUDE_CONFIG_DIR: fakeMarketplace(t, 42) } }).stdout);
+  assert.strictEqual(out.prompt.state, 'hand-edited');
+  assert.strictEqual(out.prompt.action, 'refused');
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
 });

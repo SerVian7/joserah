@@ -113,10 +113,12 @@ function decidePromptAction(state, { force = false } = {}) {
 function installPrompt(root, source, { recordOnly = false } = {}) {
   if (!recordOnly) fs.writeFileSync(path.join(root, 'AGENTS.md'), source.text, 'utf8');
   const cfgPath = path.join(root, '.joserah', 'config.json');
-  let text = fs.readFileSync(cfgPath, 'utf8');
-  text = stampKey(text, 'promptVersion', source.version).text;
+  const original = fs.readFileSync(cfgPath, 'utf8');
+  let text = stampKey(original, 'promptVersion', source.version).text;
   text = stampKey(text, 'promptSha256', promptSha(source.text)).text;
-  fs.writeFileSync(cfgPath, text, 'utf8');
+  // Opened for writing only when a byte actually changes — same rule as
+  // migrate.js's formatVersion stamp, so mtime is left alone otherwise.
+  if (text !== original) fs.writeFileSync(cfgPath, text, 'utf8');
 }
 
 module.exports = {
