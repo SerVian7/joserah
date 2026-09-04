@@ -129,3 +129,112 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   cfg = readCfg(dir);
   assert.strictEqual(cfg.promptVersion, 8);
 });
+
+// ---- refresh-prompt.js -------------------------------------------------------
+
+test('refresh-prompt: a current workspace is left alone (action none)', (t) => {
+  const dir = freshWs(t);
+  const r = runTool('refresh-prompt.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.action, 'none');
+  assert.strictEqual(out.before.state, 'current');
+});
+
+test('refresh-prompt: installs a newer prompt from the marketplace clone and records it', (t) => {
+  const dir = freshWs(t);
+  const configDir = fakeMarketplace(t, 42);
+  const r = runTool('refresh-prompt.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.action, 'install');
+  assert.strictEqual(out.source.kind, 'marketplace');
+  assert.strictEqual(out.source.version, 42);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /prompt-version 42/);
+  assert.strictEqual(readCfg(dir).promptVersion, 42);
+  // Second run: nothing left to do.
+  const again = JSON.parse(runTool('refresh-prompt.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } }).stdout);
+  assert.strictEqual(again.action, 'none');
+});
+
+test('refresh-prompt --dry-run reports the install without writing', (t) => {
+  const dir = freshWs(t);
+  const before = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+  const r = runTool('refresh-prompt.js', [dir, '--dry-run'], { env: { CLAUDE_CONFIG_DIR: fakeMarketplace(t, 42) } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.action, 'install');
+  assert.strictEqual(out.dryRun, true);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), before);
+  assert.notStrictEqual(readCfg(dir).promptVersion, 42);
+});
+
+test('refresh-prompt refuses a hand-edited AGENTS.md with exit 2, and --force replaces it keeping the old text', (t) => {
+  const dir = freshWs(t);
+  fs.appendFileSync(path.join(dir, 'AGENTS.md'), '\nmy own rule\n');
+  const configDir = fakeMarketplace(t, 42);
+  const refused = runTool('refresh-prompt.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } });
+  assert.strictEqual(refused.status, 2, refused.stdout + refused.stderr);
+  const out = JSON.parse(refused.stdout);
+  assert.strictEqual(out.action, 'refused');
+  assert.strictEqual(out.before.state, 'hand-edited');
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
+
+  const forced = runTool('refresh-prompt.js', [dir, '--force'], { env: { CLAUDE_CONFIG_DIR: configDir } });
+  assert.strictEqual(forced.status, 0, forced.stderr);
+  const f = JSON.parse(forced.stdout);
+  assert.strictEqual(f.action, 'install');
+  assert.match(f.saved, /^AGENTS\.md\.replaced-\d{4}-\d{2}-\d{2}$/);
+  assert.match(fs.readFileSync(path.join(dir, f.saved), 'utf8'), /my own rule/);
+  assert.doesNotMatch(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
+  assert.strictEqual(readCfg(dir).promptVersion, 42);
+});
+
+test('refresh-prompt on a pre-versioning workspace: byte-identical is recorded, different is refused', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = readCfg(dir);
+  delete cfg.promptVersion; delete cfg.promptSha256;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+
+  const recorded = JSON.parse(runTool('refresh-prompt.js', [dir]).stdout);
+  assert.strictEqual(recorded.action, 'record');
+  assert.ok(Number.isInteger(readCfg(dir).promptVersion));
+
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# AGENTS.md — Core AI Folder\n\nold generation\n');
+  const r = runTool('refresh-prompt.js', [dir]);
+  assert.strictEqual(r.status, 2);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.action, 'refused');
+  assert.strictEqual(out.before.state, 'unrecorded');
+  assert.match(out.reason, /--force/);
+});
+
+test('refresh-prompt installs a missing AGENTS.md without needing --force', (t) => {
+  const dir = freshWs(t);
+  fs.unlinkSync(path.join(dir, 'AGENTS.md'));
+  const r = runTool('refresh-prompt.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(JSON.parse(r.stdout).action, 'install');
+  assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')));
+});
+
+test('refresh-prompt --source uses the given checkout even when older', (t) => {
+  const dir = freshWs(t);
+  const src = path.join(tmpdir(t), 'checkout');
+  fs.mkdirSync(path.join(src, 'templates'), { recursive: true });
+  fs.writeFileSync(path.join(src, 'templates', 'AGENTS.md'), '<!-- joserah:prompt-version 0 -->\n# older\n');
+  // The workspace is at the plugin's version; an older override is "current" by comparison — nothing to do.
+  const r = runTool('refresh-prompt.js', [dir, '--source', src]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.source.kind, 'override');
+  assert.strictEqual(out.action, 'none');
+});
+
+test('refresh-prompt exits 1 outside a workspace', (t) => {
+  const r = runTool('refresh-prompt.js', [tmpdir(t)]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /not a Joserah workspace/);
+});
