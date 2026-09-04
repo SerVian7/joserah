@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * check-update.js — is this workspace behind the installed plugin?
+ * check-update.js — is this workspace behind the installed plugin, or behind the current prompt?
  * Usage: node check-update.js <workspace-root>
  *
  * Deliberately offline and dependency-free: it compares the installed
@@ -11,6 +11,16 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+// Optional on purpose: this tool is reached when a workspace is misbehaving
+// and must answer "could not tell" rather than crash if it is ever run from a
+// copy without its lib/ beside it — the same fail-closed rule as the two
+// readJson calls below.
+let promptLib = null;
+try {
+  promptLib = require('./lib/prompt');
+} catch {
+  promptLib = null;
+}
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const cfgPath = path.join(root, '.joserah', 'config.json');
@@ -53,4 +63,19 @@ const workspace = workspaceJson ? workspaceJson.createdByPluginVersion : null;
 // "behind" and not "current" — the caller must be able to distinguish this
 // state from a real answer, so it is `null` rather than either boolean.
 const behind = (installed != null && workspace != null) ? cmp(workspace, installed) < 0 : null;
-console.log(JSON.stringify({ installed, workspace, behind }));
+
+// The prompt is versioned apart from the plugin (lib/prompt.js), so it has
+// its own answer. Same fail-closed rule: an unreadable config or no source
+// means "could not tell" (null), never a fabricated boolean. A hand-edited
+// file is not "behind" — refreshing it is a decision, reported by doctor.
+let prompt = { workspace: null, available: null, behind: null };
+const source = promptLib ? promptLib.resolvePromptSource() : null;
+if (workspaceJson && source) {
+  const st = promptLib.promptState(root, workspaceJson, source);
+  prompt = {
+    workspace: st.version,
+    available: source.version,
+    behind: st.state === 'behind' || (st.state === 'unrecorded' && !st.matchesSource),
+  };
+}
+console.log(JSON.stringify({ installed, workspace, behind, prompt }));

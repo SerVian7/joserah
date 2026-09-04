@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool, fakeMarketplace } = require('./helpers');
 const nf = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'note-format'));
 
 function freshWs(t) {
@@ -447,4 +447,61 @@ test('a lowercase drive letter in the workspace path does not misreport a genuin
   assert.strictEqual(r.status, 0, r.stdout);
   assert.ok(!/no repository of its own/.test(r.stdout),
     'a genuine repo with a remote must not be reported as unbacked due to drive-letter case alone');
+});
+
+test('doctor fails when .joserah/directives.md is missing and points at migrate', (t) => {
+  const dir = freshWs(t);
+  fs.unlinkSync(path.join(dir, '.joserah', 'directives.md'));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /FAIL\s+exists: \.joserah\/directives\.md\s+— missing — run: node tools\/migrate\.js/);
+});
+
+test('doctor reports a current prompt with its version and source', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^ok\s+prompt \(AGENTS\.md\) current\s+— v\d+ \(plugin\)/m);
+});
+
+test('doctor fails a hand-edited AGENTS.md and does not call it behind', (t) => {
+  const dir = freshWs(t);
+  fs.appendFileSync(path.join(dir, 'AGENTS.md'), '\nmy own rule\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /FAIL\s+prompt \(AGENTS\.md\) current\s+— hand-edited/);
+  assert.match(r.stdout, /directives\.md/);
+  assert.match(r.stdout, /refresh-prompt\.js .*--force/);
+});
+
+test('doctor fails a pristine AGENTS.md when the marketplace clone carries a newer prompt', (t) => {
+  const dir = freshWs(t);
+  const r = runTool('doctor.js', [dir], { env: { CLAUDE_CONFIG_DIR: fakeMarketplace(t, 42) } });
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /FAIL\s+prompt \(AGENTS\.md\) current\s+— v\d+, marketplace clone has v42 — run: node tools\/refresh-prompt\.js/);
+  assert.doesNotMatch(r.stdout, /--force/);
+});
+
+test('doctor fails an unrecorded AGENTS.md that differs, and only warns about one that matches', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  delete cfg.promptVersion; delete cfg.promptSha256;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const matching = runTool('doctor.js', [dir]);
+  assert.strictEqual(matching.status, 0, matching.stdout);
+  assert.match(matching.stdout, /^warn\s+prompt \(AGENTS\.md\) current\s+— matches v\d+ but nothing recorded it/m);
+
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# AGENTS.md — Core AI Folder\n\nold generation\n');
+  const differs = runTool('doctor.js', [dir]);
+  assert.strictEqual(differs.status, 1);
+  assert.match(differs.stdout, /FAIL\s+prompt \(AGENTS\.md\) current\s+— no install record and differs/);
+});
+
+test('doctor warns when the source differs at the same prompt version (version not bumped)', (t) => {
+  const dir = freshWs(t);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  const configDir = fakeMarketplace(t, cfg.promptVersion, (text) => text + '\nan edit without a bump\n');
+  const r = runTool('doctor.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } });
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn\s+prompt source drift\s+— marketplace clone v\d+ differs from the installed v\d+ without a version bump/m);
 });

@@ -7,6 +7,7 @@ const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
+const { resolvePromptSource, promptState } = require('./lib/prompt');
 
 // Duplicated from hooks/session-start.js (a script, not a module, so it has
 // nothing to require) — the exact byte sequence the session-start hook
@@ -42,19 +43,21 @@ check('node version >= 18', Number(process.versions.node.split('.')[0]) >= 18, p
 // dosyası olmasına gerek yok, sonsuza dek claude ile çalışmayabiliriz").
 const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
                   '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md',
-                  '.joserah/agent.md'];
+                  '.joserah/agent.md', '.joserah/directives.md'];
 
 // A hosted workspace runs on the host's accounts and the host's `keys/` by
 // design, so it has no `keys/` of its own and must not be told to grow one.
 if (cfg && cfg.kind !== 'hosted') required.push('keys/AGENTS.md');
 
 // A remedy is only printed for a file something can actually install again.
-// migrate.js writes .joserah/agent.md when it is missing (see its R17 block)
-// and is the only tool that will — scaffold.js refuses to run twice on an
-// existing workspace, and forcing it past that refusal overwrites
-// directives.md and learned.md wholesale, which is the owner's own prose.
+// migrate.js writes .joserah/agent.md and .joserah/directives.md when they
+// are missing (see its R17 block and the directives block after it) and is
+// the only tool that will — scaffold.js refuses to run twice on an existing
+// workspace, and forcing it past that refusal overwrites directives.md and
+// learned.md wholesale, which is the owner's own prose.
 const REQUIRED_REMEDY = {
   '.joserah/agent.md': `missing — run: node tools/migrate.js ${root}`,
+  '.joserah/directives.md': `missing — run: node tools/migrate.js ${root}`,
 };
 
 for (const f of required) {
@@ -266,6 +269,45 @@ check('format version', fv === FORMAT_VERSION,
   fv === FORMAT_VERSION
     ? `workspace is on format v${FORMAT_VERSION}`
     : `workspace is on format v${fv || 1}, current is v${FORMAT_VERSION} \u2014 run: node tools/migrate.js ${root}`);
+
+// AGENTS.md is plugin-owned and versioned apart from the plugin (lib/prompt.js):
+// its sha is recorded at install time, so this can tell "behind" (bytes still
+// match the record, a newer prompt exists) from "hand-edited" (bytes differ
+// from the record) — and only the first is safe to overwrite. Skipped when the
+// file is missing: the `exists: AGENTS.md` check above already fails for that.
+{
+  const source = resolvePromptSource();
+  const st = promptState(root, cfg, source);
+  const srcName = source ? (source.kind === 'marketplace' ? 'marketplace clone' : source.kind) : null;
+  if (st.state !== 'missing') {
+    if (!source) {
+      check('prompt (AGENTS.md) current', false,
+        'no prompt source found — neither the marketplace clone nor this plugin carries a versioned templates/AGENTS.md');
+    } else if (st.state === 'current') {
+      check('prompt (AGENTS.md) current', true, `v${st.version} (${source.kind})`);
+    } else if (st.state === 'behind') {
+      check('prompt (AGENTS.md) current', false,
+        `v${st.version === null ? '?' : st.version}, ${srcName} has v${source.version} — run: node tools/refresh-prompt.js ${root}`);
+    } else if (st.state === 'hand-edited') {
+      check('prompt (AGENTS.md) current', false,
+        `hand-edited — differs from the recorded install (v${st.recordedVersion}); move what matters to .joserah/directives.md, then run: node tools/refresh-prompt.js ${root} --force`);
+    } else if (st.state === 'unrecorded' && st.matchesSource) {
+      warn('prompt (AGENTS.md) current',
+        `matches v${source.version} but nothing recorded it — run: node tools/refresh-prompt.js ${root} (records only)`);
+    } else {
+      check('prompt (AGENTS.md) current', false,
+        `no install record and differs from the current prompt (${srcName} v${source.version}) — predates prompt versioning or hand-edited; compare, move what matters to .joserah/directives.md, then run: node tools/refresh-prompt.js ${root} --force`);
+    }
+    // A developer's slip, not an owner's problem: the source text changed
+    // but its version line did not, so no workspace will ever see it as
+    // behind. Informational — the owner cannot fix it, but should not be
+    // told everything is current when it is not.
+    if (source && st.state === 'current' && !st.matchesSource) {
+      warn('prompt source drift',
+        `${srcName} v${source.version} differs from the installed v${st.version} without a version bump — bump the prompt-version line in templates/AGENTS.md`);
+    }
+  }
+}
 
 // G1/K4-mech: the workspace's own copy of verify-links.js is written once at
 // scaffold time and never updated by anything after that. If it has drifted

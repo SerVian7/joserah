@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, fakeMarketplace } = require('./helpers');
 
 test('check-update reports a workspace built by an older plugin as behind', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
@@ -71,4 +71,42 @@ test('check-update does not crash when the installed plugin.json is missing, and
   const out = JSON.parse(r.stdout);
   assert.strictEqual(out.installed, null);
   assert.strictEqual(out.behind, null);
+});
+
+test('check-update reports the prompt as not behind on a fresh scaffold', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const out = JSON.parse(runTool('check-update.js', [dir]).stdout);
+  assert.strictEqual(out.prompt.behind, false);
+  assert.strictEqual(out.prompt.workspace, out.prompt.available);
+});
+
+test('check-update reports the prompt behind when the marketplace clone is newer', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const out = JSON.parse(runTool('check-update.js', [dir], { env: { CLAUDE_CONFIG_DIR: fakeMarketplace(t, 42) } }).stdout);
+  assert.strictEqual(out.prompt.behind, true);
+  assert.strictEqual(out.prompt.available, 42);
+  assert.strictEqual(out.behind, false, 'the plugin itself is not behind');
+});
+
+test('check-update reports a pre-versioning AGENTS.md that differs as behind', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  delete cfg.promptVersion; delete cfg.promptSha256;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# AGENTS.md — Core AI Folder\n');
+  const out = JSON.parse(runTool('check-update.js', [dir]).stdout);
+  assert.strictEqual(out.prompt.behind, true);
+  assert.strictEqual(out.prompt.workspace, null);
+});
+
+test('check-update reports prompt.behind as null when config.json cannot be read', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{ "createdByPluginVersion": "0.3.0"');
+  const out = JSON.parse(runTool('check-update.js', [dir]).stdout);
+  assert.strictEqual(out.prompt.behind, null);
 });
