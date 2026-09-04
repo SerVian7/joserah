@@ -115,6 +115,7 @@ const args = parseArgs(process.argv.slice(2));
 // these rules again rather than an agent inventing a plausible-looking set.
 const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
+const { readPromptVersion, promptSha } = require('./lib/prompt');
 
 // `--feedback` and `--identity-mode` share one three-value vocabulary.
 // Defined once, up here, so both the main create path and --identity-only
@@ -464,6 +465,10 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   created: today,
   createdByPluginVersion: readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json')).version,
   formatVersion: FORMAT_VERSION,
+  // What refresh-prompt.js and doctor.js compare AGENTS.md against later: the
+  // version line and sha of the copy installed just above by copyTree.
+  promptVersion: readPromptVersion(fs.readFileSync(path.join(TEMPLATES, 'AGENTS.md'), 'utf8')),
+  promptSha256: promptSha(fs.readFileSync(path.join(TEMPLATES, 'AGENTS.md'), 'utf8')),
   trust: args.trust,
   kind: args.kind,
   ...(hosting ? { hosting } : {}),

@@ -144,3 +144,13 @@ test('--root-shell-only without a workspace marker exits 1', (t) => {
   const r = runTool('scaffold.js', ['--root-shell-only', '--target', dir]);
   assert.strictEqual(r.status, 1);
 });
+
+test('scaffold records the prompt version and sha of the AGENTS.md it installs', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  const prompt = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'prompt'));
+  const installed = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+  assert.strictEqual(cfg.promptVersion, prompt.readPromptVersion(installed));
+  assert.strictEqual(cfg.promptSha256, prompt.promptSha(installed));
+});

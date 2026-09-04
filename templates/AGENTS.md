@@ -1,7 +1,9 @@
+<!-- joserah:prompt-version 1 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic. **Identical in
-> every Joserah workspace** and replaced wholesale on update — never hand-edit it. Read next:
+> every Joserah workspace** and replaced wholesale by the plugin's `refresh-prompt` tool — never
+> hand-edit it; a rule that belongs to one workspace goes in its directives. Read next:
 > **[JOSERAH-ROLE.md](JOSERAH-ROLE.md)** — who you are talking to, from the workspace's `kind` —
 > then **[.joserah/directives.md](.joserah/directives.md)**, this workspace's own standing rules,
 > never touched by an update, and **`.joserah/config.json`**, its identity. Directives win.
