@@ -121,7 +121,33 @@ function installPrompt(root, source, { recordOnly = false } = {}) {
   if (text !== original) fs.writeFileSync(cfgPath, text, 'utf8');
 }
 
+// Dotted version compare: negative when a < b, 0 when equal, positive when
+// a > b. Missing components count as 0, so "0.4" equals "0.4.0".
+function compareVersions(a, b) {
+  const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+// The plugin's own version, installed (this tree) and available (the
+// marketplace clone). The prompt travels without a plugin release; code —
+// hooks, tools, skills — does not, so "a newer plugin exists" is a separate
+// answer from "a newer prompt exists", and the owner is told separately.
+function pluginVersions({ pluginRoot = PLUGIN_ROOT, configDir = defaultConfigDir() } = {}) {
+  const read = (dir) => {
+    const j = dir ? readJson(path.join(dir, '.claude-plugin', 'plugin.json')) : null;
+    return j && typeof j.version === 'string' ? j.version : null;
+  };
+  return { installed: read(pluginRoot), available: read(marketplaceClone(configDir)) };
+}
+
 module.exports = {
   PROMPT_VERSION_RE, normalizeEol, readPromptVersion, promptSha,
   resolvePromptSource, promptState, decidePromptAction, installPrompt,
+  marketplaceCloneDir: (configDir = defaultConfigDir()) => marketplaceClone(configDir),
+  pluginVersions, compareVersions,
 };

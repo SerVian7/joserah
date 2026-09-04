@@ -4,16 +4,18 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, HERMETIC_CONFIG_DIR, fakeMarketplace } = require('./helpers');
 
 function hookWs(t) {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'O', '--language', 'en', '--role', 'r']);
   return dir;
 }
-function runHook(name, cwd, stdin) {
+// Hermetic like runTool: the session-start hook resolves the prompt source
+// from CLAUDE_CONFIG_DIR, and must never see the developer's real clone here.
+function runHook(name, cwd, stdin, configDir) {
   return spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', name)],
-    { cwd, input: stdin, encoding: 'utf8' });
+    { cwd, input: stdin, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir || HERMETIC_CONFIG_DIR } });
 }
 
 test('M1: session-start on a fresh workspace reports no changed files', (t) => {
@@ -212,4 +214,47 @@ test('session-start carries a wrapped multi-line task in whole, not cut at the m
     'continuation lines must arrive with the task, not be cut off mid-sentence');
   assert.match(ctx, /second task, one line/,
     'the next task is a separate item, not swallowed into the previous one');
+});
+
+// ---- update check at session start (0.4.1) -----------------------------------
+
+test('session-start says nothing about updates when prompt and plugin are current', (t) => {
+  const r = runHook('session-start.js', hookWs(t));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /\[update\]/);
+});
+
+test('session-start refreshes a pristine-but-behind AGENTS.md on the spot and says so', (t) => {
+  const dir = hookWs(t);
+  const configDir = fakeMarketplace(t, 42);
+  const r = runHook('session-start.js', dir, undefined, configDir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\[update\] The standing instructions were refreshed to prompt v42 \(was v\d+\)/);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /prompt-version 42/);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.promptVersion, 42);
+  // Second start: current now, nothing to say.
+  const again = runHook('session-start.js', dir, undefined, configDir);
+  assert.doesNotMatch(again.stdout, /\[update\]/);
+});
+
+test('session-start leaves a hand-edited AGENTS.md alone and only reports the newer prompt', (t) => {
+  const dir = hookWs(t);
+  fs.appendFileSync(path.join(dir, 'AGENTS.md'), '\nmy own rule\n');
+  const r = runHook('session-start.js', dir, undefined, fakeMarketplace(t, 42));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\[update\] Prompt v42 is available but this workspace's AGENTS\.md was hand-edited/);
+  assert.match(r.stdout, /joserah:update/);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
+});
+
+test('session-start reports a newer plugin in the marketplace clone without touching anything', (t) => {
+  const dir = hookWs(t);
+  const installed = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
+  const promptV = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).promptVersion;
+  const r = runHook('session-start.js', dir, undefined, fakeMarketplace(t, promptV, null, { pluginVersion: '99.0.0' }));
+  assert.strictEqual(r.status, 0, r.stderr);
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes(`[update] Joserah plugin 99.0.0 is available (installed: ${installed})`), ctx);
+  assert.doesNotMatch(ctx, /refreshed to prompt/);
 });

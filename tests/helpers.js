@@ -36,8 +36,11 @@ function runTool(tool, args, opts = {}) {
 // A config dir whose known_marketplaces.json points at a fake marketplace
 // clone carrying templates/AGENTS.md at `version` — the real template with only
 // its version line replaced, so a "behind" test differs from the plugin's copy
-// in exactly one number. `mutate(text)` may alter the body further.
-function fakeMarketplace(t, version, mutate) {
+// in exactly one number. `mutate(text)` may alter the body further, and
+// `pluginVersion` writes the clone's .claude-plugin/plugin.json so a "newer
+// plugin available" case can be staged. The clone has no .git directory on
+// purpose: nothing in a test may ever reach the network.
+function fakeMarketplace(t, version, mutate, { pluginVersion = null } = {}) {
   const configDir = tmpdir(t);
   const clone = path.join(configDir, 'clone');
   fs.mkdirSync(path.join(clone, 'templates'), { recursive: true });
@@ -45,10 +48,15 @@ function fakeMarketplace(t, version, mutate) {
     .replace(/<!--\s*joserah:prompt-version\s+\d+\s*-->/, `<!-- joserah:prompt-version ${version} -->`);
   if (mutate) text = mutate(text);
   fs.writeFileSync(path.join(clone, 'templates', 'AGENTS.md'), text, 'utf8');
+  if (pluginVersion) {
+    fs.mkdirSync(path.join(clone, '.claude-plugin'), { recursive: true });
+    fs.writeFileSync(path.join(clone, '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'joserah', version: pluginVersion }, null, 2));
+  }
   fs.mkdirSync(path.join(configDir, 'plugins'), { recursive: true });
   fs.writeFileSync(path.join(configDir, 'plugins', 'known_marketplaces.json'),
     JSON.stringify({ joserah: { source: { source: 'git', url: 'https://example.invalid/joserah.git' }, installLocation: clone } }, null, 2));
   return configDir;
 }
 
-module.exports = { PLUGIN_ROOT, tmpdir, runTool, fakeMarketplace };
+module.exports = { PLUGIN_ROOT, HERMETIC_CONFIG_DIR, tmpdir, runTool, fakeMarketplace };

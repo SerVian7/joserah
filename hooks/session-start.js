@@ -7,11 +7,64 @@
  */
 'use strict';
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
+
+// The standing instructions travel apart from the plugin (tools/lib/prompt.js).
+// Once a day the marketplace clone is pulled — a plain git checkout, so this
+// is the one place a refresh needs no plugin update and no restart — and on
+// every session start a pristine-but-behind AGENTS.md is brought current on
+// the spot, exactly as refresh-prompt.js would do it: same shared decision,
+// so a hand-edited file is never touched here either, only reported. A newer
+// *plugin* is only ever reported: that update is the owner's to run.
+// Everything here is best-effort — an update check must never break a
+// session start, so every failure is swallowed and produces no line.
+const CLONE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+function maybeRefreshClone(lib, now) {
+  const clone = lib.marketplaceCloneDir();
+  if (!clone || !fs.existsSync(path.join(clone, '.git'))) return;
+  const stamp = path.join(os.tmpdir(), 'joserah-clone-refresh.stamp');
+  try {
+    if (now.getTime() - fs.statSync(stamp).mtimeMs < CLONE_REFRESH_INTERVAL_MS) return;
+  } catch { /* no stamp yet */ }
+  // Stamped before the pull, so an unreachable remote is retried tomorrow,
+  // not on every session start today.
+  try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return; }
+  spawnSync('git', ['-C', clone, 'pull', '--ff-only', '--quiet'], { stdio: 'ignore', timeout: 8000 });
+}
+function updateLines(cfg, now) {
+  let lib;
+  try { lib = require('../tools/lib/prompt'); } catch { return []; }
+  const lines = [];
+  try {
+    maybeRefreshClone(lib, now);
+    const source = lib.resolvePromptSource();
+    if (source) {
+      const st = lib.promptState(ROOT, cfg, source);
+      const action = lib.decidePromptAction(st, { force: false });
+      if (action === 'install' || action === 'record') {
+        lib.installPrompt(ROOT, source, { recordOnly: action === 'record' });
+        if (action === 'install') {
+          const was = st.version === null ? 'unversioned' : `v${st.version}`;
+          lines.push(`[update] The standing instructions were refreshed to prompt v${source.version} (was ${was}) at this session start; they take full effect in a new conversation. Tell the owner in one line, in their language.`);
+        }
+      } else if (action === 'refused') {
+        const why = st.state === 'hand-edited' ? 'was hand-edited' : 'predates prompt versioning and differs';
+        lines.push(`[update] Prompt v${source.version} is available but this workspace's AGENTS.md ${why}, so it was left alone. Tell the owner in one line, in their language, and offer /joserah:update.`);
+      }
+    }
+    const v = lib.pluginVersions();
+    if (v.installed && v.available && lib.compareVersions(v.available, v.installed) > 0) {
+      lines.push(`[update] Joserah plugin ${v.available} is available (installed: ${v.installed}). Tell the owner in one line, in their language. Updating the plugin is theirs to do and needs a restart afterwards; do not explain further unless asked.`);
+    }
+  } catch { /* best-effort, see above */ }
+  return lines;
+}
 
 function readText(p) {
   try { return fs.readFileSync(p, 'utf8'); } catch { return ''; }
@@ -224,6 +277,8 @@ const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3)
 if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);
 
 if (staleness) parts.push('\n' + staleness);
+
+for (const line of updateLines(cfg, now)) parts.push('\n' + line);
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {

@@ -78,4 +78,13 @@ if (workspaceJson && source) {
     behind: st.state === 'behind' || (st.state === 'unrecorded' && !st.matchesSource),
   };
 }
-console.log(JSON.stringify({ installed, workspace, behind, prompt }));
+
+// A third, separate answer: is the plugin's *code* behind what the
+// marketplace clone now carries? That one still needs a plugin update and a
+// restart — the owner's to do — so it is reported on its own line.
+let available = null, newer = null;
+if (promptLib) {
+  available = promptLib.pluginVersions().available;
+  if (installed != null && available != null) newer = promptLib.compareVersions(available, installed) > 0;
+}
+console.log(JSON.stringify({ installed, available, newer, workspace, behind, prompt }));

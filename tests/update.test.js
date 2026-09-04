@@ -110,3 +110,16 @@ test('check-update reports prompt.behind as null when config.json cannot be read
   const out = JSON.parse(runTool('check-update.js', [dir]).stdout);
   assert.strictEqual(out.prompt.behind, null);
 });
+
+test('check-update reports a newer plugin in the marketplace clone as `newer`, separately from the prompt', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const promptV = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).promptVersion;
+  const out = JSON.parse(runTool('check-update.js', [dir], { env: { CLAUDE_CONFIG_DIR: fakeMarketplace(t, promptV, null, { pluginVersion: '99.0.0' }) } }).stdout);
+  assert.strictEqual(out.available, '99.0.0');
+  assert.strictEqual(out.newer, true);
+  assert.strictEqual(out.prompt.behind, false);
+  const none = JSON.parse(runTool('check-update.js', [dir]).stdout);
+  assert.strictEqual(none.available, null);
+  assert.strictEqual(none.newer, null);
+});

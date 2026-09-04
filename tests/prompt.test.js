@@ -238,3 +238,22 @@ test('refresh-prompt exits 1 outside a workspace', (t) => {
   assert.strictEqual(r.status, 1);
   assert.match(r.stderr, /not a Joserah workspace/);
 });
+
+// ---- plugin versions -----------------------------------------------------------
+
+test('compareVersions orders dotted versions and treats missing components as zero', () => {
+  const c = prompt.compareVersions;
+  assert.ok(c('0.4.1', '0.4.0') > 0);
+  assert.ok(c('0.4.0', '0.10.0') < 0);
+  assert.strictEqual(c('0.4', '0.4.0'), 0);
+  assert.ok(c(null, '0.0.1') < 0);
+});
+
+test('pluginVersions reads the installed plugin and the marketplace clone, null when absent', (t) => {
+  const installed = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
+  const none = prompt.pluginVersions({ configDir: tmpdir(t) });
+  assert.strictEqual(none.installed, installed);
+  assert.strictEqual(none.available, null);
+  const some = prompt.pluginVersions({ configDir: fakeMarketplace(t, 1, null, { pluginVersion: '9.9.9' }) });
+  assert.strictEqual(some.available, '9.9.9');
+});
