@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
 const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION, roleFor } = require('./lib/note-format');
+const { stampKey } = require('./lib/config-stamp');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 
@@ -59,56 +60,6 @@ function titleFor(rel, text) {
   const m = /^#\s+(.+?)\s*$/m.exec(text);
   if (m) return m[1];
   return path.basename(rel, '.md');
-}
-
-// config.json is a file the owner hand-edits, same as a note's prose — an
-// inline array, unusual indentation, whatever they chose. A round-trip
-// through JSON.stringify would reflow every one of those choices just to
-// stamp one key, which is exactly the class of harm ensureFrontmatter
-// already refuses to do to a note. So this performs the narrowest text edit
-// that lands formatVersion at the target value and touches nothing else —
-// same discipline, applied to JSON instead of a frontmatter block.
-function stampFormatVersion(text, version) {
-  let cfg;
-  try {
-    cfg = JSON.parse(text.replace(/^\uFEFF/, ''));
-  } catch {
-    // Malformed JSON is not migrate's to repair — splicing text into a
-    // syntax error risks compounding it into real corruption, and doctor.js
-    // already surfaces an unparsable config as its own failing check. Leave
-    // the bytes exactly as the owner left them.
-    return { text, changed: false };
-  }
-  // config.json is only ever an object in practice; anything else has no
-  // key to stamp.
-  if (typeof cfg !== 'object' || cfg === null || Array.isArray(cfg)) {
-    return { text, changed: false };
-  }
-  if (cfg.formatVersion === version) return { text, changed: false };
-
-  // The key may already exist (just stale) — replace only its value, in
-  // place, rather than treating "already present" the same as "missing".
-  const KEY_RE = /"formatVersion"\s*:\s*[^,}\r\n]*/;
-  if (KEY_RE.test(text)) {
-    return { text: text.replace(KEY_RE, `"formatVersion": ${version}`), changed: true };
-  }
-
-  // No existing key: insert one as the object's first property. The eol and
-  // indent are read off the line the first existing key already sits on, so
-  // a CRLF, tab-indented, or 4-space file gets a line in its own style
-  // rather than an assumed one; an empty object falls back to a bare `\n`
-  // with no indent, since there is no sibling line to match.
-  const braceIdx = text.indexOf('{');
-  const afterBrace = text.slice(braceIdx + 1);
-  const lineMatch = /^(\r?\n)([ \t]*)/.exec(afterBrace);
-  const trimmed = afterBrace.replace(/^\s+/, '');
-  const hasSibling = trimmed.length > 0 && trimmed[0] !== '}';
-  const eol = lineMatch ? lineMatch[1] : '\n';
-  const indent = lineMatch ? lineMatch[2] : '';
-  const insertion = lineMatch
-    ? `${eol}${indent}"formatVersion": ${version}${hasSibling ? ',' : ''}`
-    : `"formatVersion": ${version}${hasSibling ? ', ' : ''}`;
-  return { text: text.slice(0, braceIdx + 1) + insertion + text.slice(braceIdx + 1), changed: true };
 }
 
 // scaffold.js and doctor.js already strip a leading U+FEFF before parsing
@@ -232,7 +183,7 @@ if (fs.existsSync(claudeMd)) {
 // the target version is not opened for writing at all, not even a no-op
 // rewrite, so its mtime and every byte are left exactly as the owner has
 // them.
-const cfgStamp = stampFormatVersion(fs.readFileSync(cfgPath, 'utf8'), FORMAT_VERSION);
+const cfgStamp = stampKey(fs.readFileSync(cfgPath, 'utf8'), 'formatVersion', FORMAT_VERSION);
 if (cfgStamp.changed && !dryRun) fs.writeFileSync(cfgPath, cfgStamp.text, 'utf8');
 
 // R17: JOSERAH-ROLE.md and .joserah/agent.md are written only at scaffold
