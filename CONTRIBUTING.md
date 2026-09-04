@@ -43,3 +43,13 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
   route still does).
 - Every skill declares `name` in its frontmatter; installed plugin paths carry
   the version and change on upgrade.
+
+## Changing the prompt
+
+`templates/AGENTS.md` is versioned apart from the plugin. Every change to its
+text **must** bump the `<!-- joserah:prompt-version N -->` line on line 1 —
+that number is the only thing a workspace compares against, so a change
+without a bump reaches no existing workspace (doctor reports it as
+`prompt source drift`). The plugin's own version bumps only when code changes:
+hooks, tools, skills, other templates. Run `node --test tests/*.test.js`
+before every release.

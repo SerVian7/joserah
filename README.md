@@ -52,14 +52,18 @@ Already have years of notes lying around? `/joserah:import` takes the pile.
 | `/joserah:import` | Bring in existing notes, exports, document piles |
 | `/joserah:project` | Start new work: plans first, then a project folder, a drop folder, and optional containers or MCP servers |
 | `/joserah:doctor` | Check a workspace is healthy, and repair it |
+| `/joserah:update` | Bring a workspace current: refresh the standing instructions and the other plugin-owned files, run the migration, report when the plugin's own code needs an update |
 | `/joserah:backup` | Write the workspace to a ZIP, or mirror it to a **private** git repository so two machines share it. A ZIP stays on your disk; a repository puts your journal and notes about people on a third party's server, so it asks first |
 
 ## How it works
 
 A workspace is any folder holding a `.joserah/config.json`. The plugin's hooks
 look for that marker and stay quiet everywhere else — so you install Joserah
-once, keep as many workspaces as you like, and updating the plugin updates all
-of them at once.
+once and keep as many workspaces as you like. The plugin's *code* updates all
+of them at once; its *standing instructions* — the `AGENTS.md` every workspace
+carries — are versioned apart from the code and brought current per workspace
+at session start, with a new conversation and no restart (see "Upgrading to
+0.4.1").
 
 Two rules keep the knowledge honest. Source material you bring in is copied
 **verbatim** into `raw/` at the workspace root — outside `.joserah/`, so a
@@ -156,6 +160,28 @@ carries no credential and is always kept in so a restored workspace still
 passes doctor) and now **ask** whether keys should be included.
 `archive.js extract` refuses to overwrite existing files without `--force`,
 and a new `verify` command checks an archive's integrity.
+
+### Upgrading to 0.4.1
+
+The prompt (`AGENTS.md`) now carries its own version — a
+`<!-- joserah:prompt-version N -->` line — separate from the plugin's. A
+change to the standing instructions no longer needs a plugin release or an
+IDE restart. The session-start hook pulls the marketplace clone once a day
+and, when the workspace's `AGENTS.md` is untouched and behind, replaces it on
+the spot; the next conversation runs on the new text. `/joserah:update` does
+the same by hand, plus the migration and the other plugin-owned files. The
+tools record what they installed in `config.json` (`promptVersion`,
+`promptSha256`), so `/joserah:doctor` can tell a workspace that is merely
+*behind* from one whose `AGENTS.md` was *hand-edited* — the first is
+refreshed in place, the second is never overwritten without `--force`, and
+`--force` keeps the displaced text beside the file. Hand-edits belong in
+`.joserah/directives.md`, which `migrate.js` now creates when it is missing
+(it never modifies an existing one) and doctor now requires. Existing
+workspaces from 0.3.x–0.4.0 have an unversioned `AGENTS.md`: doctor and the
+session briefing will say so; `migrate.js` brings it current when it is
+byte-identical to a known prompt, and `/joserah:update` walks the owner
+through the rest when it is not. A newer *plugin* is still only announced —
+that update, and the restart after it, stay the owner's.
 
 ## Requirements
 

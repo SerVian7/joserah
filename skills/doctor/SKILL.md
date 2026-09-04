@@ -25,7 +25,8 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>
 ```
 
 Pass the workspace path explicitly — cwd may be anywhere. It verifies: the marker is present and readable, Node is ≥ 18, the core files
-exist, no `{{placeholder}}` survives, and every internal link resolves.
+exist, no `{{placeholder}}` survives, every internal link resolves, and `AGENTS.md` is the current
+prompt — neither behind the newest available copy nor hand-edited.
 
 ## 2. Check the hooks are actually firing
 
@@ -62,6 +63,11 @@ Propose the specific repair for each failure and wait for a yes:
 | Broken link | Find the moved target and repoint the link |
 | `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
 | `local verify-links.js current` FAIL | Copy the plugin's `tools/verify-links.js` over `.joserah/tools/verify-links.js`, then re-run doctor. |
+| `exists: .joserah/directives.md` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it creates the file from the template with the workspace name filled in and never touches an existing one. |
+| `prompt (AGENTS.md) current` FAIL — *behind* | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/refresh-prompt.js" <workspace>`. Then tell the owner a **new conversation** is enough — no restart. |
+| `prompt (AGENTS.md) current` FAIL — *hand-edited* or *no install record and differs* | Do not overwrite. Follow `/joserah:update` step 4: show the owner what differs, move their lines to `.joserah/directives.md`, then `refresh-prompt.js <workspace> --force` on their yes — the displaced text is kept as `AGENTS.md.replaced-<date>` beside it. |
+| `prompt (AGENTS.md) current` warn — *matches but nothing recorded it* | Run `refresh-prompt.js <workspace>` — it only writes the record. |
+| `prompt source drift` warn | A developer's slip, not the owner's: the prompt text changed without its version line. Report it via `/joserah:feedback`; nothing to do in the workspace. |
 | `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate-raw.js" <workspace>` — moves the source material to `raw/` at the workspace root and rewrites the links that cited the old location. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate-raw.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
 | `projects/<Owner>/<Project>` warn (no repository of its own / no remote / N commit(s) not pushed) | Not something doctor can fix by itself — it means no copy of that work exists anywhere else, or its history is incomplete everywhere but this machine. Say so plainly and ask the owner whether to `git init`, add a remote, or push, from inside that project's own directory — never proceed as if the workspace were fully backed up while one of these is open. |
 
@@ -69,17 +75,26 @@ Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 
 ## Update notice
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/tools/check-update.js" <workspace-root>`. If `behind` is true,
-tell the owner in **one line**, in their language — "Joserah'ın yeni sürümü var, güncelleyeyim
-mi?" — and nothing more. Do not explain plugins, marketplaces or versions unless asked.
+Run `node "${CLAUDE_PLUGIN_ROOT}/tools/check-update.js" <workspace-root>`. Three things can be
+behind, and they are fixed differently. Say nothing about any whose value is `null` — the check
+could not tell; carry on and do not retry.
 
-On yes: update, then run `migrate.js` immediately so the workspace matches the new version.
-Never ask the owner to close and reopen the terminal, and never require `npx`. If the only
-available path needs either, say plainly that the update has to wait and report it to the
-developer instead.
+**`prompt.behind` is `true` — the standing instructions are behind.** Tell the owner in **one
+line**, in their language — "Joserah'ın talimat metni yenilenmiş, alayım mı?" — and nothing more.
+On yes, follow `/joserah:update`: it refreshes the marketplace clone, runs `migrate.js` and
+`refresh-prompt.js`, and ends with a **new conversation** — no plugin update, no restart. (The
+session-start hook already does the safe part of this by itself; you usually land here only when
+the file was hand-edited.)
 
-If `behind` is `null` — the check could not tell — say nothing to the owner about updates and
-carry on with whatever else brought you here; do not report it as a problem, and do not retry.
+**`newer` is `true` — the plugin's code is behind.** Tell the owner in **one line** — "Joserah'ın
+yeni sürümü var; güncellemeyi siz yapmanız gerekiyor, sonra bir kez yeniden başlatmalı." — and
+nothing more. Do not explain plugins, marketplaces or versions unless asked. The update is theirs
+to run; once it is done, run `migrate.js` so the workspace matches the new version. Never require
+`npx`; if the only available path needs it, say plainly that the update has to wait and report it
+to the developer instead.
+
+**`behind` is `true` — this workspace was built by an older plugin than the one installed.** Run
+`migrate.js` (dry-run first, see "Format version" below).
 
 ## Format version
 
