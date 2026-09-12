@@ -68,9 +68,13 @@ test('relocates knowledge/raw to the root and rewrites citing links', (t) => {
 test('preserves an owner-edited README.md under the old raw/ instead of discarding it', (t) => {
   const dir = legacyWs(t);
   // The old location may carry its own README.md from the pre-migration
-  // template. scaffold.js already wrote the *current* template's README.md
-  // at the root (see legacyWs/scaffold.js). Simulate an owner who annotated
-  // the old one, so its bytes differ from what is now at the root.
+  // template. A workspace scaffolded between 2026-08-31 and 2026-09-12 also
+  // carries the *current* template's README.md at raw/ — scaffold.js writes
+  // imports/README.md now, so the test stages that pre-existing file itself.
+  // Then simulate an owner who annotated the old one, so its bytes differ
+  // from what is at the root.
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.copyFileSync(path.join(PLUGIN_ROOT, 'templates', 'imports', 'README.md'), path.join(dir, 'raw', 'README.md'));
   const oldReadme = path.join(dir, '.joserah', 'knowledge', 'raw', 'README.md');
   fs.writeFileSync(oldReadme, '# raw/ — IMMUTABLE\n\nOwner note: do not touch, ever.\n');
   const r = runTool('relocate-raw.js', [dir]);
@@ -99,7 +103,7 @@ test('a genuinely pre-branch workspace (no root raw/ yet) gets the current READM
   const r = runTool('relocate-raw.js', [dir]);
   assert.strictEqual(r.status, 0, r.stderr);
   const got = fs.readFileSync(path.join(dir, 'raw', 'README.md'), 'utf8');
-  const current = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'raw', 'README.md'), 'utf8');
+  const current = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'imports', 'README.md'), 'utf8');
   assert.strictEqual(got, current, 'gets the current template explaining the backup exclusion, not the legacy one');
   assert.doesNotMatch(got, /Never edited, never summarized in place\./,
     'the legacy three-line boilerplate does not survive the move');
@@ -115,8 +119,8 @@ test('is a no-op when there is nothing to relocate, exit 0', (t) => {
 
 test('refuses when the root already has a non-empty raw/ of its own', (t) => {
   const dir = legacyWs(t);
-  // scaffold.js already put raw/README.md here (Tasks 1-3); add real owner
-  // content alongside it to create a genuine collision.
+  // Add real owner content under the root raw/ to create a genuine
+  // collision (scaffold.js writes imports/, not raw/, since 2026-09-12).
   fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'raw', 'existing.md'), 'x\n');
   const r = runTool('relocate-raw.js', [dir]);
@@ -133,9 +137,9 @@ test('--dry-run reports and changes nothing', (t) => {
 
 test('the .gitignore exclusion is written even when a later stage fails', (t) => {
   const dir = legacyWs(t);
-  // A genuinely pre-migration workspace would not yet have the raw/
-  // exclusion scaffold.js now writes by default — strip it so the write
-  // this test is checking for is not a no-op.
+  // A genuinely pre-migration workspace has no raw/ exclusion of its own
+  // (scaffold.js writes imports/ since 2026-09-12) — assert that, so the
+  // write this test is checking for is not a no-op.
   const giPath = path.join(dir, '.gitignore');
   const stripped = fs.readFileSync(giPath, 'utf8').replace(/^raw\/\n/m, '');
   fs.writeFileSync(giPath, stripped);

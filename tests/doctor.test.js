@@ -331,6 +331,16 @@ test('doctor warns about the legacy knowledge/raw location, exit stays 0', (t) =
   assert.match(r.stdout, /relocate-raw/, 'points at the migration tool');
 });
 
+test('doctor warns about a root raw/ (pre-2026-09-12 layout), exit stays 0', (t) => {
+  const dir = freshWs(t);
+  fs.mkdirSync(path.join(dir, 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'raw', 'old.pdf'), 'x');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn {2}.*legacy raw\/ at the workspace root/m);
+  assert.match(r.stdout, /relocate-imports/, 'points at the migration tool');
+});
+
 test('doctor warns when a project directory has no repository of its own', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);

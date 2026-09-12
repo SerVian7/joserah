@@ -180,7 +180,18 @@ let trust = null;
   const legacyRaw = path.join(root, '.joserah', 'knowledge', 'raw');
   if (fs.existsSync(legacyRaw) && fs.readdirSync(legacyRaw).length) {
     warn('legacy .joserah/knowledge/raw present',
-      `source material now lives in raw/ at the workspace root — run: node tools/relocate-raw.js ${root}`);
+      `source material now lives in imports/ at the workspace root — run: node tools/relocate-raw.js ${root} and then node tools/relocate-imports.js ${root}`);
+  }
+}
+
+// 2026-09-12: raw/ at the root was renamed imports/ (owner's decision). A
+// workspace scaffolded between 2026-08-31 and then still has raw/; warning,
+// not failure — the tools still recognise it as a legacy location.
+{
+  const legacyRootRaw = path.join(root, 'raw');
+  if (fs.existsSync(legacyRootRaw) && fs.readdirSync(legacyRootRaw).some((e) => e !== 'README.md')) {
+    warn('legacy raw/ at the workspace root',
+      `source material now lives in imports/ — run: node tools/relocate-imports.js ${root}`);
   }
 }
 

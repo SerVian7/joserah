@@ -34,16 +34,22 @@ const newRaw = path.join(root, 'raw');
 // EOL-normalised before comparing: a workspace with no .gitattributes of its
 // own checks this out as CRLF on Windows.
 const OLD_RAW_README = '# raw/\n\nImmutable source material. Never edited, never summarized in place.\n';
-const CURRENT_RAW_README = fs.readFileSync(path.join(__dirname, '..', 'templates', 'raw', 'README.md'), 'utf8');
+// The current source-material README template. It moved with the folder it
+// describes: templates/raw/README.md became templates/imports/README.md when
+// raw/ at the root was renamed imports/ (2026-09-12). A workspace relocated
+// by this tool lands on raw/ and is then carried the rest of the way by
+// relocate-imports.js, which replaces this file at its final location.
+const CURRENT_RAW_README = fs.readFileSync(path.join(__dirname, '..', 'templates', 'imports', 'README.md'), 'utf8');
 function normalizeEol(s) { return s.replace(/\r\n/g, '\n'); }
 
 if (!fs.existsSync(oldRaw)) {
   console.log(JSON.stringify({ moved: false, linksRewritten: 0, notesTouched: 0 }));
   process.exit(0);
 }
-// scaffold.js (Tasks 1-3) already creates raw/README.md at the root of every
-// new workspace, so newRaw existing with exactly that plugin-owned template
-// file is the expected steady state going into a migration, not a conflict.
+// A workspace scaffolded between 2026-08-31 and 2026-09-12 carries a
+// plugin-owned raw/README.md at the root, so newRaw existing with exactly
+// that one file is an expected steady state going into a migration, not a
+// conflict.
 // Only owner content there (anything else) is a genuine collision. This
 // guard is deliberately never loosened into a "resume" mode: a raw/ holding
 // real content after a prior partial move looks identical, on disk, to a
