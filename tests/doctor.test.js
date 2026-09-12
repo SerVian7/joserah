@@ -317,7 +317,13 @@ test('doctor summary carries no warning count when nothing warned', (t) => {
   const r = runTool('doctor.js', [freshWs(t)]);
   assert.strictEqual(r.status, 0, r.stdout);
   assert.match(r.stdout, /All checks passed\.\s*$/);
-  assert.ok(!/warning\(s\)/.test(r.stdout));
+  // Scoped to the summary line, not the whole output: the `typed claims
+  // consistent` check reports check-claims' own summary as its detail, and
+  // that detail legitimately reads "0 error(s), 0 warning(s) in N claim(s)"
+  // on a workspace where nothing warned. What this test guards is doctor's
+  // own closing line never growing a warning count out of nothing.
+  const summary = r.stdout.trim().split('\n').pop();
+  assert.ok(!/warning\(s\)/.test(summary), summary);
 });
 
 test('doctor warns about the legacy knowledge/raw location, exit stays 0', (t) => {
@@ -514,4 +520,19 @@ test('doctor warns when the source differs at the same prompt version (version n
   const r = runTool('doctor.js', [dir], { env: { CLAUDE_CONFIG_DIR: configDir } });
   assert.strictEqual(r.status, 0, r.stdout);
   assert.match(r.stdout, /^warn\s+prompt source drift\s+— marketplace clone v\d+ differs from the installed v\d+ without a version bump/m);
+});
+
+test('doctor fails on a measurement written without its conditions, and names the line', (t) => {
+  const dir = freshWs(t);
+  const p = path.join(dir, '.joserah', 'knowledge', 'wiki', 'entities', 'box.md');
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, '# Box\n\n- [measurement] Box VRAM -> 20009 MiB\n  by: owner\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /^FAIL {2}typed claims consistent.*box\.md:3.*measurement-without-condition/m);
+});
+
+test('doctor reports the claim count on a clean workspace', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.match(r.stdout, /^ok {4}typed claims consistent {2}— 0 error\(s\), 0 warning\(s\) in \d+ claim\(s\)/m);
 });

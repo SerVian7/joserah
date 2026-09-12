@@ -371,6 +371,16 @@ check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftove
 const links = spawnSync('node', [path.join(__dirname, 'verify-links.js'), root], { encoding: 'utf8' });
 check('internal links resolve', links.status === 0, (links.stdout || '').trim().split('\n')[0]);
 
+// Typed claims (design 2026-09-12): a measurement without its conditions is
+// the exact record shape that produced a wrong answer to the owner, so it is
+// a failure, not a warning. check-claims.js prints its own summary line last.
+{
+  const claims = spawnSync(process.execPath, [path.join(__dirname, 'check-claims.js'), root], { encoding: 'utf8' });
+  const lines = (claims.stdout || '').trim().split('\n').filter(Boolean);
+  check('typed claims consistent', claims.status === 0,
+    claims.status === 0 ? (lines[lines.length - 1] || '') : (lines[0] || (claims.stderr || '').trim()));
+}
+
 // G3/I12: the plugin's hooks are declared with shell:"bash". On Windows that
 // silently never fires without Git for Windows on PATH — the single most
 // common Windows failure mode, and nothing else in this tool would ever
