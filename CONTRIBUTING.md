@@ -37,7 +37,7 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
   (`node "${CLAUDE_PLUGIN_ROOT}/hooks/x.js"`) and keep `shell` set to `bash`,
   so `${CLAUDE_PLUGIN_ROOT}` expands the same way everywhere; in PowerShell
   that syntax means something else entirely.
-- Nothing writes into `raw/` at the workspace root except the import skill,
+- Nothing writes into `imports/` at the workspace root except the import skill,
   and only ever verbatim copies of the owner's own material. It lives outside
   `.joserah/`, gitignored, so a repository backup never carries it (the zip
   route still does).

@@ -66,7 +66,7 @@ at session start, with a new conversation and no restart (see "Upgrading to
 0.4.1").
 
 Two rules keep the knowledge honest. Source material you bring in is copied
-**verbatim** into `raw/` at the workspace root — outside `.joserah/`, so a
+**verbatim** into `imports/` at the workspace root — outside `.joserah/`, so a
 repository backup does not carry your bank statements and vendor PDFs along
 with your notes — and never edited; anything the assistant writes lives
 elsewhere and cites the source it came from. A knowledge base that quotes its
@@ -81,7 +81,7 @@ own guesses back at you is worse than no knowledge base.
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
 ├── keys/               SENSITIVE — never read or echoed
-├── raw/                source material, verbatim — outside .joserah/, excluded from repo backups
+├── imports/            source material, verbatim — outside .joserah/, excluded from repo backups
 │
 └── .joserah/
     ├── config.json          workspace marker

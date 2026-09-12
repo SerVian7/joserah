@@ -17,10 +17,10 @@ function backupSkillText() {
   return fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'backup', 'SKILL.md'), 'utf8');
 }
 
-test('gate 2.6 ls-files pathspec covers both the current and pre-migration raw/ locations', () => {
+test('gate 2.6 ls-files pathspec covers the current imports/ and both legacy raw locations', () => {
   const text = backupSkillText();
-  const m = text.match(/git -C <workspace> ls-files -- "projects\/" "docker-stack\/" "raw\/"[^\n`]*/);
-  assert.ok(m, 'gate 2.6 ls-files command not found');
+  const m = text.match(/git -C <workspace> ls-files -- "projects\/" "docker-stack\/" "imports\/" "raw\/"[^\n`]*/);
+  assert.ok(m, 'gate 2.6 ls-files line not found in the expected shape');
   assert.match(m[0], /"\.joserah\/knowledge\/raw\/"/,
     'ls-files pathspec must also cover the pre-migration .joserah/knowledge/raw/ location');
 });
@@ -31,6 +31,7 @@ test('gate 2.6 carries a git log --all history probe for raw/ material, not just
   assert.ok(m, 'gate 2.6 history probe not found — ls-files alone cannot see source material relocate-raw.js already moved');
   assert.match(m[0], /"\.joserah\/knowledge\/raw\/"/);
   assert.match(m[0], /"raw\/"/);
+  assert.match(m[0], /"imports\/"/);
 });
 
 test('gate 2.6 prose says a hit routes to the scope reset, and that deleting files does not fix history', () => {

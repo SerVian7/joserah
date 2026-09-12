@@ -229,9 +229,9 @@ one:
    separately for any `.env`-family file inside `keys/`**, because
    `--include-keys` never takes those; name it if one was left behind. Point
    at the manifest (section 2) for exactly what the `projects/`/`docker-stack/`
-   exclusion left out by name. `raw/` is excluded by default on the
+   exclusion left out by name. `imports/` is excluded by default on the
    **repository** route (the scaffold's own `.gitignore` covers it) — but
-   the zip route still includes `raw/`: a zip carries binaries without
+   the zip route still includes `imports/`: a zip carries binaries without
    consequence, so say plainly that it's IN here, unlike on the repository
    route.
 
@@ -288,11 +288,11 @@ them twice — once cheaply before staging, and once for real, after.
       on a repeat backup where one is already tracked from an earlier,
       informed decision.
    3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `*.env.*`,
-      `.envrc`, `*.envrc`, `projects/*`, `docker-stack/*` and `raw/` — the last
+      `.envrc`, `*.envrc`, `projects/*`, `docker-stack/*` and `imports/` — the last
       of these keeps source material that never belongs in a repository
       backup out from under `git add -A` in the first place, the same way
-      the others keep credentials and project checkouts out. A `raw/` line
-      missing here is exactly how step 2.6 later finds tracked `raw/`
+      the others keep credentials and project checkouts out. An `imports/` line
+      missing here is exactly how step 2.6 later finds tracked `imports/`
       content instead of never seeing any: this check exists to catch that
       before it happens, not after.
    4. If no remote is configured yet
@@ -327,23 +327,23 @@ them twice — once cheaply before staging, and once for real, after.
    plus the root shell files — never project work, runtime state or source
    material:
 
-   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "raw/" ".joserah/knowledge/raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
+   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "imports/" "raw/" ".joserah/knowledge/raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
 
    → must print nothing. Anything listed means the repository already tracks
    out-of-scope content — from before the exclusions existed, or from a
    hand-run `git add`. `.joserah/knowledge/raw/` is in this pathspec because
    every workspace this branch migrates carried its source material there
-   before `raw/` existed, and its `.gitignore` never excluded that path —
-   so `git add -A` tracked it, commit after commit, for as long as the
-   workspace existed, and pushed it.
+   before the legacy root `raw/` existed, and its `.gitignore` never
+   excluded that path — so `git add -A` tracked it, commit after commit,
+   for as long as the workspace existed, and pushed it.
 
    That is also why `ls-files` alone is not enough here: it only answers for
-   what is tracked **right now**. `relocate-raw.js` moves the files to
-   `raw/` and the next `add -A` stages only the deletion — `ls-files` then
+   what is tracked **right now**. The relocate tools move the files out of
+   scope and the next `add -A` stages only the deletion — `ls-files` then
    prints nothing forever, while every past commit still serves the very
    material this scope exists to keep out. So also run:
 
-   `git -C <workspace> log --all --oneline -- ".joserah/knowledge/raw/" "raw/"`
+   `git -C <workspace> log --all --oneline -- "imports/" "raw/" ".joserah/knowledge/raw/"`
 
    → must print nothing either. A hit here means source material is sitting
    in a commit reachable from some branch in this repository's history,
@@ -526,7 +526,7 @@ Measure-Object -Line).Lines`), or on the zip route
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
 5. A `.joserah`-only backup restores no root shell: `AGENTS.md`,
-   `JOSERAH-ROLE.md`, `.gitignore`, `raw/README.md` and
+   `JOSERAH-ROLE.md`, `.gitignore`, `imports/README.md` and
    `.claude/settings.json` are not in it by design. Regenerate them — never
    by hand, never copied from another workspace:
 
@@ -538,8 +538,8 @@ Measure-Object -Line).Lines`), or on the zip route
    restore report: these files came from the plugin's template, not from the
    backup. The missing `.gitignore` is the security-relevant one — until it
    is regenerated, a `git add -A` on the restored machine would stage
-   `keys/`. `raw/README.md` arrives empty of anything but its own
-   explanation: the backup route never carries `raw/` by design, so there is
+   `keys/`. `imports/README.md` arrives empty of anything but its own
+   explanation: the backup route never carries `imports/` by design, so there is
    no source material to restore into it — say that plainly too, rather than
    leaving the owner to wonder why the folder came back empty. Then re-run
    doctor and confirm the check named `.claude/settings.json (present)` says

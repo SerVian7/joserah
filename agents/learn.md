@@ -46,7 +46,7 @@ relative to the workspace root you found.
 ## What you don't do
 
 - Don't decide policy on your own — only capture what the user expressed.
-- Don't write to `raw/` at the workspace root.
+- Don't write to `imports/` at the workspace root.
 - Don't echo secrets, passwords, credentials, or anything from `keys/` or `.joserah/personal/private/`.
 - Don't speculate on motivation. If the user didn't state the reason, write "Reason: (not stated)".
 

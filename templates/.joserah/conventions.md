@@ -32,7 +32,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Quick unsorted capture | `.joserah/desk/inbox/captures.md` |
 | Facts about the owner | `.joserah/personal/profile.md` |
 | Credentials | `keys/` — never echoed |
-| Source material, build inputs, generated artifacts | `raw/` — workspace root, outside `.joserah/`, never in a repository backup |
+| Source material, build inputs, generated artifacts | `imports/` — workspace root, outside `.joserah/`, never in a repository backup |
 | The owner's own code, and the small inputs it needs | `.joserah/tools/` — backed up with the rest of `.joserah/`, so a tool still runs after a restore. Grouped into subfolders; no bulk |
 | AI-maintained synthesis | `.joserah/knowledge/wiki/` |
 | One file per person | `.joserah/knowledge/people/firstname-lastname.md` |
