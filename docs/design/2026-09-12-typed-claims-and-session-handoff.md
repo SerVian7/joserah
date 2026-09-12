@@ -184,9 +184,15 @@ Open questions.
 
 ## Out of scope
 
-- Veritabanı yok. Markdown kaynak olmaya devam eder.
-- Anlamsal/vektör arama yok. Bu gecenin arızası erişim arızası değildi: dosya bulunmuştu,
-  okunmamıştı. Vektör arama aynı dosyayı önümüze koyar ve aynı hatayı yaptırırdı.
+- ~~Veritabanı yok. Markdown kaynak olmaya devam eder.~~ — superseded: 2026-09-12 tarihli "duran
+  kayıt çelişkilerinin kapatılması" kararı — markdown kaynaktır ve öyle kalır; dosyalardan yeniden
+  üretilebilen türev bir indeks kaynak değildir ve bu ilkeye aykırı değildir.
+- ~~Anlamsal/vektör arama yok. Bu gecenin arızası erişim arızası değildi: dosya bulunmuştu,
+  okunmamıştı. Vektör arama aynı dosyayı önümüze koyar ve aynı hatayı yaptırırdı.~~ — superseded:
+  2026-09-12 tarihli "refactor kapsamı, arama sırası, prompt ölçümü" kararı — önce tiplenmiş iddia
+  satırları ve metin araması; vektör arama veri büyüdüğünde, sonraki katman olarak. Bu paragrafın
+  gözlemi (bulunan dosyanın okunmaması) doğrudur ve geçerliliğini korur; geçersiz olan, ondan
+  çıkarılan kalıcı kapsam dışılıktır.
 - Mevcut dosyaların toptan yeniden yazımı yok. İddialar dokunuldukça tiplenir, artı elde olan
   ölçümler için **bir defalık geri doldurma** yapılır.
 
