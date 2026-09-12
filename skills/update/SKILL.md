@@ -94,7 +94,8 @@ owner says so.
 Run doctor and act on these lines only:
 
 - `local verify-links.js current` FAIL → copy the plugin's `tools/verify-links.js` over
-  `.joserah/tools/verify-links.js`.
+  `.joserah/tools/verify-links.js` **and** the plugin's `tools/lib/untouchable.js` over
+  `.joserah/tools/lib/untouchable.js`; the checker requires that library, so both must be current.
 - `exists: JOSERAH-ROLE.md` FAIL with "does not match the role template" → delete it and run
   `migrate.js` again; it reinstalls the right one for the workspace's `kind`.
 

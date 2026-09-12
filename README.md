@@ -86,7 +86,7 @@ own guesses back at you is worse than no knowledge base.
 └── .joserah/
     ├── config.json          workspace marker
     ├── conventions.md · learned.md · skill-candidates.md
-    ├── tools/               verify-links.js
+    ├── tools/               verify-links.js, lib/untouchable.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
     ├── knowledge/           people/ · wiki/ · archive/
     ├── personal/            private — read on demand only

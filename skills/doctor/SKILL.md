@@ -62,7 +62,7 @@ Propose the specific repair for each failure and wait for a yes:
 | Unfilled placeholder | Ask for the value, then substitute it |
 | Broken link | Find the moved target and repoint the link |
 | `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
-| `local verify-links.js current` FAIL | Copy the plugin's `tools/verify-links.js` over `.joserah/tools/verify-links.js`, then re-run doctor. |
+| `local verify-links.js current` FAIL | Copy **both** plugin files over the workspace's copies — `tools/verify-links.js` → `.joserah/tools/verify-links.js` and `tools/lib/untouchable.js` → `.joserah/tools/lib/untouchable.js` (the checker requires the library, so it only works if both travel) — then re-run doctor. |
 | `exists: .joserah/directives.md` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it creates the file from the template with the workspace name filled in and never touches an existing one. |
 | `prompt (AGENTS.md) current` FAIL — *behind* | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/refresh-prompt.js" <workspace>`. Then tell the owner a **new conversation** is enough — no restart. |
 | `prompt (AGENTS.md) current` FAIL — *hand-edited* or *no install record and differs* | Do not overwrite. Follow `/joserah:update` step 4: show the owner what differs, move their lines to `.joserah/directives.md`, then `refresh-prompt.js <workspace> --force` on their yes — the displaced text is kept as `AGENTS.md.replaced-<date>` beside it. |
@@ -129,7 +129,9 @@ created before 0.3.0. The move, in order, with the owner watching:
    --settings-only --target <workspace> --force` — with `--force` because a
    settings.json with the OLD paths exists; show the owner the diff first.
 5. Refresh the local link checker: copy the plugin's `tools/verify-links.js`
-   over `.joserah/tools/verify-links.js`.
+   over `.joserah/tools/verify-links.js`, and the plugin's
+   `tools/lib/untouchable.js` over `.joserah/tools/lib/untouchable.js` — the
+   checker requires that library, so both files have to be current.
 6. Anything else in the workspace that names `.joserah/keys` (its AGENTS.md,
    an `.mcp.json` mount, notes) — find with a grep scoped to markdown/config
    files, never `keys/` or an env file, so it can never surface a credential's

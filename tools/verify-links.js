@@ -9,28 +9,30 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES, SOURCE_MATERIAL_REL, isUnder } = require('./lib/untouchable');
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
 
+// Which paths this scan may not walk is stated once, in lib/untouchable.js,
+// and composed there per consumer; the two sets below name what this tool
+// takes from it. The reasons stay here, where the scan is.
+//
 // Junk that is junk at any depth — matched by name. '.superpowers' is
 // disposable scratch written by the superpowers execution harness
 // (plan ledgers, briefs, review packages): it is regenerated on demand,
 // listed in the generated workspace .gitignore, and excluded from backups
 // by archive.js — so links inside it are not the workspace's health, and a
 // broken one there cannot be cleared by the owner.
-const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build', '.superpowers']);
+const SKIP_ANY = new Set(LINK_SCAN_SKIP_NAMES);
 // Contracts about the workspace root — matched by workspace-relative path,
 // case-insensitively (Windows/macOS filesystems are). `imports/` (formerly
 // `raw/`) holds imported snapshots that are immutable by rule: their internal
-// links are historical facts, not workspace health. The two `raw` entries are
-// the legacy locations — root `raw/` is the 2026-08-31..2026-09-12 name and
-// `.joserah/knowledge/raw` the one before it — kept for workspaces the
-// relocate tools have not yet touched.
-const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', '.joserah/knowledge/raw'];
+// links are historical facts, not workspace health. The legacy `raw`
+// locations are kept for workspaces the relocate tools have not yet touched.
+const SKIP_REL = LINK_SCAN_SKIP_REL;
 
 function isSkippedRel(rel) {
-  const low = rel.split(path.sep).join('/').toLowerCase();
-  return SKIP_REL.some((p) => low === p || low.startsWith(p + '/'));
+  return isUnder(rel, SKIP_REL);
 }
 
 function* mdFiles(dir, rel) {
@@ -51,7 +53,9 @@ function* mdFiles(dir, rel) {
 // Deliberately duplicated (also in tools/lib/note-format.js): this file is
 // copied verbatim into every workspace by scaffold.js, and doctor.js compares
 // the workspace's copy to the plugin's byte-for-byte, so it cannot require a
-// sibling library file that would not travel with it.
+// sibling library file that would not travel with it. lib/untouchable.js is
+// the one library that does travel — scaffold.js copies it alongside, and
+// doctor.js checks it for drift too; note-format.js does not.
 function stripCode(text) {
   return text
     .replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '))
@@ -114,14 +118,11 @@ function existsExact(baseDir, target) {
 // one file carries no source material either way, so it is treated the
 // same as an imports/ that does not exist yet.
 //
-// The two raw roots below stay for workspaces not yet migrated: root `raw/`
+// The two legacy raw roots stay for workspaces not yet migrated: root `raw/`
 // was this folder's name from 2026-08-31 to 2026-09-12, and
-// `.joserah/knowledge/raw` the name before that.
-const RAW_ROOTS = [
-  { rel: 'imports', abs: path.join(ROOT, 'imports') },
-  { rel: 'raw', abs: path.join(ROOT, 'raw') },
-  { rel: '.joserah/knowledge/raw', abs: path.join(ROOT, '.joserah', 'knowledge', 'raw') },
-];
+// `.joserah/knowledge/raw` the name before that. All three are the
+// source-material set from lib/untouchable.js, resolved against this root.
+const RAW_ROOTS = SOURCE_MATERIAL_REL.map((rel) => ({ rel, abs: path.join(ROOT, ...rel.split('/')) }));
 function isEffectivelyAbsent(abs) {
   let entries;
   try { entries = fs.readdirSync(abs); }

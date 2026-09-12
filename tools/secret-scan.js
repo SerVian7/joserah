@@ -15,16 +15,21 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { SPECIFIC } = require('../hooks/lib/redactions');
 const { isOwnRepoRoot } = require('./lib/git-root');
+const { SECRET_SCAN_SKIP_REL, isUnder } = require('./lib/untouchable');
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const staged = process.argv.includes('--staged');
-const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', 'node_modules', '.git',
-  '.venv', '.superpowers', 'dist', 'build'];
+// Composed in lib/untouchable.js. Every entry is matched as a workspace-
+// relative path, so the junk names in it exclude only a root-level one — that
+// is how this tool has always behaved. The legacy `.joserah/knowledge/raw`
+// source-material location is deliberately absent: nothing ever gitignored
+// it, so a workspace that still has it tracks it in git and this scan must
+// keep reading it.
+const SKIP = SECRET_SCAN_SKIP_REL;
 const TEXT_EXT = new Set(['.md', '.json', '.txt', '.yml', '.yaml', '.toml']);
 
 function isSkipped(rel) {
-  const low = rel.split(path.sep).join('/').toLowerCase();
-  return SKIP.some((p) => low === p || low.startsWith(p + '/'));
+  return isUnder(rel, SKIP);
 }
 
 // A placeholder has the SHAPE of a secret slot, not of a secret: the vendor

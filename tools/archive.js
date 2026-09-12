@@ -26,20 +26,26 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { ARCHIVE_EXCLUDE_ROOT_REL, ARCHIVE_SKIP_NAMES, ARCHIVE_KEYS_PREFIXES, isUnder } = require('./lib/untouchable');
 
+// The three sets below are composed in lib/untouchable.js. NOTE what is not
+// among them: source material (`imports/`, and its legacy names) is NOT
+// excluded here, and that is deliberate — the zip route carries the owner's
+// own originals on purpose, and skills/backup/SKILL.md says so out loud.
+//
 // Root-anchored: these are contracts about the WORKSPACE ROOT layout, so a
 // nested folder that happens to share the name is still backed up. Matching
 // is case-insensitive because Windows and default-macOS filesystems are —
 // `.joserah/Keys` IS the credentials directory there.
-const EXCLUDE_ROOT_DIRS = ['projects', 'docker-stack'];
+const EXCLUDE_ROOT_DIRS = ARCHIVE_EXCLUDE_ROOT_REL;
 // Any-depth: conventional junk that is junk wherever it appears. '.superpowers'
 // is disposable scratch written by the superpowers execution harness (plan
 // ledgers, briefs, review packages); it is regenerated on demand and would
 // otherwise dominate a backup's file count.
-const EXCLUDE_ANY_DIRS = new Set(['node_modules', '.git', '.venv', '.superpowers']);
+const EXCLUDE_ANY_DIRS = new Set(ARCHIVE_SKIP_NAMES);
 // Current layout plus the pre-0.3.0 layout — published workspaces still have
 // the old one, and a credential left behind there must never enter a backup.
-const KEYS_PREFIXES = ['keys', '.joserah/keys'];
+const KEYS_PREFIXES = ARCHIVE_KEYS_PREFIXES;
 
 // Environment files carry credentials. Matching the bare name `.env` is not
 // enough: `.env.local`, `.env.production` and a prefixed `root.envrc` hold
@@ -82,8 +88,7 @@ function dosDate(d) {
 // here would be a silent security regression, so it must be verified, not
 // assumed correct (see the K1 test).
 function isKeysPath(rel) {
-  const low = rel.toLowerCase();
-  return KEYS_PREFIXES.some((p) => low === p || low.startsWith(p + '/'));
+  return isUnder(rel, KEYS_PREFIXES);
 }
 function isExcludedDir(rel, name) {
   if (EXCLUDE_ANY_DIRS.has(name.toLowerCase())) return true;

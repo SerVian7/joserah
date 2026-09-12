@@ -380,6 +380,7 @@ const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
   path.join(root, '.claude', 'settings.json'),
   path.join(root, '.gitignore'),
   path.join(root, '.joserah', 'tools', 'verify-links.js'),
+  path.join(root, '.joserah', 'tools', 'lib', 'untouchable.js'),
   path.join(root, 'JOSERAH-ROLE.md'),
 ]);
 
@@ -502,10 +503,15 @@ writeSettings(root, true, denyFor(args.trust, { hostPaths: hostPathsFor({ hostin
 // Workspace .gitignore (see GITIGNORE_LINES above).
 fs.writeFileSync(path.join(root, '.gitignore'), GITIGNORE_LINES.join('\n'), 'utf8');
 
-// Local copy of the link checker so the workspace can verify itself.
+// Local copy of the link checker so the workspace can verify itself, plus the
+// one library it requires — doctor.js compares this copy byte-for-byte with
+// the plugin's, so anything verify-links.js requires has to travel with it.
 fs.mkdirSync(path.join(root, '.joserah', 'tools'), { recursive: true });
 fs.copyFileSync(path.join(PLUGIN_ROOT, 'tools', 'verify-links.js'),
   path.join(root, '.joserah', 'tools', 'verify-links.js'));
+fs.mkdirSync(path.join(root, '.joserah', 'tools', 'lib'), { recursive: true });
+fs.copyFileSync(path.join(PLUGIN_ROOT, 'tools', 'lib', 'untouchable.js'),
+  path.join(root, '.joserah', 'tools', 'lib', 'untouchable.js'));
 
 if (args.git) {
   const { spawnSync } = require('child_process');

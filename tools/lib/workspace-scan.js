@@ -35,13 +35,13 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { MIGRATION_SKIP_NAMES, MIGRATION_SKIP_REL, isUnder } = require('./untouchable');
 
-const SKIP_DIR_ANY = new Set(['.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']);
-const SKIP_REL = [
-  'keys', 'projects', 'docker-stack', '.claude',
-  '.joserah/knowledge/raw', 'imports', 'raw', '.joserah/user', '.joserah/feedback',
-  '.joserah/tools', '.joserah/last-time-inject',
-];
+// The two directory sets are composed in lib/untouchable.js, the one place
+// that states which paths a tool may not walk; the reasons for this tool's
+// share of them are the three kinds of exclusion above.
+const SKIP_DIR_ANY = new Set(MIGRATION_SKIP_NAMES);
+const SKIP_REL = MIGRATION_SKIP_REL;
 const SKIP_FILE_REL = new Set([
   '.joserah/directives.md',
   'AGENTS.md',
@@ -50,8 +50,7 @@ const SKIP_FILE_REL = new Set([
 ]);
 
 function isSkippedRel(rel) {
-  const low = rel.toLowerCase();
-  return SKIP_REL.some((p) => low === p || low.startsWith(p + '/'));
+  return isUnder(rel, SKIP_REL);
 }
 
 function scanWorkspace(root) {

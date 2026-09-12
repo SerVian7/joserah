@@ -8,6 +8,7 @@ const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./lib/note-format');
 const { resolvePromptSource, promptState } = require('./lib/prompt');
+const { WALK_SKIP_NAMES } = require('./lib/untouchable');
 
 // Duplicated from hooks/session-start.js (a script, not a module, so it has
 // nothing to require) — the exact byte sequence the session-start hook
@@ -326,24 +327,37 @@ check('format version', fv === FORMAT_VERSION,
 // which is exactly what happened before this check existed. This is name-
 // based directory matching (see the placeholder walk below), not a
 // substitute for the legacy-keys check above.
+//
+// Two files travel that way, not one: verify-links.js and the
+// lib/untouchable.js it requires, which scaffold.js copies next to it. Both
+// are checked here, under the one check name the doctor and update skills and
+// tests/doctor.test.js key off.
 {
-  const localPath = path.join(root, '.joserah', 'tools', 'verify-links.js');
-  const canonical = fs.readFileSync(path.join(__dirname, 'verify-links.js'), 'utf8');
+  const pairs = [
+    ['verify-links.js', path.join(root, '.joserah', 'tools', 'verify-links.js'), path.join(__dirname, 'verify-links.js')],
+    ['lib/untouchable.js', path.join(root, '.joserah', 'tools', 'lib', 'untouchable.js'), path.join(__dirname, 'lib', 'untouchable.js')],
+  ];
   // A workspace with no .gitattributes of its own (pre-R18, or restored from
   // a backup taken before it) checks out under whatever the owner's global
   // core.autocrlf says. On Windows with autocrlf=true — the plugin's own
   // target platform — git rewrites the checkout to CRLF while this file's
   // canonical copy on disk stays LF, so a copy re-taken minutes ago still
-  // differs byte-for-byte from `canonical`, on every such workspace, always.
+  // differs byte-for-byte from the plugin's copy, on every such workspace, always.
   // That is a checkout convention, not evidence of staleness, so the
   // comparison runs through the shared normalizeEol above (R20) — same
   // helper, same reason, as the JOSERAH-ROLE.md check; a genuine content
   // difference still differs after normalising and still fails below.
-  let ok = false, detail;
-  if (!fs.existsSync(localPath)) detail = 'missing — copy it from the plugin: tools/verify-links.js';
-  else if (normalizeEol(fs.readFileSync(localPath, 'utf8')) !== normalizeEol(canonical)) detail = 'stale — differs from the plugin copy; re-copy it';
-  else { ok = true; detail = 'matches the plugin copy'; }
-  check('local verify-links.js current', ok, detail);
+  const problems = [];
+  for (const [label, localPath, canonicalPath] of pairs) {
+    if (!fs.existsSync(localPath)) { problems.push(`${label} missing`); continue; }
+    if (normalizeEol(fs.readFileSync(localPath, 'utf8')) !== normalizeEol(fs.readFileSync(canonicalPath, 'utf8'))) {
+      problems.push(`${label} stale`);
+    }
+  }
+  check('local verify-links.js current', problems.length === 0,
+    problems.length
+      ? `${problems.join(', ')} — re-copy tools/verify-links.js and tools/lib/untouchable.js from the plugin`
+      : 'matches the plugin copy');
 }
 
 // The scan must ignore {{PLACEHOLDER}}-shaped text inside fenced/inline code —
@@ -351,18 +365,25 @@ check('format version', fv === FORMAT_VERSION,
 // a ```js block showing '{{OWNER_NAME}}': owner, or backticked
 // `{{OWNER_ROLE_LINE}}` in prose), and an owner cannot "fix" their own
 // documentation to clear a false alarm. stripCode below is duplicated from
-// verify-links.js rather than shared: scaffold.js copies verify-links.js
-// standalone into every workspace (not tools/lib/), and the drift check above
-// compares that copy byte-for-byte against the plugin's — a require() of a
-// shared helper would fail to resolve in every workspace and break both the
-// link check and the drift check.
+// verify-links.js rather than shared: scaffold.js copies verify-links.js into
+// every workspace with only lib/untouchable.js beside it, and the drift
+// check above compares both copies byte-for-byte against the plugin's — a
+// require() of any other shared helper would fail to resolve in every
+// workspace and break both the link check and the drift check.
+// The skip list is WALK_SKIP_NAMES from lib/untouchable.js, handed in as the
+// second argument because this walk runs in its own `node -e` process and
+// cannot require the library: bare directory names matched at ANY depth, so a
+// nested knowledge/projects/ stays out of the scan exactly as before. Under
+// `node -e <src> a b`, process.argv[1] is `a` and process.argv[2] is `b`, so
+// `root` keeps its place.
 const leftover = spawnSync('node', ['-e', `
   const fs=require('fs'),path=require('path');let hits=0;
+  const SKIP=JSON.parse(process.argv[2]);
   function stripCode(t){return t.replace(/\`\`\`[\\s\\S]*?\`\`\`/g,m=>m.replace(/[^\\n]/g,' ')).replace(/\`[^\`\\n]*\`/g,m=>' '.repeat(m.length));}
   (function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){
-    if(e.isDirectory()){if(!['.git','node_modules','projects','docker-stack','keys','.venv','.superpowers'].includes(e.name))walk(path.join(d,e.name));}
+    if(e.isDirectory()){if(!SKIP.includes(e.name))walk(path.join(d,e.name));}
     else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(stripCode(fs.readFileSync(path.join(d,e.name),'utf8'))))hits++;}})(process.argv[1]);
-  console.log(hits);`, root], { encoding: 'utf8' });
+  console.log(hits);`, root, JSON.stringify(WALK_SKIP_NAMES)], { encoding: 'utf8' });
 check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
 
 // M3/K4-mech: run the plugin's own copy, never the workspace's — a stale or
