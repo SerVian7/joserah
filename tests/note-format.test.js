@@ -175,3 +175,81 @@ test('parseClaims: CRLF bodies and an arrow written as → parse the same', () =
 test('CLAIM_TYPES is the closed list from the design', () => {
   assert.deepStrictEqual(nf.CLAIM_TYPES, ['measurement', 'calculation', 'decision', 'estimate']);
 });
+
+// ---- the three silent ways a claim falls out of the audit (0.8.0) ----------
+// Each of these parsed clean and reported nothing: the type was wrong, the
+// separator was wrong, or the claim's own sentence was wrapped. findClaimAnomalies
+// is additive — parseClaims still returns exactly what it returned before.
+
+test('findClaimAnomalies: a near-miss type with claim fields under it is reported', () => {
+  const body = [
+    '# Page', '',
+    '- [claim] Widget throughput -> 40 per second',
+    '  date: 2026-09-12 · by: assistant · source: ../imports/x/run.log',
+    '',
+  ].join('\n');
+  const found = nf.findClaimAnomalies(body);
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(found[0].kind, 'unknown-claim-type');
+  assert.strictEqual(found[0].line, 3);
+  assert.match(found[0].detail, /\[claim\]/);
+  for (const t of nf.CLAIM_TYPES) assert.match(found[0].detail, new RegExp(t));
+  assert.deepStrictEqual(nf.parseClaims(body), []);
+});
+
+test('findClaimAnomalies: an ordinary observation with no claim fields under it is left alone', () => {
+  const body = [
+    '- [fact] owner works on the widget line',
+    '  a plain indented continuation, no field keys',
+    '- [preference] assistant writes in English',
+    '',
+  ].join('\n');
+  assert.deepStrictEqual(nf.findClaimAnomalies(body), []);
+});
+
+test('findClaimAnomalies: a field value that swallows the next key is reported', () => {
+  const body = [
+    '- [measurement] Widget weight -> 4 kg',
+    '  condition: bench scale',
+    '  date: 2026-09-12 - by: owner - source: ../imports/x/scale.log',
+    '',
+  ].join('\n');
+  const found = nf.findClaimAnomalies(body);
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(found[0].kind, 'swallowed-field');
+  assert.strictEqual(found[0].line, 3);
+  assert.match(found[0].detail, /by:/);
+  assert.match(found[0].detail, /·/);
+  // and the proof it matters: the audit only ever saw `date`
+  const [c] = nf.parseClaims(body);
+  assert.deepStrictEqual(Object.keys(c.fields), ['condition', 'date']);
+});
+
+test('findClaimAnomalies: a wrapped claim sentence that severs the fields is reported', () => {
+  const body = [
+    '- [decision] Widget ships on the later date because the earlier one',
+    '  collided with a holiday',
+    '  date: 2026-09-12 · by: owner',
+    '',
+  ].join('\n');
+  const found = nf.findClaimAnomalies(body);
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(found[0].kind, 'severed-claim');
+  assert.strictEqual(found[0].line, 2);
+  assert.match(found[0].detail, /line 1/);
+  const [c] = nf.parseClaims(body);
+  assert.deepStrictEqual(c.fields, {}); // exactly what the finding is about
+});
+
+test('findClaimAnomalies: well-formed claims, CRLF included, report nothing', () => {
+  const body = [
+    '- [measurement] Widget VRAM @65536 -> 20009 MiB',
+    '  condition: bench rig · runtime · Q4_K_M',
+    '  date: 2026-08-28 · by: owner · source: ../imports/x/server.log',
+    '- [calculation] ~~Widget context cost -> ~14x per token~~',
+    '  date: 2026-08-25 · by: assistant · superseded: the measurement above',
+    '',
+  ].join('\n');
+  assert.deepStrictEqual(nf.findClaimAnomalies(body), []);
+  assert.deepStrictEqual(nf.findClaimAnomalies(body.replace(/\n/g, '\r\n')), []);
+});

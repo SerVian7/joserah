@@ -52,6 +52,10 @@ it is and under what conditions it holds. It lives on the page of its subject.
   `condition` (mandatory for a measurement: hardware, engine, quantisation, settings), `date`,
   `by` (mandatory for every type), `source` (relative path or URL), `superseded` (what replaced a
   struck line).
+- **Two mechanical rules**, both silent when broken: fields sharing a line are separated by ` · `
+  and by nothing else — with any other separator the rest of the line is read as the first field's
+  value; and nothing may sit between a claim line and its field lines — the block ends at the first
+  line that is not a field, so a claim sentence wrapped onto a second line loses every field under it.
 - **Supersession**: a refuted claim is never deleted. Its text is wrapped in `~~…~~` and it gets a
   `superseded:` field naming the successor.
 
@@ -66,7 +70,9 @@ it is and under what conditions it holds. It lives on the page of its subject.
 The audit runs through `/joserah:doctor`, whose `typed claims consistent` line reports a
 measurement without conditions, a struck line without a successor, a calculation left beside a
 measurement of the same subject, and two live claims that contradict each other under the same
-conditions. The owner is never handed a command for this; the assistant runs it.
+conditions. It also reports the three ways a claim goes unread: a bracket category that is not
+one of the four types, a field line separated by something other than ` · `, and a line severing
+a claim from its fields. The owner is never handed a command for this; the assistant runs it.
 
 ## Learned-preference entries
 

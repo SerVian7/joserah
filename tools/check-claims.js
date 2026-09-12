@@ -8,12 +8,20 @@
  * without its conditions, a superseded line that names no successor, and a
  * calculation left standing next to a measurement of the same subject — the
  * last one is the exact shape of the failure the design was written for.
+ *
+ * Three more (0.8.0) are about the audit itself rather than about a fact: a
+ * near-miss type, a field line whose separator is not ` · `, and a claim whose
+ * own sentence was wrapped away from its fields. Each one hides a claim, or
+ * its fields, from every check above while this tool reports zero errors —
+ * which is the failure the typed-claim format exists to prevent, so each is an
+ * error. A warning would leave doctor passing a workspace whose claim audit is
+ * blind, and "0 errors" is precisely the sentence that must stop being true.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
-const { parseFrontmatter, parseClaims } = require('./lib/note-format');
+const { parseFrontmatter, parseClaims, findClaimAnomalies } = require('./lib/note-format');
 
 const args = process.argv.slice(2);
 const json = args.includes('--json');
@@ -34,6 +42,12 @@ for (const rel of scanWorkspace(root).files) {
   const offset = text.slice(0, text.length - body.length).split(/\r?\n/).length - 1;
   const claims = parseClaims(body).map((c) => ({ ...c, line: c.line + offset }));
   total += claims.length;
+
+  // First what the audit could not read at all: a claim counted here may be
+  // missing from `claims` entirely, and a claim present in it may be missing
+  // its fields, so these findings come before any judgement made from them.
+  for (const a of findClaimAnomalies(body)) add('error', rel, a.line + offset, a.kind, a.detail);
+
   const live = claims.filter((c) => !c.struck);
   const measured = new Set(live.filter((c) => c.type === 'measurement').map((c) => norm(c.subject)));
 

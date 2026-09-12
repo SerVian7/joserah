@@ -99,3 +99,82 @@ test('imports/ and projects/ are never scanned', (t) => {
   })]);
   assert.strictEqual(r.status, 0, r.stdout);
 });
+
+// ---- the audit no longer lies about what it could not read (0.8.0) ---------
+// Three shapes that used to report "0 errors" while the claims they carried
+// were never audited at all. Each is an error, not a warning: in all three the
+// tool's answer is wrong about itself, and doctor must not pass a workspace
+// whose claim audit is blind.
+
+test('a near-miss claim type is an error naming the four valid types', (t) => {
+  const note = [
+    '# Box', '',
+    '- [claim] Box throughput -> 40 per second',
+    '  date: 2026-09-12 · by: assistant',
+    '',
+  ].join('\n');
+  const r = runTool('check-claims.js', [ws(t, { '.joserah/knowledge/wiki/entities/box.md': note })]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /^error {2}\.joserah\/knowledge\/wiki\/entities\/box\.md:3 {2}unknown-claim-type/m);
+  assert.match(r.stdout, /measurement, calculation, decision, estimate/);
+});
+
+test('a field line written with the wrong separator is an error', (t) => {
+  const note = [
+    '# Box', '',
+    '- [measurement] Box weight -> 4 kg',
+    '  condition: kitchen scale',
+    '  date: 2026-09-12 - by: owner',
+    '',
+  ].join('\n');
+  const r = runTool('check-claims.js', [ws(t, { '.joserah/knowledge/wiki/entities/box.md': note })]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /^error {2}\.joserah\/knowledge\/wiki\/entities\/box\.md:5 {2}swallowed-field/m);
+});
+
+test('a wrapped claim sentence that severs its fields is an error', (t) => {
+  const note = [
+    '# Box', '',
+    '- [decision] Box stays on shelf A because shelf B is reserved',
+    '  for the other line',
+    '  date: 2026-09-12 · by: owner',
+    '',
+  ].join('\n');
+  const r = runTool('check-claims.js', [ws(t, { '.joserah/knowledge/wiki/entities/box.md': note })]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /^error {2}\.joserah\/knowledge\/wiki\/entities\/box\.md:4 {2}severed-claim/m);
+});
+
+test('the three blind spots are found together, and --json carries their kinds', (t) => {
+  const note = [
+    '# Box', '',
+    '- [claim] Box throughput -> 40 per second',
+    '  date: 2026-09-12 · by: assistant',
+    '- [measurement] Box weight -> 4 kg',
+    '  condition: kitchen scale',
+    '  date: 2026-09-12 - by: owner',
+    '- [decision] Box stays on shelf A because shelf B is reserved',
+    '  for the other line',
+    '  date: 2026-09-12 · by: owner',
+    '',
+  ].join('\n');
+  const dir = ws(t, { '.joserah/knowledge/wiki/entities/box.md': note });
+  const r = runTool('check-claims.js', [dir, '--json']);
+  assert.strictEqual(r.status, 1);
+  const out = JSON.parse(r.stdout);
+  const kinds = out.findings.filter((f) => f.file.endsWith('box.md')).map((f) => f.kind);
+  assert.ok(kinds.includes('unknown-claim-type'), JSON.stringify(kinds));
+  assert.ok(kinds.includes('swallowed-field'), JSON.stringify(kinds));
+  assert.ok(kinds.includes('severed-claim'), JSON.stringify(kinds));
+  for (const f of out.findings.filter((f) => f.file.endsWith('box.md'))) {
+    if (['unknown-claim-type', 'swallowed-field', 'severed-claim'].includes(f.kind)) {
+      assert.strictEqual(f.level, 'error');
+    }
+  }
+});
+
+test('the five original finding kinds are unchanged by the new ones', (t) => {
+  const r = runTool('check-claims.js', [ws(t, { '.joserah/knowledge/wiki/entities/box.md': GOOD })]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /0 error\(s\), 0 warning\(s\) in 4 claim\(s\)/);
+});

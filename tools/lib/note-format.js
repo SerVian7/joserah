@@ -183,6 +183,98 @@ function parseClaims(body) {
   return out;
 }
 
+// The three ways a claim can fall out of parseClaims without anyone noticing
+// (found 2026-09-12 on real reports: 33 numbers that the audit never saw while
+// it reported zero errors). Each is a failure of the audit to READ the record,
+// not a judgement about the fact in it, so each is detected here — beside the
+// parser whose blind spots they are — and reported by check-claims.js.
+// parseClaims itself is untouched: it still returns exactly the claims it
+// always returned, and this is a second, purely descriptive pass.
+//
+//  1. A near-miss type. `- [claim] …` is a plausible word and not one of the
+//     four types, so the line is not a claim at all and neither it nor its
+//     fields ever reach the audit. The evidence that one was intended: the
+//     lines under it use the claim field keys.
+//  2. A swallowed field. Fields sharing a line are separated by ` · ` and by
+//     nothing else; written `date: … - by: …` the whole tail is read as the
+//     value of `date`, and `by:`/`source:` simply do not exist — including for
+//     the checks that make `by:` mandatory.
+//  3. A severed claim. The block ends at the first line that is not a field,
+//     so a claim sentence wrapped onto a second line cuts off its own fields.
+//
+// A line that ends the run (blank, a new bullet, a heading, a fence, a table
+// or quote line) ends the scan: past it there is no claim block left to damage.
+const OBS_CLAIMISH_RE = /^(\s*)-\s+\[([A-Za-z][A-Za-z0-9_-]*)\]\s+(.+?)\s*$/;
+const CLAIM_KEY_IN_VALUE_RE = /(?:^|[\s·])(condition|date|by|source|superseded):(?:\s|$)/;
+const BLOCK_BREAK_RE = /^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|~~~|---\s*$)/;
+
+// The key a field line's own value has eaten, or null. The split performed
+// here is the one parseClaims performs, so what is tested is exactly what
+// parseClaims stored: a key surviving inside a stored value was never a field.
+function swallowedKeyOf(fieldMatch) {
+  for (const part of `${fieldMatch[2]}: ${fieldMatch[3]}`.split(CLAIM_FIELD_SPLIT_RE)) {
+    const kv = /^(condition|date|by|source|superseded):\s*(.*)$/.exec(part.trim());
+    if (!kv) continue;
+    const m = CLAIM_KEY_IN_VALUE_RE.exec(kv[2]);
+    if (m) return { holder: kv[1], eaten: m[1] };
+  }
+  return null;
+}
+
+function findClaimAnomalies(body) {
+  const out = [];
+  const lines = body.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const m = OBS_CLAIMISH_RE.exec(lines[i]);
+    if (!m) continue;
+    const indent = m[1].length;
+    const fieldAt = (j) => {
+      const f = CLAIM_FIELD_LINE_RE.exec(lines[j]);
+      return f && f[1].length > indent ? f : null;
+    };
+    const runEnds = (j) => j >= lines.length || !lines[j].trim() || BLOCK_BREAK_RE.test(lines[j]);
+
+    if (!CLAIM_TYPES.includes(m[2])) {
+      for (let j = i + 1; !runEnds(j); j++) {
+        if (!fieldAt(j)) continue;
+        out.push({
+          kind: 'unknown-claim-type',
+          line: i + 1,
+          detail: `[${m[2]}] is not a claim type, so this line and the fields under it never reach the audit — the four types are ${CLAIM_TYPES.join(', ')}`,
+        });
+        break;
+      }
+      continue;
+    }
+
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const f = fieldAt(j);
+      if (!f) break;
+      const s = swallowedKeyOf(f);
+      if (s) {
+        out.push({
+          kind: 'swallowed-field',
+          line: j + 1,
+          detail: `the ${s.holder}: value swallows ${s.eaten}: — fields on one line are separated by " · " and by nothing else, so everything from ${s.eaten}: onwards was read as part of ${s.holder}:`,
+        });
+      }
+    }
+    if (!runEnds(j)) {
+      for (let k = j + 1; !runEnds(k); k++) {
+        if (!fieldAt(k)) continue;
+        out.push({
+          kind: 'severed-claim',
+          line: j + 1,
+          detail: `this line interrupts the claim on line ${i + 1} — the block ends at the first line that is not a field, so every field below it is lost; a claim and its fields are never interrupted`,
+        });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 function extractWikilinks(text) {
   const seen = [];
   for (const m of text.matchAll(WIKILINK_RE)) {
@@ -459,6 +551,6 @@ function renderFeedbackNote(fields, forbidden) {
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
   extractWikilinks, renderRelations, FORMAT_VERSION, stripCode, detectEol,
-  CLAIM_TYPES, CLAIM_FIELDS, parseClaims,
+  CLAIM_TYPES, CLAIM_FIELDS, parseClaims, findClaimAnomalies,
   roleFor, FEEDBACK_AREAS, scanForIdentifiers, renderFeedbackNote,
 };

@@ -221,6 +221,24 @@ changed with it — prompt **v3**, whose opening no longer sends a session off t
 open files it has already been handed — so this is both a plugin update and a
 `/joserah:update` of the prompt.
 
+### Upgrading to 0.8.0
+
+The claim audit no longer reports "0 errors" about lines it could not read.
+Three ways a claim used to fall out of `check-claims.js` in silence are now
+errors: a bracket category that is not one of the four types but carries claim
+fields under it (`unknown-claim-type`), a field line whose fields are separated
+by something other than ` · `, which makes the first field swallow the rest
+(`swallowed-field`), and a line sitting between a claim and its field lines —
+usually the claim's own sentence wrapped — which cuts every field off from it
+(`severed-claim`). Each one hid a claim, or its fields, from every existing
+check while the tool declared the file clean, so each fails `/joserah:doctor`
+until it is fixed; nothing is rewritten for you and no line is guessed at. Run
+`/joserah:doctor` after updating: a workspace that passed before may now have
+claims to repair, which means those facts were never being audited. The
+standing prompt is unchanged, still version 3, so this is a plugin update and
+not a `/joserah:update` of the prompt — the conventions file gains the two
+mechanical rules and travels with the workspace as usual.
+
 ## Requirements
 
 - Claude Code
