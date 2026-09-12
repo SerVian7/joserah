@@ -260,12 +260,26 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- prompt v2 -----------------------------------------------------------------
 
-test('prompt v2 carries the claim-line obligations, the role default, and names no third-party skill', () => {
+test('prompt v3 carries the claim-line obligations, the role default, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 2);
+  assert.strictEqual(prompt.readPromptVersion(text), 3);
   assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);
   assert.match(text, /the measurement speaks/);
   assert.match(text, /default role .* is the brain/i);
   assert.doesNotMatch(text, /superpowers/i, 'Joserah names no third-party plugin (owner, 2026-09-12)');
   assert.doesNotMatch(text, /(^|[^a-z])raw\//m, 'the source folder is imports/');
+});
+
+// 0.7.0: the role file and the workspace's directives are injected at session
+// start. A prompt that still sends the session off to open them is telling it
+// to fetch text it was already handed — wasteful, and confusing about which
+// copy is authoritative.
+test('the prompt does not send a session to open the two layers it is already given', () => {
+  const text = fs.readFileSync(TEMPLATE, 'utf8');
+  const head = text.slice(0, text.indexOf('## 1.'));
+  assert.doesNotMatch(head, /Read next/, 'the "read next" instruction is what changed');
+  assert.match(head, /injected/, 'it has to say the two layers are already in context');
+  assert.match(head, /JOSERAH-ROLE\.md/);
+  assert.match(head, /directives\.md/);
+  assert.match(head, /Directives win/, 'which layer wins is still stated');
 });

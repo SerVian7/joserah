@@ -536,3 +536,36 @@ test('doctor reports the claim count on a clean workspace', (t) => {
   const r = runTool('doctor.js', [freshWs(t)]);
   assert.match(r.stdout, /^ok {4}typed claims consistent {2}— 0 error\(s\), 0 warning\(s\) in \d+ claim\(s\)/m);
 });
+
+// ---- the standing context has a size, and the owner hears about it (0.7.0) ---
+// The directives file belongs to the owner and grows. Every character of it is
+// now paid for at the start of every session, so the size is reported on every
+// run and warned about before it is large enough to be cut.
+
+test('doctor reports the size of the standing context on a healthy workspace', (t) => {
+  const r = runTool('doctor.js', [freshWs(t)]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^ok\s+standing context size\s+— \d+ characters/m);
+  assert.match(r.stdout, /AGENTS\.md \d+/, 'the breakdown names what is paying for it');
+});
+
+test('doctor warns, without failing, once the standing context passes the threshold', (t) => {
+  const dir = freshWs(t);
+  fs.writeFileSync(path.join(dir, '.joserah', 'directives.md'),
+    '# Directives — w\n\n## Scope\n\n' + '- a standing rule that is here to take up room.\n'.repeat(200));
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^warn\s+standing context size\s+— \d+ characters/m);
+  assert.match(r.stdout, /\.joserah\/directives\.md/);
+  assert.match(r.stdout, /1 warning\(s\)\./);
+});
+
+// The warning has to arrive while every layer is still whole: a threshold that
+// only trips after the hook has already started cutting text would tell the
+// owner about it after it hurt, which is the failure this change exists to fix.
+test('the size warning trips before any layer is long enough to be cut', () => {
+  const { MAX_LAYER_CHARS, WARN_TOTAL_CHARS } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'standing-context'));
+  const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8').length;
+  assert.ok(agents + MAX_LAYER_CHARS > WARN_TOTAL_CHARS,
+    'a file at the cap must already have tripped the warning');
+});

@@ -29,6 +29,10 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { denyFor, hostPathsFor, defaultTrustFor } = require('./permission-deny');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./note-format');
+// The standing layers the session-start hook injects, and what they cost: the
+// size check below must measure exactly what a session is handed, so it asks
+// the hook's own library rather than re-deriving it here.
+const { standingContextSize, WARN_TOTAL_CHARS } = require('../../hooks/lib/standing-context');
 
 // The two result shapes, named as they were when they pushed onto doctor's own
 // array — so the body of a check reads here exactly as it read there.
@@ -330,6 +334,34 @@ const CHECKS = [
           hasMarker ? '' : 'missing — the session-start hook injects only text below this marker, so nothing in this file reaches any session right now');
       }
       return null;
+    },
+  },
+
+  {
+    id: 'standing-context-size',
+    remedies: [
+      {
+        key: '`standing context size` warn',
+        text: 'Nothing is broken: it means every session now starts by reading more than it comfortably should, before a word of the actual work. Say the number in plain words and offer to prune `.joserah/directives.md` — keep the rules that must hold in *every* session, move the detail into `.joserah/knowledge/` notes that can be read when they are needed, and delete what stopped being true. Never edit that file without the owner: it is theirs. Left alone it eventually passes the injector\'s per-file cap, and a file over that cap arrives cut short (with a `[cut]` line saying so).',
+      },
+    ],
+    // 0.7.0: JOSERAH-ROLE.md and .joserah/directives.md are injected into every
+    // session instead of being pointed at. The directives file is the owner's
+    // and grows, and nothing else in the workspace would ever tell them what
+    // that costs — so the size of everything a session is handed before it
+    // starts is reported on every run, and warned about while every layer is
+    // still whole (see WARN_TOTAL_CHARS, which is deliberately below
+    // "AGENTS.md + one file at the cap"). Informational, never a failure: a
+    // long rule set is the owner's own call, not a broken workspace.
+    run({ root }) {
+      const { total, parts } = standingContextSize(root);
+      const breakdown = parts.map(([name, len]) => `${name} ${len}`).join(', ');
+      const detail = `${total} characters reach every session before any work (${breakdown})`;
+      if (total > WARN_TOTAL_CHARS) {
+        return warn('standing context size',
+          `${detail} — past ${WARN_TOTAL_CHARS}; prune .joserah/directives.md, keeping only what must hold in every session`);
+      }
+      return check('standing context size', true, detail);
     },
   },
 

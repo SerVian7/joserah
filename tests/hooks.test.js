@@ -258,3 +258,121 @@ test('session-start reports a newer plugin in the marketplace clone without touc
   assert.ok(ctx.includes(`[update] Joserah plugin 99.0.0 is available (installed: ${installed})`), ctx);
   assert.doesNotMatch(ctx, /refreshed to prompt/);
 });
+
+// ---- the two standing layers are injected, not pointed at (0.7.0) ------------
+// Until 0.7.0 the role file and the workspace's directives were only named by
+// AGENTS.md's "read next" sentence. A session either opened them or did not,
+// and the owner's own rules were in force only in the sessions that did. They
+// are now injected like every other layer, so "in force" no longer depends on
+// the assistant's choice.
+
+function writeDirectives(dir, body) {
+  fs.writeFileSync(path.join(dir, '.joserah', 'directives.md'),
+    `# Directives — w\n\n## Scope\n\n${body}\n`);
+}
+
+test('session-start injects the role file and the workspace directives', (t) => {
+  const dir = hookWs(t);
+  writeDirectives(dir, '- Never mail anyone but the counterparty named here.');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /JOSERAH-ROLE\.md/);
+  assert.match(ctx, /There is no ambiguity to resolve/, 'the role file arrives in full');
+  assert.match(ctx, /\.joserah\/directives\.md/);
+  assert.match(ctx, /Never mail anyone but the counterparty named here/);
+  // Order: the role supplements AGENTS.md and comes first; the directives win
+  // over everything above them and are read last of the standing layers.
+  assert.ok(ctx.indexOf('JOSERAH-ROLE.md') < ctx.indexOf('## This workspace'),
+    'the role block comes before the workspace block');
+  assert.ok(ctx.indexOf('.joserah/directives.md') > ctx.indexOf('## This workspace'),
+    'the directives come after the workspace block');
+  assert.ok(ctx.indexOf('.joserah/directives.md') < ctx.indexOf('## Right now'),
+    'the directives come before the computed block');
+});
+
+// A workspace several people reach carries a different role file, and a hosted
+// one carries its own directives: nothing here may assume the layout of the
+// workspace it was developed in.
+test('a shared workspace is injected its own server role, a hosted one its own directives', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--kind', 'shared']);
+  writeDirectives(dir, '- Answer only within what the asker is permitted to see.');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Records here are shared/, 'the server role, not the client one');
+  assert.doesNotMatch(ctx, /There is no ambiguity to resolve/);
+  assert.match(ctx, /Answer only within what the asker is permitted to see/);
+
+  const hosted = path.join(tmpdir(t), 'hosted');
+  runTool('scaffold.js', ['--target', hosted, '--workspace', 'h', '--kind', 'hosted']);
+  writeDirectives(hosted, '- The host never speaks for the owner.');
+  const hostedCtx = JSON.parse(runHook('session-start.js', hosted).stdout).hookSpecificOutput.additionalContext;
+  assert.match(hostedCtx, /The host never speaks for the owner/);
+  assert.match(hostedCtx, /There is no ambiguity to resolve/, 'a hosted workspace still has one owner');
+});
+
+test('session-start says nothing when either file is missing', (t) => {
+  const dir = hookWs(t);
+  fs.rmSync(path.join(dir, 'JOSERAH-ROLE.md'));
+  fs.rmSync(path.join(dir, '.joserah', 'directives.md'));
+
+  const r = runHook('session-start.js', dir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /JOSERAH-ROLE\.md/, 'no empty block, no placeholder');
+  assert.doesNotMatch(ctx, /\.joserah\/directives\.md/);
+  assert.match(ctx, /## This workspace/, 'the rest of the briefing is unaffected');
+});
+
+test('session-start says nothing for an empty directives file', (t) => {
+  const dir = hookWs(t);
+  fs.writeFileSync(path.join(dir, '.joserah', 'directives.md'), '\n   \n');
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /\.joserah\/directives\.md/);
+});
+
+// A freshly scaffolded workspace ships the directives skeleton: explanation,
+// three headings, and HTML comments telling the owner what to write under
+// each. That is not a rule, and injecting it spends context on instructions
+// addressed to the owner — the assistant would be reading an empty form.
+test('session-start does not inject the untouched directives skeleton', (t) => {
+  const dir = hookWs(t);
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /\.joserah\/directives\.md/);
+  assert.doesNotMatch(ctx, /Who the assistant is in this workspace/,
+    'the authoring comments must never reach a session');
+
+  // One rule written under a heading is enough to make the file real.
+  fs.appendFileSync(path.join(dir, '.joserah', 'directives.md'),
+    '\n- Weekly report goes out on Friday, never before.\n');
+  const after = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(after, /Weekly report goes out on Friday/);
+});
+
+// A silently truncated rule is worse than no rule: this is the exact failure
+// the whole change exists to fix, so the cut has to be announced.
+test('session-start cuts an over-long directives file and says so in the text', (t) => {
+  const dir = hookWs(t);
+  writeDirectives(dir, '- First rule, at the top.\n\n' + 'filler line to make this file long.\n'.repeat(400) +
+    '\n- LAST-RULE-MARKER, past the cap.');
+
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /First rule, at the top/);
+  assert.doesNotMatch(ctx, /LAST-RULE-MARKER/, 'the tail is past the cap');
+  assert.match(ctx, /\[cut\]/, 'the model is told the text was cut');
+  assert.match(ctx, /character\(s\) of it were not injected/i);
+  assert.match(ctx, /\.joserah\/directives\.md/);
+});
+
+test('a role file is capped the same way, and nothing short of the cap is touched', (t) => {
+  const dir = hookWs(t);
+  const role = path.join(dir, 'JOSERAH-ROLE.md');
+  const original = fs.readFileSync(role, 'utf8');
+  let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes(original.trim().replace(/\r\n/g, '\n')), 'a normal role file arrives whole');
+
+  fs.writeFileSync(role, original + '\nX'.repeat(12000) + '\nROLE-TAIL-MARKER\n');
+  ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /ROLE-TAIL-MARKER/);
+  assert.match(ctx, /\[cut\] JOSERAH-ROLE\.md/);
+});

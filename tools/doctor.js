@@ -14,10 +14,10 @@ const { resolvePromptSource, promptState } = require('./lib/prompt');
 const { WALK_SKIP_NAMES } = require('./lib/untouchable');
 const { CHECKS } = require('./lib/doctor-checks');
 
-// Duplicated from hooks/session-start.js (a script, not a module, so it has
-// nothing to require) — the exact byte sequence the session-start hook
-// looks for before it will inject anything from .joserah/agent.md at all.
-const AGENT_OVERLAY_MARKER = '<!-- joserah:agent-overlay-below -->';
+// The exact byte sequence the session-start hook looks for before it will
+// inject anything from .joserah/agent.md at all — taken from the hook's own
+// library, so this can no longer drift from what the hook actually does.
+const { AGENT_OVERLAY_MARKER } = require('../hooks/lib/standing-context');
 
 // Shared by every check that byte-compares a plugin-owned file against
 // its canonical copy or template (JOSERAH-ROLE.md, verify-links.js): a

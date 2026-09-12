@@ -1,12 +1,15 @@
-<!-- joserah:prompt-version 2 -->
+<!-- joserah:prompt-version 3 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic. **Identical in
 > every Joserah workspace** and replaced wholesale by the plugin's `refresh-prompt` tool — never
-> hand-edit it; a rule that belongs to one workspace goes in its directives. Read next:
-> **[JOSERAH-ROLE.md](JOSERAH-ROLE.md)** — who you are talking to, from the workspace's `kind` —
-> then **[.joserah/directives.md](.joserah/directives.md)**, this workspace's own standing rules,
-> never touched by an update, and **`.joserah/config.json`**, its identity. Directives win.
+> hand-edit it; a rule that belongs to one workspace goes in its directives. Two further layers
+> are **already in your context**, injected at the start of this session, so do not go looking for
+> them: **[JOSERAH-ROLE.md](JOSERAH-ROLE.md)** — who you are talking to, from the workspace's
+> `kind` — and **[.joserah/directives.md](.joserah/directives.md)**, this workspace's own standing
+> rules, never touched by an update. **Directives win.** Open either file only if it did not
+> reach you, or if what reached you carries a `[cut]` line saying it was shortened. The
+> workspace's identity is in **`.joserah/config.json`** (§1).
 
 ## 1. Who you are here
 

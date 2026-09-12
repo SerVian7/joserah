@@ -11,6 +11,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('./lib/workspace');
+const { roleBlock, directivesBlock, agentOverlayBody } = require('./lib/standing-context');
 
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
@@ -202,19 +203,33 @@ const cfg = readConfig(ROOT) || {};
 const staleness = backupStalenessLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
-// Context arrives in four layers, and the order is deliberate — it is how the
-// model weighs what it reads:
+// Context arrives in layers, and the order is deliberate — it is how the
+// model weighs what it reads. Each one is more specific than the one above it,
+// and the last is true only of this moment:
 //   1. AGENTS.md   the system prompt: the same in every workspace, never varies.
-//   2. this block   what is TRUE of this workspace: who it belongs to, who you
+//   2. role block   JOSERAH-ROLE.md — who you are talking to, from the
+//                   workspace's `kind`. Supplements AGENTS.md, so it is read
+//                   directly after it.
+//   3. this block   what is TRUE of this workspace: who it belongs to, who you
 //                   are in it, what language, what you may touch.
-//   3. agent block  the owner's overlay on the assistant's default character
-//                   (layer 4 below) — empty unless the owner wrote to it.
-//   4. next block   what happens to be true RIGHT NOW: the date, open tasks,
+//   4. agent block  the owner's overlay on the assistant's default character
+//                   — empty unless the owner wrote to it.
+//   5. directives   .joserah/directives.md — the owner's own standing rules,
+//                   which win over AGENTS.md and over everything above them,
+//                   so they are the last standing layer and are read last.
+//   6. next block   what happens to be true RIGHT NOW: the date, open tasks,
 //                   today's journal — computed per session, true of no other.
-// Identity belongs in layer 2 and is injected, never left to AGENTS.md to be
+// Identity belongs in layer 3 and is injected, never left to AGENTS.md to be
 // read: a file the model may or may not open cannot override the name it
 // already believes it has. On 2026-08-30 an assistant with
 // `assistantName: "Rıfkı"` on record still introduced itself as Claude.
+// Layers 2 and 5 are injected for the same reason and were not always: until
+// 0.7.0 AGENTS.md only *pointed* at those two files, and measuring real
+// session transcripts showed that a pointed-at file is usually never opened —
+// which meant a workspace's own rules were in force only in the sessions that
+// happened to go and read them. Both files are the workspace's own, never the
+// plugin's: one is written at scaffold time from the role template that
+// matches `kind`, the other is the owner's and nothing here ever writes it.
 const who = [];
 if (cfg.assistantName) {
   who.push(`**Your name in this workspace is ${cfg.assistantName}.** Introduce yourself as ${cfg.assistantName} — never as the model or tool you happen to be running on.`);
@@ -228,15 +243,24 @@ who.push('They are the owner, **not a developer of this software**: do not volun
 if (cfg.trust === 'guest') {
   who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
 }
-// Layer 2 first, then layer 3, then layer 4. What is true of this workspace
-// outranks what is true only of this moment, so it is read first and never
-// buried under a date.
-const parts = [
+// In the order above. What is true of this workspace outranks what is true
+// only of this moment, so it is read first and never buried under a date.
+// Every block that reads a file is skipped whole when that file is missing,
+// empty, or still the skeleton it shipped as — an empty heading would spend
+// context saying nothing, and doctor is what reports a file that should exist
+// and does not.
+const parts = [];
+
+const role = roleBlock(ROOT);
+if (role) parts.push(role.trim());
+
+parts.push(
   '## This workspace',
   who.join('\n'),
-];
+);
 
-// Layer 4 — the owner's overlay on the assistant's default character. Shipped
+// Layer 4 (see the list above) — the owner's overlay on the assistant's
+// default character. Shipped
 // empty; injected only when it has real content, so an untouched workspace
 // spends no context on it. Detection is a wording-independent marker, never
 // a comparison against the plugin's own template file: an earlier version of
@@ -254,11 +278,16 @@ const parts = [
 // file) means there is no reliable boundary between explanation and rule,
 // so nothing is injected — silence is the safe default for an owner who
 // never asked for any of this, not a guess at which lines are "prose".
-const AGENT_MARKER = '<!-- joserah:agent-overlay-below -->';
-const agentText = readText(path.join(ROOT, '.joserah', 'agent.md'));
-const agentMarkerAt = agentText.lastIndexOf(AGENT_MARKER);
-const agentBody = agentMarkerAt === -1 ? '' : agentText.slice(agentMarkerAt + AGENT_MARKER.length).trim();
+// (The marker and this read live in lib/standing-context.js, beside the other
+// two per-workspace layers and the doctor check that measures all of them —
+// still a workspace-relative read, with no path into the plugin tree.)
+const agentBody = agentOverlayBody(ROOT);
 if (agentBody) parts.push('\n## This assistant\n' + agentBody);
+
+// Layer 5 — the owner's own standing rules. Last of the standing layers
+// because they win over every one of them, AGENTS.md included.
+const directives = directivesBlock(ROOT);
+if (directives) parts.push(directives);
 
 parts.push(
   `\n## Right now (computed for this session)`,

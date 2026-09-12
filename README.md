@@ -204,6 +204,23 @@ registry, and a test holds the doctor skill's remedy table to it. The
 standing prompt is unchanged, still version 2, so this is a plugin update
 and not a `/joserah:update` of the prompt.
 
+### Upgrading to 0.7.0
+
+Two layers that every session was only *told to read* are now put in front of
+it: the workspace's role file (`JOSERAH-ROLE.md`) and its own standing rules
+(`.joserah/directives.md`) are injected at session start, in full, alongside
+the rest of the briefing. They were pointed at before, and a pointed-at file is
+usually never opened — which meant a workspace's own written rules were in
+force only in the sessions that happened to go and fetch them. Nothing of
+yours is rewritten: the directives file is never touched, and an untouched
+skeleton, an empty file or a missing one still adds nothing to a session. A
+file long enough to be shortened arrives with a `[cut]` line saying exactly how
+much was left out, and `/joserah:doctor` now prints `standing context size` on
+every run and warns before any file gets that long. The standing instructions
+changed with it — prompt **v3**, whose opening no longer sends a session off to
+open files it has already been handed — so this is both a plugin update and a
+`/joserah:update` of the prompt.
+
 ## Requirements
 
 - Claude Code
