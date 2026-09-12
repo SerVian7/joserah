@@ -183,6 +183,14 @@ byte-identical to a known prompt, and `/joserah:update` walks the owner
 through the rest when it is not. A newer *plugin* is still only announced —
 that update, and the restart after it, stay the owner's.
 
+### Upgrading to 0.5.0
+
+Source material now lands in `imports/` instead of `raw/`; doctor flags a
+root `raw/` and `tools/relocate-imports.js` moves it and rewrites the links.
+`raw/` stays recognised, so older workspaces keep working. Notes now carry
+typed claim lines — `measurement`, `calculation`, `decision`, `estimate` —
+audited by `tools/check-claims.js` in doctor. The prompt moves to version 2.
+
 ## Requirements
 
 - Claude Code
