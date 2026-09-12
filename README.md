@@ -191,6 +191,19 @@ root `raw/` and `tools/relocate-imports.js` moves it and rewrites the links.
 typed claim lines — `measurement`, `calculation`, `decision`, `estimate` —
 audited by `tools/check-claims.js` in doctor. The prompt moves to version 2.
 
+### Upgrading to 0.6.0
+
+One library now says which paths a tool may not walk into
+(`tools/lib/untouchable.js`), and the workspace's own copy of the link
+checker travels with it — `/joserah:doctor` reports it stale if either
+file drifts, and `/joserah:update` copies both. One command,
+`tools/relocate.js`, carries a workspace from any earlier source-material
+layout to `imports/`. The backup skill gets its scope from
+`tools/backup-scope.js` instead of restating it. Doctor's checks are a
+registry, and a test holds the doctor skill's remedy table to it. The
+standing prompt is unchanged, still version 2, so this is a plugin update
+and not a `/joserah:update` of the prompt.
+
 ## Requirements
 
 - Claude Code

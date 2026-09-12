@@ -53,3 +53,24 @@ without a bump reaches no existing workspace (doctor reports it as
 `prompt source drift`). The plugin's own version bumps only when code changes:
 hooks, tools, skills, other templates. Run `node --test tests/*.test.js`
 before every release.
+
+## Releasing
+
+The plugin's version lives in three hand-written places and they must agree:
+
+- `.claude-plugin/plugin.json` → `version`
+- `.claude-plugin/marketplace.json` → `metadata.version`
+- `.claude-plugin/marketplace.json` → `plugins[0].version`
+
+To cut a release: change all three to the new number, add a
+`### Upgrading to <version>` section to `README.md` saying what changed for
+someone who already has a workspace, then run `node --test tests/*.test.js`.
+`tests/version.test.js` fails if the three disagree, and fails if the release
+note for the current number is missing — three numbers that were all forgotten
+together agree with each other perfectly, so the note is the part that cannot
+be satisfied by copying.
+
+The prompt's version (`templates/AGENTS.md`, line 1) is separate and bumps only
+when that file's text changes; see above. A release that changes only the
+prompt reaches workspaces through `/joserah:update`; one that changes code
+needs a plugin update.
