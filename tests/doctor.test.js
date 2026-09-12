@@ -334,7 +334,7 @@ test('doctor warns about the legacy knowledge/raw location, exit stays 0', (t) =
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);
   assert.match(r.stdout, /^warn {2}.*legacy .*knowledge\/raw/m);
-  assert.match(r.stdout, /relocate-raw/, 'points at the migration tool');
+  assert.match(r.stdout, /relocate\.js/, 'points at the one migration command');
 });
 
 test('doctor warns about a root raw/ (pre-2026-09-12 layout), exit stays 0', (t) => {
@@ -344,7 +344,7 @@ test('doctor warns about a root raw/ (pre-2026-09-12 layout), exit stays 0', (t)
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);
   assert.match(r.stdout, /^warn {2}.*legacy raw\/ at the workspace root/m);
-  assert.match(r.stdout, /relocate-imports/, 'points at the migration tool');
+  assert.match(r.stdout, /relocate\.js/, 'points at the one migration command');
 });
 
 test('doctor warns when a project directory has no repository of its own', (t) => {

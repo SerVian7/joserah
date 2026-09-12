@@ -173,15 +173,17 @@ let trust = null;
     legacy ? 'legacy layout — credentials moved to keys/ in 0.3.0; see the doctor skill\'s Migrate section' : '');
 }
 
-// Source material used to live under .joserah/knowledge/raw; tasks 1-4 moved
-// it to raw/ at the workspace root. This is a warning, not a failure: nothing
-// is broken by leftover files here, but they are stray and easy to miss since
-// nothing else in the workspace still reads this location.
+// Source material used to live under .joserah/knowledge/raw, and later at
+// raw/ in the workspace root; today it lives at imports/. One command,
+// relocate.js, carries a workspace from either old location to today's. This
+// is a warning, not a failure: nothing is broken by leftover files here, but
+// they are stray and easy to miss since nothing else in the workspace still
+// reads this location.
 {
   const legacyRaw = path.join(root, '.joserah', 'knowledge', 'raw');
   if (fs.existsSync(legacyRaw) && fs.readdirSync(legacyRaw).length) {
     warn('legacy .joserah/knowledge/raw present',
-      `source material now lives in imports/ at the workspace root — run: node tools/relocate-raw.js ${root} and then node tools/relocate-imports.js ${root}`);
+      `source material now lives in imports/ at the workspace root — run: node tools/relocate.js ${root}`);
   }
 }
 
@@ -192,7 +194,7 @@ let trust = null;
   const legacyRootRaw = path.join(root, 'raw');
   if (fs.existsSync(legacyRootRaw) && fs.readdirSync(legacyRootRaw).some((e) => e !== 'README.md')) {
     warn('legacy raw/ at the workspace root',
-      `source material now lives in imports/ — run: node tools/relocate-imports.js ${root}`);
+      `source material now lives in imports/ — run: node tools/relocate.js ${root}`);
   }
 }
 
