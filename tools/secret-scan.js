@@ -18,7 +18,7 @@ const { isOwnRepoRoot } = require('./lib/git-root');
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const staged = process.argv.includes('--staged');
-const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'raw', 'node_modules', '.git',
+const SKIP = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', 'node_modules', '.git',
   '.venv', '.superpowers', 'dist', 'build'];
 const TEXT_EXT = new Set(['.md', '.json', '.txt', '.yml', '.yaml', '.toml']);
 

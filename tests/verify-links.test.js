@@ -59,25 +59,65 @@ test('a genuinely mistyped raw/ citation is still caught when raw/ IS present', 
   assert.match(r.stdout, /statement\.pdf/);
 });
 
-// Regression: --root-shell-only writing raw/README.md (added so a restored
-// workspace gets the folder's explanation) materialises raw/ on disk, which
+test('root imports/ is not scanned — imported snapshots carry historical links', (t) => {
+  const d = ws(t, { 'imports/2026-09-09-x/note.md': '[gone](nope.md)\n', 'ok.md': 'hi\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
+test('a wiki citation into imports/ is not broken when imports/ is absent (a clone before any import)', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../imports/2026-09-09-x/statement.pdf)\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});
+
+test('a mistyped imports/ citation is still caught when imports/ IS present', (t) => {
+  const d = ws(t, {
+    '.joserah/knowledge/wiki/topics/x.md': '[source](../../../../imports/2026-09-09-x/statement.pdf)\n',
+    'imports/2026-09-09-x/other-file.md': 'x\n',
+  });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 1, r.stdout);
+  assert.match(r.stdout, /statement\.pdf/);
+});
+
+// Regression: --root-shell-only writing imports/README.md (added so a restored
+// workspace gets the folder's explanation) materialises imports/ on disk, which
 // used to flip a bare fs.existsSync check back to "present" and re-break
 // every citation into it — undoing the fix above on exactly the restore
 // route skills/backup/SKILL.md's own restore step exercises (doctor →
 // --root-shell-only → re-run doctor). This walks that actual order.
-test('--root-shell-only writing raw/README.md does not re-break a raw/ citation on restore', (t) => {
+test('--root-shell-only writing imports/README.md does not re-break an imports/ citation on restore', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', d, '--workspace', 'w']);
+  fs.mkdirSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics', 'x.md'),
+    '# X\n\n[source](../../../../imports/statement.pdf)\n');
+  // simulate a restore that never carried imports/ at all:
+  fs.rmSync(path.join(d, 'imports'), { recursive: true, force: true });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0, 'clean before --root-shell-only');
+
+  const rso = runTool('scaffold.js', ['--root-shell-only', '--target', d]);
+  assert.strictEqual(rso.status, 0, rso.stderr);
+  assert.ok(fs.existsSync(path.join(d, 'imports', 'README.md')), 'precondition: imports/README.md now exists');
+
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout + ' — an imports/ holding only its own template README.md must still count as absent');
+});
+
+// The same tolerance on the legacy root raw/, which the scaffold no longer
+// writes: a workspace that has not run relocate-imports.js still has one, and
+// a raw/ holding nothing but its own old template README.md carries no source
+// material, so every citation into it must stay green.
+test('a legacy raw/ holding only its own README.md still counts as absent', (t) => {
   const d = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', d, '--workspace', 'w']);
   fs.mkdirSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics'), { recursive: true });
   fs.writeFileSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics', 'x.md'),
     '# X\n\n[source](../../../../raw/imports/statement.pdf)\n');
-  // simulate a restore that never carried raw/ at all:
-  fs.rmSync(path.join(d, 'raw'), { recursive: true, force: true });
-  assert.strictEqual(runTool('verify-links.js', [d]).status, 0, 'clean before --root-shell-only');
-
-  const rso = runTool('scaffold.js', ['--root-shell-only', '--target', d]);
-  assert.strictEqual(rso.status, 0, rso.stderr);
-  assert.ok(fs.existsSync(path.join(d, 'raw', 'README.md')), 'precondition: raw/README.md now exists');
+  fs.mkdirSync(path.join(d, 'raw'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'raw', 'README.md'), '# raw/ — IMMUTABLE\n');
 
   const r = runTool('verify-links.js', [d]);
   assert.strictEqual(r.status, 0, r.stdout + ' — a raw/ holding only its own template README.md must still count as absent');
@@ -89,9 +129,10 @@ test('a raw/ holding real content alongside the template README.md still catches
   fs.mkdirSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics'), { recursive: true });
   fs.writeFileSync(path.join(d, '.joserah', 'knowledge', 'wiki', 'topics', 'x.md'),
     '# X\n\n[source](../../../../raw/imports/statement.pdf)\n');
-  // raw/README.md is already there from scaffold; add real content beside it
+  // the legacy raw/ with its own README.md; add real content beside it
   // without the file the citation actually names:
   fs.mkdirSync(path.join(d, 'raw', 'imports'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'raw', 'README.md'), '# raw/ — IMMUTABLE\n');
   fs.writeFileSync(path.join(d, 'raw', 'imports', 'other-file.md'), 'x\n');
   const r = runTool('verify-links.js', [d]);
   assert.strictEqual(r.status, 1, r.stdout);

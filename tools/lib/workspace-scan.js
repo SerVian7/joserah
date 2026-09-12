@@ -3,7 +3,8 @@
  * Enumerate the markdown files a migration may touch in one workspace.
  *
  * Three kinds of exclusion, and they are different in kind:
- *  - IMMUTABILITY: raw/ is source material the AI never writes; user/ is the
+ *  - IMMUTABILITY: imports/ (formerly raw/) is source material the AI never
+ *    writes; user/ is the
  *    drop folder the install skill tells owners to leave a CV or a bio in, so
  *    it is source material of exactly the same kind; directives.md is the
  *    workspace's own standing rules and survives every plugin update; keys/
@@ -38,7 +39,7 @@ const path = require('path');
 const SKIP_DIR_ANY = new Set(['.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']);
 const SKIP_REL = [
   'keys', 'projects', 'docker-stack', '.claude',
-  '.joserah/knowledge/raw', 'raw', '.joserah/user', '.joserah/feedback',
+  '.joserah/knowledge/raw', 'imports', 'raw', '.joserah/user', '.joserah/feedback',
   '.joserah/tools', '.joserah/last-time-inject',
 ];
 const SKIP_FILE_REL = new Set([

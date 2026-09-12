@@ -20,12 +20,13 @@ const ROOT = path.resolve(process.argv[2] || process.cwd());
 // broken one there cannot be cleared by the owner.
 const SKIP_ANY = new Set(['.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build', '.superpowers']);
 // Contracts about the workspace root — matched by workspace-relative path,
-// case-insensitively (Windows/macOS filesystems are). `raw/` holds imported
-// snapshots that are immutable by rule: their internal links are historical
-// facts, not workspace health. `.joserah/knowledge/raw` is the pre-2026-08-31
-// location, skipped forever for workspaces relocate-raw.js has not yet
-// touched.
-const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'raw', '.joserah/knowledge/raw'];
+// case-insensitively (Windows/macOS filesystems are). `imports/` (formerly
+// `raw/`) holds imported snapshots that are immutable by rule: their internal
+// links are historical facts, not workspace health. The two `raw` entries are
+// the legacy locations — root `raw/` is the 2026-08-31..2026-09-12 name and
+// `.joserah/knowledge/raw` the one before it — kept for workspaces the
+// relocate tools have not yet touched.
+const SKIP_REL = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', '.joserah/knowledge/raw'];
 
 function isSkippedRel(rel) {
   const low = rel.split(path.sep).join('/').toLowerCase();
@@ -88,10 +89,10 @@ function existsExact(baseDir, target) {
   return true;
 }
 
-// SKIP_REL (above) stops this tool WALKING into raw/ — it does not stop a
+// SKIP_REL (above) stops this tool WALKING into imports/ — it does not stop a
 // link written elsewhere from RESOLVING into it, and existsExact runs on
-// every link target regardless of where it lives. raw/ is gitignored by
-// construction (relocate-raw.js, 2026-08-31), so a fresh clone or restore
+// every link target regardless of where it lives. imports/ (formerly raw/) is
+// gitignored by construction, so a fresh clone or restore
 // has none on disk at all — and every wiki citation written the documented
 // way (templates/.joserah/knowledge/wiki/README.md,
 // templates/.joserah/conventions.md) would go red on the very first machine
@@ -99,20 +100,25 @@ function existsExact(baseDir, target) {
 // is normal. So: a target that resolves under one of these roots is only
 // exempted from the existence check when that top-level tree is itself
 // absent. Conditioned on absence, not on the child path, on purpose — a
-// genuinely mistyped raw/ citation is still caught on the authoring
-// machine, where raw/ is present.
+// genuinely mistyped imports/ citation is still caught on the authoring
+// machine, where imports/ is present.
 //
-// "Absent" tolerates a raw/ that holds nothing but its own template
-// README.md, not only a raw/ missing outright. scaffold.js's
-// --root-shell-only writes raw/README.md on a restore whose backup scope
-// never carried raw/ at all (see its own comment) — that write
+// "Absent" tolerates an imports/ that holds nothing but its own template
+// README.md, not only an imports/ missing outright. scaffold.js's
+// --root-shell-only writes imports/README.md on a restore whose backup scope
+// never carried imports/ at all (see its own comment) — that write
 // materialises the directory, and a bare existsSync would flip every
 // citation back to broken on exactly the restore this exemption exists
 // for, with the confirming doctor re-run in skills/backup/SKILL.md's own
-// restore step landing on the newly-red result. A raw/ holding only that
+// restore step landing on the newly-red result. An imports/ holding only that
 // one file carries no source material either way, so it is treated the
-// same as a raw/ that does not exist yet.
+// same as an imports/ that does not exist yet.
+//
+// The two raw roots below stay for workspaces not yet migrated: root `raw/`
+// was this folder's name from 2026-08-31 to 2026-09-12, and
+// `.joserah/knowledge/raw` the name before that.
 const RAW_ROOTS = [
+  { rel: 'imports', abs: path.join(ROOT, 'imports') },
   { rel: 'raw', abs: path.join(ROOT, 'raw') },
   { rel: '.joserah/knowledge/raw', abs: path.join(ROOT, '.joserah', 'knowledge', 'raw') },
 ];

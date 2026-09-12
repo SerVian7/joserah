@@ -177,12 +177,13 @@ function backupStalenessLine(root, cfg, now) {
     try { sinceMs = fs.statSync(configPath).mtimeMs; } catch { return null; }
   }
   // This scope (`.joserah/desk`, `knowledge`, `personal`) matches what the
-  // repository backup route actually carries — `raw/` is excluded from it
-  // by construction. It does NOT match the zip route, which does carry
-  // `raw/` (archive.js has no such exclusion): a change under `raw/` alone
+  // repository backup route actually carries — `imports/` (formerly `raw/`)
+  // is excluded from it by construction. It does NOT match the zip route,
+  // which does carry `imports/` (archive.js has no such exclusion): a change
+  // under `imports/` alone
   // will never trip this staleness counter, even right after a zip backup,
   // and a change there right before one will not clear it either. Accepted
-  // as a low-consequence gap for now — `raw/` holds immutable source
+  // as a low-consequence gap for now — `imports/` holds immutable source
   // material, which changes far less often than the notes above it — but a
   // future change to either route's scope should double check this still
   // matches whichever route the owner actually uses.

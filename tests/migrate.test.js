@@ -27,14 +27,16 @@ function promptRecordLines(indent, eol) {
          `${indent}"promptVersion": ${promptLib.readPromptVersion(tpl)},${eol}`;
 }
 
-test('scan includes knowledge notes and excludes raw/, directives and keys', (t) => {
+test('scan includes knowledge notes and excludes imports/, raw/, directives and keys', (t) => {
   const dir = ws(t);
   write(dir, '.joserah/knowledge/people/ada-lovelace.md', '# Ada\n');
   write(dir, '.joserah/knowledge/raw/source.md', '# immutable\n');
+  write(dir, 'imports/source.md', '# immutable\n');
   write(dir, '.joserah/directives.md', '# rules\n');
   const { files } = scanWorkspace(dir);
   assert.ok(files.includes('.joserah/knowledge/people/ada-lovelace.md'));
   assert.ok(!files.some((f) => f.startsWith('.joserah/knowledge/raw/')), 'raw/ excluded');
+  assert.ok(!files.some((f) => f.startsWith('imports/')), 'imports/ excluded');
   assert.ok(!files.includes('.joserah/directives.md'), 'directives excluded');
   assert.ok(!files.some((f) => f.startsWith('keys/')), 'keys/ excluded');
 });

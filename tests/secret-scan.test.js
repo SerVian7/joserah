@@ -67,6 +67,16 @@ test('root raw/ is never scanned — vendor docs full of api_key=… are not the
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
 
+test('root imports/ is never scanned — vendor docs full of api_key=… are not the owner\'s notes', (t) => {
+  const dir = tmpdir(t);
+  fs.mkdirSync(path.join(dir, 'imports'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'imports', 'vendor-manual.md'), 'password: s3cr3t-9real-value\n');
+  const r = runTool('secret-scan.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+});
+
 test('secret-scan does not report a clean tree when a listed file cannot be read', (t) => {
   const d = path.join(tmpdir(t), 'ws');
   fs.mkdirSync(d, { recursive: true });
