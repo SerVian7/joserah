@@ -11,27 +11,26 @@ const { PLUGIN_ROOT } = require('./helpers');
 // after commit, undetected. relocate-raw.js moving the files makes the next
 // `add -A` stage only the deletion, so ls-files alone goes quiet forever
 // while every past commit still serves the material — which is exactly why
-// a `git log --all` probe has to sit beside it. Pin both pathspecs here so a
-// future edit to this section cannot quietly drop either check.
+// a `git log --all` probe has to sit beside it. Both pathspecs now live in
+// tools/backup-scope.js and tests/backup-scope.test.js holds them to that
+// behaviour; what is pinned here is that the skill still *runs* the tool at
+// the gate, so no edit to this section can quietly drop the check by
+// restating a narrower list in prose.
 function backupSkillText() {
   return fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'backup', 'SKILL.md'), 'utf8');
 }
 
-test('gate 2.6 ls-files pathspec covers the current imports/ and both legacy raw locations', () => {
+test('gate 2.6 runs the scope check instead of restating the pathspec', () => {
   const text = backupSkillText();
-  const m = text.match(/git -C <workspace> ls-files -- "projects\/" "docker-stack\/" "imports\/" "raw\/"[^\n`]*/);
-  assert.ok(m, 'gate 2.6 ls-files line not found in the expected shape');
-  assert.match(m[0], /"\.joserah\/knowledge\/raw\/"/,
-    'ls-files pathspec must also cover the pre-migration .joserah/knowledge/raw/ location');
+  assert.match(text, /backup-scope\.js" <workspace> --check history/,
+    'gate 2.6 must run the tool that owns the pathspec');
+  assert.doesNotMatch(text, /ls-files -- "projects\//,
+    'the pathspec lives in tools/backup-scope.js now, not in prose that can drift from it');
 });
 
-test('gate 2.6 carries a git log --all history probe for raw/ material, not just ls-files', () => {
+test('gate 2.3 runs the gitignore check instead of listing the lines', () => {
   const text = backupSkillText();
-  const m = text.match(/git -C <workspace> log --all --oneline -- [^\n`]*/);
-  assert.ok(m, 'gate 2.6 history probe not found — ls-files alone cannot see source material relocate-raw.js already moved');
-  assert.match(m[0], /"\.joserah\/knowledge\/raw\/"/);
-  assert.match(m[0], /"raw\/"/);
-  assert.match(m[0], /"imports\/"/);
+  assert.match(text, /backup-scope\.js" <workspace> --check gitignore/);
 });
 
 test('gate 2.6 prose says a hit routes to the scope reset, and that deleting files does not fix history', () => {

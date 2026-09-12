@@ -216,24 +216,21 @@ one:
 4. Show the owner what went in:
    `node "${CLAUDE_PLUGIN_ROOT}/tools/archive.js" list <out.zip>` — report the
    file count and the top-level folders, not the full listing.
-5. Say plainly what was **excluded**: `keys/` (except `keys/AGENTS.md` — that
-   one file is always carried through because it is the plugin's own
-   documentation explaining that the folder must never be read, not a
-   credential; if the listing in step 4 shows a `keys/AGENTS.md` entry, say
-   so and say why, so the owner isn't left wondering what from `keys/` made
-   it in), every environment file (`.env`, `.env.local`, `.env.production`,
-   `.envrc` and anything matching `*.env`, `*.env.*` or `*.envrc`, except
-   `.env.example` files), everything under `projects/` and `docker-stack/`,
-   and `.superpowers/` scratch, unless the owner chose to include keys in
-   question 3, in which case say plainly that they are IN — **and check
-   separately for any `.env`-family file inside `keys/`**, because
-   `--include-keys` never takes those; name it if one was left behind. Point
-   at the manifest (section 2) for exactly what the `projects/`/`docker-stack/`
-   exclusion left out by name. `imports/` is excluded by default on the
-   **repository** route (the scaffold's own `.gitignore` covers it) — but
-   the zip route still includes `imports/`: a zip carries binaries without
-   consequence, so say plainly that it's IN here, unlike on the repository
-   route.
+5. Say plainly what was **excluded** and what rode along — read it out of the
+   tool that owns the scope, in the owner's language, never from memory:
+
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/backup-scope.js" <workspace> --route zip`
+
+   Three things about *this* run the tool cannot know, and you add every time:
+   - If step 4's listing shows a `keys/AGENTS.md` entry, say so and say why
+     (the tool's output gives the reason), so the owner isn't left wondering
+     what from `keys/` made it in.
+   - If the owner chose to include keys in question 3, say plainly they are
+     IN — **and check separately for any `.env`-family file inside `keys/`**,
+     because `--include-keys` never takes those; name it if one was left
+     behind.
+   - Point at the manifest (section 2) for what the
+     `projects/`/`docker-stack/` exclusion left out by name.
 
 ## 3b. Repository route
 
@@ -287,14 +284,14 @@ them twice — once cheaply before staging, and once for real, after.
       it gets surfaced and decided, every time `keys/` is staged, including
       on a repeat backup where one is already tracked from an earlier,
       informed decision.
-   3. `.gitignore` contains `keys/*`, `.env`, `.env.*`, `*.env`, `*.env.*`,
-      `.envrc`, `*.envrc`, `projects/*`, `docker-stack/*` and `imports/` — the last
-      of these keeps source material that never belongs in a repository
-      backup out from under `git add -A` in the first place, the same way
-      the others keep credentials and project checkouts out. An `imports/` line
-      missing here is exactly how step 2.6 later finds tracked `imports/`
-      content instead of never seeing any: this check exists to catch that
-      before it happens, not after.
+   3. `node "${CLAUDE_PLUGIN_ROOT}/tools/backup-scope.js" <workspace> --check gitignore`
+      → exit 0; it names any required line that is missing. The
+      source-material line is the one worth understanding rather than just
+      re-adding: it keeps material that never belongs in a repository backup
+      out from under `git add -A` in the first place. Missing, it is exactly
+      how step 2.6 later finds tracked source material instead of never
+      seeing any — this check exists to catch that before it happens, not
+      after.
    4. If no remote is configured yet
       (`git -C <workspace> remote get-url origin` prints nothing), ask the
       owner which private remote to use, confirm directly that it is
@@ -327,33 +324,30 @@ them twice — once cheaply before staging, and once for real, after.
    plus the root shell files — never project work, runtime state or source
    material:
 
-   `git -C <workspace> ls-files -- "projects/" "docker-stack/" "imports/" "raw/" ".joserah/knowledge/raw/" ":(exclude)projects/AGENTS.md" ":(exclude)docker-stack/README.md"`
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/backup-scope.js" <workspace> --check history`
 
-   → must print nothing. Anything listed means the repository already tracks
-   out-of-scope content — from before the exclusions existed, or from a
-   hand-run `git add`. `.joserah/knowledge/raw/` is in this pathspec because
-   every workspace this branch migrates carried its source material there
-   before the legacy root `raw/` existed, and its `.gitignore` never
-   excluded that path — so `git add -A` tracked it, commit after commit,
-   for as long as the workspace existed, and pushed it.
+   → exit 0. Exit 1 lists what it found: out-of-scope content the repository
+   already carries, from before the exclusions existed or from a hand-run
+   `git add`.
 
-   That is also why `ls-files` alone is not enough here: it only answers for
-   what is tracked **right now**. The relocate tools move the files out of
-   scope and the next `add -A` stages only the deletion — `ls-files` then
-   prints nothing forever, while every past commit still serves the very
-   material this scope exists to keep out. So also run:
+   It asks git **two** questions, and the second is the one that is easy to
+   leave out. `ls-files` only answers for what is tracked **right now**: the
+   relocate tools move the files out of scope and the next `add -A` stages
+   only the deletion, so `ls-files` prints nothing forever while every past
+   commit still serves the very material this scope exists to keep out. The
+   `git log --all` half is what sees those commits, on a workspace whose
+   working tree and `ls-files` output are clean today. Its paths reach the
+   **pre-migration** location too, and have to: every workspace migrated from
+   that layout carried its source material there, and its `.gitignore` never
+   excluded that path — so `git add -A` tracked it, commit after commit, for
+   as long as the workspace existed, and pushed it.
 
-   `git -C <workspace> log --all --oneline -- "imports/" "raw/" ".joserah/knowledge/raw/"`
-
-   → must print nothing either. A hit here means source material is sitting
-   in a commit reachable from some branch in this repository's history,
-   even on a workspace whose working tree and `ls-files` output are clean
-   today. **Source material in the history is not fixed by deleting the
-   files** — anyone with a clone, or access to the remote, still has every
-   commit. Either check failing: stop, show the owner the list, and offer
-   the **scope reset** (last section of this skill) — that is not a
-   fallback for something worse, it is exactly the right procedure for this
-   case. Do not take a new snapshot on top of a contaminated history.
+   **Source material in the history is not fixed by deleting the files** —
+   anyone with a clone, or access to the remote, still has every commit. A
+   hit of either kind: stop, show the owner the list, and offer the
+   **scope reset** (last section of this skill) — that is not a fallback for
+   something worse, it is exactly the right procedure for this case. Do not
+   take a new snapshot on top of a contaminated history.
 
 3. Stage: `git -C <workspace> add -A`, then, only if the owner answered yes
    to question 3, `git -C <workspace> add -f keys/` — that is why `keys/`
@@ -480,7 +474,7 @@ Report what changed since `lastBackup` with:
 `git -C <workspace> log --oneline --since="<lastBackup>" | wc -l` (commits;
 PowerShell: `(git -C <workspace> log --oneline --since="<lastBackup>" |
 Measure-Object -Line).Lines`), or on the zip route
-`node -e "const fs=require('fs'),p=require('path');const since=new Date(process.argv[2]).getTime();let n=0;(function w(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);if(e.isDirectory()){if(!['.git','node_modules','projects','docker-stack','keys'].includes(e.name))w(f)}else if(fs.statSync(f).mtimeMs>since)n++}})(process.argv[1]);console.log(n)" <workspace> <lastBackup-ISO>`.
+`node "${CLAUDE_PLUGIN_ROOT}/tools/backup-scope.js" <workspace> --changed-since <lastBackup-ISO>`.
 
 - Before working: `git -C <workspace> pull --rebase`
 - After working: show the diff summary, then run **every step of the
@@ -660,9 +654,9 @@ explicit yes, since every old version disappears from the backup:
   by that yes: the zip route's `--include-keys` never takes it regardless;
   the repository route's `git add -f keys/` does, and gate step 3 is where
   that gets surfaced and decided every time — never assume either way.
-- Excluded by default, both routes: `keys/` (old and new location), the
-  `.env` family, `projects/`, `docker-stack/`, `.superpowers/`. `keys/` can
-  be included only by the owner's explicit answer to question 3, never by
+- What a route excludes is stated in one place and read out of it, never
+  recited: `backup-scope.js <workspace> --route zip|repo`. `keys/` can be
+  included only by the owner's explicit answer to question 3, never by
   default. The `.env` family stays excluded even then on the zip route; on
   the repository route it rides along inside `keys/` unless the owner asks
   for it to be stripped out (gate step 3) — never silently either way.
