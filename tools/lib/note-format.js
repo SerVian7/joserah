@@ -138,6 +138,51 @@ function parseRelations(body) {
   return out;
 }
 
+// Typed claim lines (design 2026-09-12): an observation whose category is one
+// of four closed types, followed by indented `key: value` field lines. Fields
+// may share one line separated by ` · `; a value may itself contain ` · `, so
+// the split happens only in front of a known key. `~~…~~` around the text
+// means the claim was superseded — it stays on the page, struck through.
+const CLAIM_TYPES = ['measurement', 'calculation', 'decision', 'estimate'];
+const CLAIM_FIELDS = ['condition', 'date', 'by', 'source', 'superseded'];
+const CLAIM_RE = /^(\s*)-\s+\[(measurement|calculation|decision|estimate)\]\s+(.+?)\s*$/;
+const CLAIM_FIELD_LINE_RE = /^(\s+)(condition|date|by|source|superseded):\s*(.*)$/;
+const CLAIM_FIELD_SPLIT_RE = /\s+·\s+(?=(?:condition|date|by|source|superseded):)/;
+const CLAIM_ARROW_RE = /\s*(?:->|→)\s*/;
+
+function parseClaims(body) {
+  const out = [];
+  let cur = null;
+  const lines = body.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = CLAIM_RE.exec(line);
+    if (m) {
+      let text = m[3];
+      const struck = /^~~[\s\S]*~~$/.test(text);
+      if (struck) text = text.slice(2, -2).trim();
+      const arrowAt = text.search(CLAIM_ARROW_RE);
+      const subject = (arrowAt >= 0 ? text.slice(0, arrowAt) : text).trim();
+      const value = arrowAt >= 0 ? text.slice(arrowAt).replace(CLAIM_ARROW_RE, '').trim() : null;
+      cur = { type: m[2], text, subject, value, struck, fields: {}, line: i + 1, indent: m[1].length };
+      out.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    const f = CLAIM_FIELD_LINE_RE.exec(line);
+    if (f && f[1].length > cur.indent) {
+      for (const part of `${f[2]}: ${f[3]}`.split(CLAIM_FIELD_SPLIT_RE)) {
+        const kv = /^(condition|date|by|source|superseded):\s*(.*)$/.exec(part.trim());
+        if (kv) cur.fields[kv[1]] = kv[2].trim();
+      }
+      continue;
+    }
+    cur = null; // anything else ends the claim block
+  }
+  for (const c of out) delete c.indent;
+  return out;
+}
+
 function extractWikilinks(text) {
   const seen = [];
   for (const m of text.matchAll(WIKILINK_RE)) {
@@ -414,5 +459,6 @@ function renderFeedbackNote(fields, forbidden) {
 module.exports = {
   parseFrontmatter, ensureFrontmatter, parseObservations, parseRelations,
   extractWikilinks, renderRelations, FORMAT_VERSION, stripCode, detectEol,
+  CLAIM_TYPES, CLAIM_FIELDS, parseClaims,
   roleFor, FEEDBACK_AREAS, scanForIdentifiers, renderFeedbackNote,
 };

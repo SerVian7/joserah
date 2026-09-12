@@ -113,3 +113,65 @@ test('stripCode: blanks fenced and inline code but preserves line count', () => 
   assert.doesNotMatch(out, /\[\[Spine\]\] inside a fence/, 'fenced content blanked');
   assert.doesNotMatch(out, /`\[\[Spine\]\]`/, 'inline code blanked');
 });
+
+test('parseClaims: reads type, subject, value and the indented field lines', () => {
+  const body = [
+    '# Page',
+    '',
+    '- [measurement] Gemma-4-26B VRAM @65536 -> 20009 MiB',
+    '  condition: RTX 4090 24564 MiB · LM Studio · Q4_K_M',
+    '  date: 2026-08-28 · by: owner · source: ../imports/2026-09-10-x/',
+    '',
+  ].join('\n');
+  const claims = nf.parseClaims(body);
+  assert.strictEqual(claims.length, 1);
+  const c = claims[0];
+  assert.strictEqual(c.type, 'measurement');
+  assert.strictEqual(c.subject, 'Gemma-4-26B VRAM @65536');
+  assert.strictEqual(c.value, '20009 MiB');
+  assert.strictEqual(c.struck, false);
+  assert.strictEqual(c.line, 3);
+  assert.deepStrictEqual(c.fields, {
+    condition: 'RTX 4090 24564 MiB · LM Studio · Q4_K_M',
+    date: '2026-08-28', by: 'owner', source: '../imports/2026-09-10-x/',
+  });
+});
+
+test('parseClaims: a struck line is superseded; the field carries what replaced it', () => {
+  const body = [
+    '- [calculation] ~~Gemma context cost -> ~14x per token~~',
+    '  date: 2026-08-25 · by: assistant · superseded: measurement of 2026-08-28 — old line held only for FreeToken/NVFP4 @32768',
+  ].join('\n');
+  const [c] = nf.parseClaims(body);
+  assert.strictEqual(c.struck, true);
+  assert.strictEqual(c.text, 'Gemma context cost -> ~14x per token');
+  assert.strictEqual(c.subject, 'Gemma context cost');
+  assert.match(c.fields.superseded, /^measurement of 2026-08-28/);
+});
+
+test('parseClaims: ignores ordinary observations, relations and non-indented lines', () => {
+  const body = [
+    '- [fact] Works at Zenger',
+    '- knows [[Someone]]',
+    '- [decision] Storage stays markdown; SQLite is a disposable index',
+    'condition: not a field — same indent as the dash, so this is prose',
+    '  by: owner',
+  ].join('\n');
+  const claims = nf.parseClaims(body);
+  assert.strictEqual(claims.length, 1);
+  assert.strictEqual(claims[0].type, 'decision');
+  assert.strictEqual(claims[0].value, null);
+  assert.deepStrictEqual(claims[0].fields, {}); // the by: line is cut off by the prose line before it
+});
+
+test('parseClaims: CRLF bodies and an arrow written as → parse the same', () => {
+  const body = '- [estimate] harvest per session → 40 s\r\n  by: assistant · date: 2026-09-12\r\n';
+  const [c] = nf.parseClaims(body);
+  assert.strictEqual(c.subject, 'harvest per session');
+  assert.strictEqual(c.value, '40 s');
+  assert.strictEqual(c.fields.by, 'assistant');
+});
+
+test('CLAIM_TYPES is the closed list from the design', () => {
+  assert.deepStrictEqual(nf.CLAIM_TYPES, ['measurement', 'calculation', 'decision', 'estimate']);
+});
