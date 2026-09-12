@@ -257,3 +257,15 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
   const some = prompt.pluginVersions({ configDir: fakeMarketplace(t, 1, null, { pluginVersion: '9.9.9' }) });
   assert.strictEqual(some.available, '9.9.9');
 });
+
+// ---- prompt v2 -----------------------------------------------------------------
+
+test('prompt v2 carries the claim-line obligations, the role default, and names no third-party skill', () => {
+  const text = fs.readFileSync(TEMPLATE, 'utf8');
+  assert.strictEqual(prompt.readPromptVersion(text), 2);
+  assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);
+  assert.match(text, /the measurement speaks/);
+  assert.match(text, /default role .* is the brain/i);
+  assert.doesNotMatch(text, /superpowers/i, 'Joserah names no third-party plugin (owner, 2026-09-12)');
+  assert.doesNotMatch(text, /(^|[^a-z])raw\//m, 'the source folder is imports/');
+});

@@ -39,6 +39,35 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 | Learned preferences and corrections | `.joserah/learned.md` |
 | Cold storage | `.joserah/knowledge/archive/` |
 
+## Claim lines
+
+A fact that will be relied on — a number read off a system, a figure derived from other numbers,
+a decision, a forecast — is written as a **claim line**, so a tool can tell what kind of statement
+it is and under what conditions it holds. It lives on the page of its subject.
+
+- **Type**, closed list, English: `measurement` (read from a real system), `calculation` (derived
+  from other numbers), `decision` (the owner or someone authorised decided), `estimate` (a forecast,
+  no evidence yet).
+- **Fields**, on indented lines, `key: value`, several per line separated by ` · `:
+  `condition` (mandatory for a measurement: hardware, engine, quantisation, settings), `date`,
+  `by` (mandatory for every type), `source` (relative path or URL), `superseded` (what replaced a
+  struck line).
+- **Supersession**: a refuted claim is never deleted. Its text is wrapped in `~~…~~` and it gets a
+  `superseded:` field naming the successor.
+
+```markdown
+- [measurement] Model-A VRAM @65536 ctx -> 20009 MiB
+  condition: RTX 4090 24564 MiB · LM Studio · Q4_K_M · temperature 0.2
+  date: 2026-08-28 · by: owner (manual run) · source: ../imports/<date>-<label>/server.log
+- [calculation] ~~Model-A context cost -> ~14x per token vs Model-B~~
+  date: 2026-08-25 · by: assistant · superseded: the measurement above — this line held only for another engine at 32768 ctx
+```
+
+The audit runs through `/joserah:doctor`, whose `typed claims consistent` line reports a
+measurement without conditions, a struck line without a successor, a calculation left beside a
+measurement of the same subject, and two live claims that contradict each other under the same
+conditions. The owner is never handed a command for this; the assistant runs it.
+
 ## Learned-preference entries
 
 The format for `.joserah/learned.md`. It lives here, not there: the

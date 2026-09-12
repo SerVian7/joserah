@@ -15,6 +15,8 @@ function ws(t, notes) {
   }
   return dir;
 }
+// Totals below are workspace-wide: every scaffold ships the two example claim
+// lines in .joserah/conventions.md (both valid), so a count includes them.
 const GOOD = [
   '# Box', '',
   '- [measurement] Box VRAM @65536 -> 20009 MiB',
@@ -33,7 +35,7 @@ test('a fresh scaffold has no claim errors', (t) => {
 test('a well-formed page with a superseded calculation passes', (t) => {
   const r = runTool('check-claims.js', [ws(t, { '.joserah/knowledge/wiki/entities/box.md': GOOD })]);
   assert.strictEqual(r.status, 0, r.stdout);
-  assert.match(r.stdout, /0 error\(s\), 0 warning\(s\) in 2 claim\(s\)/);
+  assert.match(r.stdout, /0 error\(s\), 0 warning\(s\) in 4 claim\(s\)/);
 });
 
 test('a measurement without a condition is an error with file and line', (t) => {
@@ -78,7 +80,7 @@ test('struck without superseded, conflict, and missing by are reported at their 
   // reported once — on the later of the pair (line 7). The earlier line of a
   // conflicting pair carries no finding of its own; the later one names it
   // ("contradicts line 5").
-  assert.match(r.stdout, /2 error\(s\), 1 warning\(s\) in 4 claim\(s\)/);
+  assert.match(r.stdout, /2 error\(s\), 1 warning\(s\) in 6 claim\(s\)/);
 });
 
 test('--json prints the findings as an array', (t) => {
@@ -87,7 +89,7 @@ test('--json prints the findings as an array', (t) => {
   const out = JSON.parse(r.stdout);
   assert.strictEqual(out.findings.length, 1);
   assert.strictEqual(out.findings[0].kind, 'measurement-without-condition');
-  assert.strictEqual(out.claims, 1);
+  assert.strictEqual(out.claims, 3);
 });
 
 test('imports/ and projects/ are never scanned', (t) => {
