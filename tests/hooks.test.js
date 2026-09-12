@@ -400,3 +400,28 @@ test('post-tool-use says nothing after a command that moves nothing', (t) => {
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(r.stdout, '');
 });
+
+// 0.11.2: the briefing picked the first three sections of learned.md and called
+// them the newest. That is true only while the file happens to be written
+// newest-first — and in a workspace kept oldest-first, or one where a single
+// entry was appended at the bottom, the newest rules reached no session at all
+// while the owner could see them written down and assumed they were in force.
+test('the briefing carries the newest learnings wherever they sit in the file', (t) => {
+  const dir = hookWs(t);
+  fs.writeFileSync(path.join(dir, '.joserah', 'learned.md'), [
+    '# Learned', '',
+    '## 2024-01-01 — oldest rule', 'ancient', '',
+    '## 2024-01-02 — middle rule', 'middling', '',
+    '## 2026-09-11 — a later rule', 'later still', '',
+    '## 2026-09-13 — appended at the bottom', 'the newest rule of all', '',
+    '## Relations', 'not a learning, carries no date', '',
+  ].join('\n'));
+
+  const r = runHook('session-start.js', dir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /appended at the bottom/, 'the newest entry never reached the session');
+  assert.doesNotMatch(r.stdout, /not a learning, carries no date/, 'an undated section is not a learning');
+  // Three slots, and the oldest of four dated entries is the one that loses its
+  // place — not whichever happened to be typed last.
+  assert.doesNotMatch(r.stdout, /ancient/, 'the oldest entry took a slot from a newer one');
+});

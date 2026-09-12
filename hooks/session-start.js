@@ -127,7 +127,27 @@ function lastLearnedEntries(p, n) {
     } else if (current) current.push(line);
   }
   if (current) sections.push(current.join('\n').trimEnd());
-  return sections.slice(0, n).join('\n\n');
+  // `slice(0, n)` was "the newest" only while the file happened to be written
+  // newest-first, and nothing enforces that: an entry appended at the bottom —
+  // or a whole file kept oldest-first — silently never reaches a session, which
+  // is the worst failure this hook has, because the owner sees their rule
+  // written down and assumes it is in force. So pick by the date in the
+  // heading, not by position. Sections whose heading carries no date (a
+  // `## Relations` or `## Claims` block at the end of the file) are not
+  // learnings and are never candidates.
+  const dated = [];
+  for (const s of sections) {
+    const m = /^##\s+(\d{4}-\d{2}-\d{2})/.exec(s);
+    if (m) dated.push({ date: m[1], text: s });
+  }
+  // Stable within the same date: whichever came first in the file stays first,
+  // so a day's entries keep the order their author wrote them in.
+  return dated
+    .map((d, i) => ({ ...d, i }))
+    .sort((a, b) => (a.date === b.date ? a.i - b.i : (a.date < b.date ? 1 : -1)))
+    .slice(0, n)
+    .map((d) => d.text)
+    .join('\n\n');
 }
 
 // Local-only staleness signal: no git, no network, modification times only.

@@ -19,9 +19,20 @@ the same files, and opening them twice is paying twice.
 Read `lastSweep` from `.joserah/config.json`.
 
 - **Present** → only what changed since it. This is the normal case and it is small.
-- **Absent or null** → the first sweep: everything. Say so to the owner **before starting**, with
-  the page count, and get a yes. A first sweep on a full workspace is hours of delegated work; a
-  weekly one is minutes. They are the same skill and nothing but this line separates them.
+- **Absent or null** → possibly the first sweep, and possibly not. **A missing stamp is not
+  evidence that nothing was ever done.** This work predates the skill: a workspace may have been
+  tidied by hand, or had its numbers harvested by a one-off job, and nothing stamped anything.
+  Before quoting a page count, look for that:
+  - **The pages themselves.** A page already carrying claim lines with `source:` under them has
+    been harvested. That record IS the evidence; it does not need a stamp to be true. Such a page
+    is still tidied and still checked, but its numbers are not re-derived from its prose.
+  - **The owner's own record.** Scan the recent journal — `.joserah/desk/daily/<year>/` — for a
+    bulk pass: an import, a backfill, a cleanup. If one is there, say the date you found and ask
+    whether to treat it as the starting point. If they say yes, that date is the window.
+
+  Then say what you are about to read, with the page count, and get a yes. A first sweep on a full
+  workspace is hours of delegated work; a delta is minutes. Nothing but this step separates them,
+  and getting it wrong spends the owner's money re-deriving what is already written down.
 
 > **Running the plugin's tools.** The commands below use `${CLAUDE_PLUGIN_ROOT}`. That expands in
 > bash; in PowerShell it is variable syntax, not an environment lookup, and expands to nothing —
@@ -57,10 +68,20 @@ that carries a fact, or touch anything under `imports/`.
 ## 3. Delegating it
 
 The reading is wide and shallow — exactly the shape to hand out, and the shape the owner should
-not pay top rates for. One agent per folder, never two on the same folder, and effort follows the
-**tightest remaining quota** rather than the size of the folder. Each agent writes its report as
-its pages finish, not at the end, so an agent that runs out mid-folder still hands over: what is
-done · what is left · the single next page.
+not pay top rates for. **Never two agents on one folder**: they write the same files and one
+overwrites the other's work.
+
+**But do not split further than the work needs.** Every agent pays the same fixed opening cost
+whatever it is given — learning the claim format, checking its own links, auditing what it wrote —
+and that cost is paid per agent, not per page. Eight agents over small folders pay it eight times
+for the same reading three would have done. So: group the small folders together and give a folder
+its own agent only when it is big enough to be worth one. The few pages at the workspace root are
+the exception in the other direction — they decide how every session opens, so read those yourself
+rather than handing them out.
+
+Effort follows the **tightest remaining quota** rather than the size of the folder. Each agent
+writes its report as its pages finish, not at the end, so an agent that runs out mid-folder still
+hands over: what is done · what is left · the single next page.
 
 Where the session cannot dispatch, the sweep still runs — inline, one folder at a time, and the
 owner is told it will take longer.

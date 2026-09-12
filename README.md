@@ -344,3 +344,34 @@ sweep, or from the day the workspace was created when there has never been one.
 
 Both warnings are warnings, not failures: a workspace whose content is behind
 its format is not broken, it is behind.
+
+### Upgrading to 0.11.1
+
+The sweep treated a missing `lastSweep` as proof that nothing had ever been
+done, and offered to read every page in the workspace — in front of an owner
+whose notes had been harvested the day before by a one-off job that stamped
+nothing. The work predates the skill everywhere it is installed, so the stamp
+can only ever be evidence that a sweep ran, never that one did not.
+
+It now looks for the work instead of the stamp: a page already carrying claim
+lines with their sources has been harvested and is tidied rather than
+re-derived, and the recent journal is scanned for a bulk pass whose date the
+owner can confirm as the starting point. The page count is quoted after that,
+not before.
+
+### Upgrading to 0.11.2
+
+The session briefing took the first three sections of `learned.md` and called
+them the newest. That is only true while the file happens to be written
+newest-first, and nothing enforces that: in a workspace kept the other way
+round, or one where a single entry was appended at the bottom, the newest rules
+reached no session at all — while the owner could see them written down and
+reasonably assume they were in force. The briefing now picks by the date in each
+heading, so the newest three travel wherever they sit in the file, and a section
+with no date is not mistaken for a learning.
+
+The sweep also stopped splitting the reading further than the work needs. Every
+agent pays the same fixed opening cost whatever it is handed — the claim format,
+its own link check, auditing what it wrote — so eight agents over small folders
+pay it eight times for the reading three would have done. Small folders are
+grouped; a folder gets its own agent when it is big enough to earn one.
