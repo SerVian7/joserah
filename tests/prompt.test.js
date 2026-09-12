@@ -258,16 +258,64 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
   assert.strictEqual(some.available, '9.9.9');
 });
 
-// ---- prompt v2 -----------------------------------------------------------------
+// ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v3 carries the claim-line obligations, the role default, and names no third-party skill', () => {
+test('prompt v4 carries the claim-line obligations, the role default, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 3);
+  assert.strictEqual(prompt.readPromptVersion(text), 4);
   assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);
   assert.match(text, /the measurement speaks/);
   assert.match(text, /default role .* is the brain/i);
   assert.doesNotMatch(text, /superpowers/i, 'Joserah names no third-party plugin (owner, 2026-09-12)');
   assert.doesNotMatch(text, /(^|[^a-z])raw\//m, 'the source folder is imports/');
+});
+
+// 0.9.0: the behaviour rules the owner decided on 2026-09-12 belong in every
+// installation. Only the ones a plain MCP server can honour are here — work
+// distribution and model choice are a harness capability, not a promise the
+// product can keep everywhere, so they stayed out. Each id below is asserted by
+// a phrase distinctive enough that a rewrite dropping the rule fails, and short
+// enough that rewording the sentence around it does not.
+test('prompt v4 carries every behaviour rule the owner put in the native prompt', () => {
+  const text = fs.readFileSync(TEMPLATE, 'utf8');
+  const rules = {
+    // A — character, toward the owner
+    A3: 'the one thing they must do',
+    A4: 'Filing is not reporting',
+    A5: 'never an internal label',
+    A6: 'version numbers, tool names',
+    A7: 'Take the general rule out of it',
+    A8: '"not found" beats a guess',
+    // B — decision
+    B1: 'both are read, the measurement speaks',
+    B2: 'A number never travels without its conditions',
+    B3: 'the first plausible answer is not the answer',
+    B4: 'the struck line is not used again',
+    B5: 'a number with no source carries no weight',
+    B7: 'The example they give is not the scope',
+    B8: 'the incident not retold',
+    B9: 'approve one they have not seen',
+    B12: 'Cite a source only after opening it',
+    // C — role, and the end of a session
+    C6: 'default role in every session is the brain',
+    C8: 'one entry point, one first task, the prompt to paste',
+    // D — verification
+    D1: 'No output, no claim',
+    D2: 'the live system is the authority',
+  };
+  for (const [id, phrase] of Object.entries(rules)) {
+    assert.ok(text.includes(phrase), `rule ${id} missing from the prompt: "${phrase}"`);
+  }
+});
+
+// The file grew by accumulation twice and was cut twice (0.4.0: 235 -> 201;
+// 0.9.0: 231 -> under 200 while taking nineteen rules in). Every addition is
+// defensible on its own, which is exactly how the whole gets worse. The closing
+// note names the limit; this test is what makes the note true.
+test('the shipped prompt stays under the line limit its own closing note sets', () => {
+  const lines = fs.readFileSync(TEMPLATE, 'utf8').split(/\r?\n/);
+  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+  assert.ok(lines.length <= 200, `templates/AGENTS.md is ${lines.length} lines; the limit is 200`);
 });
 
 // 0.7.0: the role file and the workspace's directives are injected at session

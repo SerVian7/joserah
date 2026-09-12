@@ -239,6 +239,28 @@ standing prompt is unchanged, still version 3, so this is a plugin update and
 not a `/joserah:update` of the prompt — the conventions file gains the two
 mechanical rules and travels with the workspace as usual.
 
+### Upgrading to 0.9.0
+
+The standing prompt moves to version 4 and nothing else changes: no code, no
+tools, no new files. It takes in the behaviour rules decided on 2026-09-12 —
+every turn ends with what was done, the one thing you have to do (or nothing)
+and the next step; a finding counts only once you have read it in the
+conversation, and nothing is put to you for approval that you have not seen;
+questions come in your words with the option and what it costs, never an
+internal label; a measurement outranks a calculation and both are read; a
+number never travels without its conditions and an unsourced one carries no
+weight; a source is cited only after it has been opened and the figure seen; a
+struck-through claim is not used again; "done" comes with the output of a
+command just run. Four rules the owner considered were deliberately left out,
+because they are about spreading work across models and only some setups can do
+that — a promise this file cannot keep everywhere does not belong in it. The
+file also went back under 200 lines, so the additions cost nothing in length.
+
+Because only the prompt changed, this reaches an existing workspace through
+`/joserah:update` — no plugin reinstall is needed. Run it, and your
+`AGENTS.md` is replaced with version 4; a hand-edited one is refused rather
+than overwritten, and `/joserah:doctor` will tell you so.
+
 ## Requirements
 
 - Claude Code
