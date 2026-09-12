@@ -261,6 +261,23 @@ Because only the prompt changed, this reaches an existing workspace through
 `AGENTS.md` is replaced with version 4; a hand-edited one is refused rather
 than overwritten, and `/joserah:doctor` will tell you so.
 
+### Upgrading to 0.10.0
+
+Three new skills and one new hook. The skills carry the rules from the same
+2026-09-12 list that only make sense where work can be handed to another agent
+or session, so they load when they are needed instead of sitting in the
+standing prompt: `research` (how a fact-gathering job is briefed out, how its
+report comes back, and checking what a delivered report deleted before reading
+what it added), `dispatch` (effort follows the remaining quota, and a second
+local session counts as a lane), and `plan` (whoever executes a plan stops when
+plan and reality disagree rather than improvising). The hook runs the link
+check after a move or rename and speaks only when something broke — silent
+otherwise, and silent outside a workspace.
+
+The standing prompt is unchanged, still version 4, so nothing needs
+`/joserah:update`; this is a plugin update and the new hook starts working
+after the restart that follows it.
+
 ## Requirements
 
 - Claude Code

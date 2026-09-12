@@ -376,3 +376,27 @@ test('a role file is capped the same way, and nothing short of the cap is touche
   assert.doesNotMatch(ctx, /ROLE-TAIL-MARKER/);
   assert.match(ctx, /\[cut\] JOSERAH-ROLE\.md/);
 });
+
+// ---- D3: after a move or rename, the link check runs (0.10.0) ----------------
+
+function brokenLink(dir) {
+  fs.writeFileSync(path.join(dir, 'notes.md'), '# notes\n\n[gone](does-not-exist.md)\n');
+}
+
+test('post-tool-use reports broken links after a move command', (t) => {
+  const dir = hookWs(t);
+  brokenLink(dir);
+  const r = runHook('post-tool-use.js', dir,
+    JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git mv a.md b.md' } }));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /does-not-exist\.md/, 'the broken link must be named');
+});
+
+test('post-tool-use says nothing after a command that moves nothing', (t) => {
+  const dir = hookWs(t);
+  brokenLink(dir);
+  const r = runHook('post-tool-use.js', dir,
+    JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'node --test tests/*.test.js' } }));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout, '');
+});
