@@ -605,6 +605,67 @@ const CHECKS = [
   },
 
   {
+    id: 'migrations-pending',
+    remedies: [
+      {
+        key: '`structure migrations applied` warn',
+        text: "The plugin ships one note per release that changes what a workspace should look like, in its own `docs/migrations/`. Read every note newer than `migratedTo` in config.json, oldest first, and do what each one says — some steps are a tool, some are the owner's decision — then stamp `migratedTo` at the installed version. `/joserah:update` step 3b walks this.",
+      },
+    ],
+    // `update` moves the shell and `migrate.js` does only what someone wrote
+    // code for. A release that changes what a workspace should LOOK like has
+    // nowhere to say so — which is how a workspace sits releases behind on
+    // layout while every check passes. The notes are that missing sentence;
+    // this is the only thing that notices they were never read.
+    run({ cfg, pluginDir }) {
+      const dir = path.join(pluginDir, '..', 'docs', 'migrations');
+      if (!fs.existsSync(dir)) return null;
+      const notes = fs.readdirSync(dir).filter((f) => /^\d+\.\d+\.\d+\.md$/.test(f)).map((f) => f.slice(0, -3));
+      if (!notes.length) return null;
+      // No `migratedTo` yet: fall back to the version that created the
+      // workspace, so a workspace scaffolded by this very release is not told
+      // to catch up on notes that describe how it was already built.
+      const from = (cfg && (cfg.migratedTo || cfg.createdByPluginVersion)) || null;
+      if (!from) {
+        return warn('structure migrations applied',
+          `${notes.length} note(s) exist and config.json records no version to compare them against`);
+      }
+      const pending = notes.filter((v) => !versionAtLeast(from, v)).sort();
+      if (!pending.length) return null;
+      return warn('structure migrations applied', `${pending.length} newer than ${from}: ${pending.join(', ')}`);
+    },
+  },
+
+  {
+    id: 'sweep-due',
+    remedies: [
+      {
+        key: '`knowledge sweep` warn',
+        text: 'Run `/joserah:sweep`. Nothing is broken — the content is behind the format: `update` deliberately never reads prose, so numbers stay as sentences until a sweep turns them into claims. A regular sweep reads only what changed since the last one and is small; a long-deferred first one is not.',
+      },
+    ],
+    // The one check whose subject is the notes themselves rather than the
+    // scaffolding around them. Measured from the last sweep, or — when there
+    // has never been one — from the day the workspace was created, so a
+    // workspace made this morning is not nagged and one made in spring is.
+    run({ root, cfg }) {
+      const SWEEP_STALE_DAYS = 14;
+      if (!fs.existsSync(path.join(root, '.joserah', 'knowledge'))) return null;
+      const last = cfg && cfg.lastSweep;
+      const since = last || (cfg && cfg.created);
+      if (!since) return null;
+      const days = Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
+      if (!Number.isFinite(days)) {
+        return warn('knowledge sweep', `config.json records "${since}", which is not a date`);
+      }
+      if (days <= SWEEP_STALE_DAYS) return null;
+      return warn('knowledge sweep', last
+        ? `${days} days since the last one`
+        : `never swept — ${days} days of notes have never been read for claims`);
+    },
+  },
+
+  {
     id: 'bash-for-hooks',
     remedies: [],
     // G3/I12: the plugin's hooks are declared with shell:"bash". On Windows that

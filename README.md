@@ -313,3 +313,34 @@ the whole point of keeping them plain.
 ## Licence
 
 MIT for the code. The Joserah name and logo are not part of that grant.
+
+### Upgrading to 0.11.0
+
+The update stopped pretending it was the whole job. It never reads a note — by
+design, so that it stays fast and cannot damage anything — which meant a
+workspace could finish an update knowing the claim format and holding no
+claims: the format moved on and the content did not. Two things close that.
+
+**Structure notes.** A release that changes what a workspace should *look*
+like now ships a note saying so, one file per such release under
+`docs/migrations/`, named for its version. `/joserah:update` reads every note
+newer than `migratedTo` in `config.json`, oldest first, does what each says —
+some steps are a command, some are the owner's decision — and stamps
+`migratedTo` only when they are done. A declined step leaves the stamp where it
+is, so the question comes back rather than disappearing. Doctor warns when
+notes are pending. The first note, `0.11.0`, describes the layout every
+workspace should have reached: source material in `imports/`, load-bearing
+numbers as claim lines, and the two new config keys.
+
+**`/joserah:sweep`.** The pass that actually reads the pages: it tidies their
+structure and turns the numbers in their prose into claim lines, in one reading
+rather than two. It works on what changed since `lastSweep`, so a regular sweep
+is small; with no stamp it is the first sweep and reads everything, which it
+says up front because that one is expensive. It hands the reading out, checks
+what comes back by reading the deleted lines in the diff before the added ones,
+and stamps `lastSweep` only after the link, claim and doctor checks are clean.
+Doctor asks for one when the notes have gone unswept — measured from the last
+sweep, or from the day the workspace was created when there has never been one.
+
+Both warnings are warnings, not failures: a workspace whose content is behind
+its format is not broken, it is behind.

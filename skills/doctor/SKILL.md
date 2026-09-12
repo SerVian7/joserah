@@ -73,6 +73,8 @@ Propose the specific repair for each failure and wait for a yes:
 | Unfilled placeholder | Ask for the value, then substitute it |
 | Broken link | Find the moved target and repoint the link |
 | `typed claims consistent` FAIL | Open the named file and line. A measurement gets its `condition:` (hardware, engine, settings, date); a struck line gets `superseded:` naming its successor; a calculation beside a measurement of the same subject is struck and pointed at it. Re-run doctor. |
+| `structure migrations applied` warn | The plugin ships one note per release that changes what a workspace should look like, in its own `docs/migrations/`. Read every note newer than `migratedTo` in config.json, oldest first, and do what each one says — some steps are a tool, some are the owner's decision — then stamp `migratedTo` at the installed version. `/joserah:update` step 3b walks this. |
+| `knowledge sweep` warn | Run `/joserah:sweep`. Nothing is broken — the content is behind the format: `update` deliberately never reads prose, so numbers stay as sentences until a sweep turns them into claims. A regular sweep reads only what changed since the last one and is small; a long-deferred first one is not. |
 | `projects/<Owner>/<Project>` warn (no repository of its own / no remote / N commit(s) not pushed) | Not something doctor can fix by itself — it means no copy of that work exists anywhere else, or its history is incomplete everywhere but this machine. Say so plainly and ask the owner whether to `git init`, add a remote, or push, from inside that project's own directory — never proceed as if the workspace were fully backed up while one of these is open. |
 <!-- joserah:remedy-table-end -->
 

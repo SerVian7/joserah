@@ -10,7 +10,7 @@ const { PLUGIN_ROOT } = require('./helpers');
 // third-party plugin, skill, vendor or product — the skills are read into a
 // session the same way the prompt is.
 const FORBIDDEN = [/superpowers/i, /obsidian/i, /notion/i, /chatgpt/i, /copilot/i];
-const SKILLS = ['research', 'dispatch', 'plan'];
+const SKILLS = ['research', 'dispatch', 'plan', 'sweep'];
 
 for (const name of SKILLS) {
   test(`skills/${name}/SKILL.md has frontmatter and names nobody else`, () => {

@@ -70,6 +70,28 @@ additive and idempotent: it never edits prose and never touches an existing `dir
 - `refused` — the workspace's `AGENTS.md` differs from anything the plugin ever installed
   (hand-edited, or from before prompt versioning). Go to step 4.
 
+## 3b. The structure notes
+
+`migrate.js` does only what someone wrote code for. A release that changes what a workspace should
+**look like** — where the source material lives, what a load-bearing number is written as — needs a
+sentence saying so, and that sentence is a note in the plugin's own `docs/migrations/`, one file per
+such release, named for its version.
+
+Read `migratedTo` in `.joserah/config.json` (when absent, `createdByPluginVersion`). Every note with
+a higher version is pending. Take them **oldest first** and do what each says — some steps are a
+command, some are a decision that is the owner's to make, and a note says which. Never batch the
+decisions into one question at the end: ask each where it arises, in their words.
+
+When every pending note is done, and only then:
+
+```
+node -e "const f=require('fs'),p=process.argv[1],{stampKey}=require(process.argv[2]);const r=stampKey(f.readFileSync(p,'utf8'),'migratedTo',process.argv[3]);if(r.changed)f.writeFileSync(p,r.text);" "<workspace-root>/.joserah/config.json" "${CLAUDE_PLUGIN_ROOT}/tools/lib/config-stamp.js" "<installed-version>"
+```
+
+A note the owner declined is still not done: leave the stamp where it is, say which note is open and
+why, and let doctor keep asking. A stamp that runs ahead of the work is how a workspace reports itself
+current while sitting a release behind.
+
 ## 4. The prompt, when migrate refused
 
 Do not overwrite. Show the owner what differs:
@@ -109,3 +131,8 @@ Every check `ok` or the update is not done — report what is still red, in the 
 one line each. When it is clean, tell the owner in one or two lines: what changed, and that a
 **new conversation** picks up the new instructions. Mention a restart only if `newer` was true in
 step 2, and only as the owner's own step.
+
+**Then say what an update is not.** Nothing here read a single note: this moved the shell, and the
+owner's own pages are untouched by design. If doctor's `knowledge sweep` warned — or the workspace
+just gained a format its content does not use yet — say so in one line and offer `/joserah:sweep`,
+with the warning that the first one on a full workspace is the expensive one. Offer; do not start it.
