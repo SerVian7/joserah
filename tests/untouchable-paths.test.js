@@ -7,14 +7,18 @@ const { spawnSync } = require('child_process');
 const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
 const u = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'untouchable'));
 
-// The five files that each carried their own copy of this knowledge until
-// 2026-09-13, and the specifier each must require the library by.
+// The six files that read their path knowledge from the library, and the
+// specifier each must require it by: the five that each carried their own copy
+// until 2026-09-13, plus tools/backup-scope.js, which was written against the
+// library the same day and never had one. The point of the guard is that nobody
+// keeps a copy — so a new consumer belongs in this list the moment it exists.
 const CONSUMERS = [
   ['tools/verify-links.js', './lib/untouchable'],
   ['tools/lib/workspace-scan.js', './untouchable'],
   ['tools/secret-scan.js', './lib/untouchable'],
   ['tools/doctor.js', './lib/untouchable'],
   ['tools/archive.js', './lib/untouchable'],
+  ['tools/backup-scope.js', './lib/untouchable'],
 ];
 
 const RESERVED = ['keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw',

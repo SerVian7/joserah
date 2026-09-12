@@ -55,23 +55,25 @@ reported, if there were none of either, say so in one sentence and stop.
 
 Propose the specific repair for each failure and wait for a yes:
 
+<!-- joserah:remedy-table-start -->
 | Failure | Repair |
 |---|---|
 | Missing core file (other than `keys/AGENTS.md`) | Recreate it from the plugin's `templates/`. Templates carry `{{OWNER_ROLE_LINE}}`, which config.json does not store — ask the owner for it; if they decline, substitute an empty string. Never invent it. |
 | `exists: keys/AGENTS.md` FAIL | **Do not read-then-write this one.** The workspace's `Read(./keys/**)` deny rule matches a `keys/` directory at any depth — including the plugin's own `templates/keys/`, per the README's Security section — so a normal read of the template fails with a confusing denial. Copy the file instead, without ever reading its content into the conversation: `cp "${CLAUDE_PLUGIN_ROOT}/templates/keys/AGENTS.md" <workspace>/keys/AGENTS.md` (PowerShell: `Copy-Item "${CLAUDE_PLUGIN_ROOT}/templates/keys/AGENTS.md" "<workspace>/keys/AGENTS.md"`). |
-| Unfilled placeholder | Ask for the value, then substitute it |
-| Broken link | Find the moved target and repoint the link |
-| `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
-| `local verify-links.js current` FAIL | Copy **both** plugin files over the workspace's copies — `tools/verify-links.js` → `.joserah/tools/verify-links.js` and `tools/lib/untouchable.js` → `.joserah/tools/lib/untouchable.js` (the checker requires the library, so it only works if both travel) — then re-run doctor. |
 | `exists: .joserah/directives.md` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it creates the file from the template with the workspace name filled in and never touches an existing one. |
+| `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
+| `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
+| `legacy raw/ at the workspace root` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — the same one command: from a root `raw/` it moves the source material to `imports/`, flattening `raw/imports/`, and rewrites citations. |
 | `prompt (AGENTS.md) current` FAIL — *behind* | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/refresh-prompt.js" <workspace>`. Then tell the owner a **new conversation** is enough — no restart. |
 | `prompt (AGENTS.md) current` FAIL — *hand-edited* or *no install record and differs* | Do not overwrite. Follow `/joserah:update` step 4: show the owner what differs, move their lines to `.joserah/directives.md`, then `refresh-prompt.js <workspace> --force` on their yes — the displaced text is kept as `AGENTS.md.replaced-<date>` beside it. |
 | `prompt (AGENTS.md) current` warn — *matches but nothing recorded it* | Run `refresh-prompt.js <workspace>` — it only writes the record. |
 | `prompt source drift` warn | A developer's slip, not the owner's: the prompt text changed without its version line. Report it via `/joserah:feedback`; nothing to do in the workspace. |
-| `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
-| `legacy raw/ at the workspace root` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — the same one command: from a root `raw/` it moves the source material to `imports/`, flattening `raw/imports/`, and rewrites citations. |
+| `local verify-links.js current` FAIL | Copy **both** plugin files over the workspace's copies — `tools/verify-links.js` → `.joserah/tools/verify-links.js` and `tools/lib/untouchable.js` → `.joserah/tools/lib/untouchable.js` (the checker requires the library, so it only works if both travel) — then re-run doctor. |
+| Unfilled placeholder | Ask for the value, then substitute it |
+| Broken link | Find the moved target and repoint the link |
 | `typed claims consistent` FAIL | Open the named file and line. A measurement gets its `condition:` (hardware, engine, settings, date); a struck line gets `superseded:` naming its successor; a calculation beside a measurement of the same subject is struck and pointed at it. Re-run doctor. |
 | `projects/<Owner>/<Project>` warn (no repository of its own / no remote / N commit(s) not pushed) | Not something doctor can fix by itself — it means no copy of that work exists anywhere else, or its history is incomplete everywhere but this machine. Say so plainly and ask the owner whether to `git init`, add a remote, or push, from inside that project's own directory — never proceed as if the workspace were fully backed up while one of these is open. |
+<!-- joserah:remedy-table-end -->
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
 
