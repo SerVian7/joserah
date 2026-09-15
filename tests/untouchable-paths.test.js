@@ -99,15 +99,37 @@ test('isHiddenForeignDir: a dot-directory is a tool\'s unless it is .joserah or 
   assert.deepStrictEqual(u.HIDDEN_KEEP_NAMES, ['.joserah', '.claude']);
 });
 
-test('scanIgnoreFrom: normalises config.scanIgnore to workspace-relative lowercase prefixes', () => {
-  assert.deepStrictEqual(u.scanIgnoreFrom(null), []);
-  assert.deepStrictEqual(u.scanIgnoreFrom({}), []);
-  assert.deepStrictEqual(u.scanIgnoreFrom({ scanIgnore: 'tmp' }), []);
-  assert.deepStrictEqual(u.scanIgnoreFrom({ scanIgnore: ['tmp/', './Worktrees', '\\docs\\old\\', '', 42] }),
-    ['tmp', 'worktrees', 'docs/old']);
-  // works with the existing matcher
-  assert.strictEqual(u.isUnder('TMP/x.md', u.scanIgnoreFrom({ scanIgnore: ['tmp'] })), true);
-  assert.strictEqual(u.isUnder('tmpx/x.md', u.scanIgnoreFrom({ scanIgnore: ['tmp'] })), false);
+// `scope` SELECTS the workspace's members. An absent key is null, not an
+// empty list: null means "everything is the workspace", which is what every
+// workspace did before 0.11.3, and an empty [] means "only the shell".
+test('scopeFrom: absent or non-array scope is null; entries normalise to first segments', () => {
+  assert.strictEqual(u.scopeFrom(null), null);
+  assert.strictEqual(u.scopeFrom({}), null);
+  assert.strictEqual(u.scopeFrom({ scope: 'notes' }), null);
+  assert.deepStrictEqual(u.scopeFrom({ scope: [] }), []);
+  assert.deepStrictEqual(
+    u.scopeFrom({ scope: ['notes/', './Worktrees', '\\docs\\old\\', 'docs', '', 42] }),
+    ['notes', 'worktrees', 'docs']);
+});
+
+test('inScope: null scope admits everything; otherwise the first segment decides', () => {
+  assert.strictEqual(u.inScope('anything/at/all.md', null), true);
+  const scope = u.scopeFrom({ scope: ['notes'] });
+  assert.strictEqual(u.inScope('notes/a.md', scope), true);
+  assert.strictEqual(u.inScope('NOTES/deep/a.md', scope), true);
+  assert.strictEqual(u.inScope('tmp/b.md', scope), false);
+  assert.strictEqual(u.inScope('LOOSE.md', scope), false);
+  assert.strictEqual(u.inScope('notesy/a.md', scope), false, 'first segment matches whole, not prefix');
+  // the plugin's own shell never needs selecting
+  for (const keep of ['.joserah/knowledge/wiki/x.md', 'AGENTS.md', 'JOSERAH-ROLE.md',
+    'keys/t.txt', 'projects/p/a.md', 'imports/2026/x.md']) {
+    assert.strictEqual(u.inScope(keep, scope), true, keep);
+  }
+  assert.deepStrictEqual(u.ALWAYS_IN_SCOPE,
+    ['.joserah', 'agents.md', 'joserah-role.md', 'keys', 'projects', 'imports']);
+  // an empty selection still keeps the shell
+  assert.strictEqual(u.inScope('.joserah/a.md', []), true);
+  assert.strictEqual(u.inScope('notes/a.md', []), false);
 });
 
 test('a scaffolded workspace gets the library beside its own link checker, and it runs', (t) => {

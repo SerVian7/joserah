@@ -10,18 +10,18 @@
 const fs = require('fs');
 const path = require('path');
 const { LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES, SOURCE_MATERIAL_REL, isUnder,
-  isHiddenForeignDir, scanIgnoreFrom } = require('./lib/untouchable');
+  isHiddenForeignDir, scopeFrom, inScope } = require('./lib/untouchable');
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
 
-// The owner's own additions to the skip list, read from the workspace marker.
-// A missing or malformed config never breaks a walk: any failure is an empty
-// list, and the scan proceeds with the built-in sets alone.
+// Which root entries are the workspace at all, as the owner selected them.
+// A missing or malformed config never breaks a walk: any failure reads as no
+// selection, and the scan proceeds over everything as it always did.
 function readConfig(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, '.joserah', 'config.json'), 'utf8').replace(/^﻿/, '')); }
   catch { return {}; }
 }
-const SCAN_IGNORE = scanIgnoreFrom(readConfig(ROOT));
+const SCOPE = scopeFrom(readConfig(ROOT));
 
 // Which paths this scan may not walk is stated once, in lib/untouchable.js,
 // and composed there per consumer; the two sets below name what this tool
@@ -42,7 +42,7 @@ const SKIP_ANY = new Set(LINK_SCAN_SKIP_NAMES);
 const SKIP_REL = LINK_SCAN_SKIP_REL;
 
 function isSkippedRel(rel) {
-  return isUnder(rel, SKIP_REL) || isUnder(rel, SCAN_IGNORE);
+  return isUnder(rel, SKIP_REL) || !inScope(rel, SCOPE);
 }
 
 function* mdFiles(dir, rel) {
@@ -52,6 +52,9 @@ function* mdFiles(dir, rel) {
       if (SKIP_ANY.has(e.name) || isHiddenForeignDir(e.name) || isSkippedRel(childRel)) continue;
       yield* mdFiles(path.join(dir, e.name), childRel);
     } else if (e.name.toLowerCase().endsWith('.md')) {
+      // Scope selects root-level files as well as folders, so a loose note the
+      // owner did not select is not this workspace's to check.
+      if (!inScope(childRel, SCOPE)) continue;
       yield path.join(dir, e.name);
     }
   }

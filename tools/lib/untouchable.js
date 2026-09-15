@@ -113,19 +113,49 @@ function isHiddenForeignDir(name) {
   return typeof name === 'string' && name.length > 1 && name[0] === '.' && !HIDDEN_KEEP_NAMES.includes(name);
 }
 
-// Optional `scanIgnore` in .joserah/config.json: workspace-relative prefixes
-// the owner declares off-limits to every walk (a home-root workspace's tmp/,
-// worktrees/, an old docs tree). Normalised to the shape isUnder() matches.
-// Pure: the consumer reads config.json and hands the object in.
-function scanIgnoreFrom(cfg) {
-  const list = cfg && Array.isArray(cfg.scanIgnore) ? cfg.scanIgnore : [];
-  return list.filter((s) => typeof s === 'string')
-    .map((s) => s.split('\\').join('/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '').toLowerCase())
-    .filter(Boolean);
+// Optional `scope` in .joserah/config.json: the root entries that ARE the
+// workspace. Selecting members is the right way round — an ignore list can
+// never be finished, because a home directory grows new tool folders without
+// asking. When the key is present, nothing else at the root is walked.
+//
+// The plugin's own shell is always in: the knowledge base, the two files the
+// plugin writes and byte-compares, and the three root trees the skip sets
+// above already govern (they are excluded by those sets, not by this one, and
+// making the owner select them would only invite leaving one out).
+const ALWAYS_IN_SCOPE = ['.joserah', 'agents.md', 'joserah-role.md', 'keys', 'projects', 'imports'];
+
+/**
+ * Normalise cfg.scope to lowercase first path segments, or null when the key
+ * is absent — null means "everything under the root is the workspace", which
+ * is what every workspace did before 0.11.3. Pure: the consumer reads
+ * config.json and hands the object in.
+ */
+function scopeFrom(cfg) {
+  if (!cfg || !Array.isArray(cfg.scope)) return null;
+  const out = [];
+  for (const s of cfg.scope) {
+    if (typeof s !== 'string') continue;
+    const first = s.split('\\').join('/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '')
+      .split('/')[0].toLowerCase();
+    if (first && !out.includes(first)) out.push(first);
+  }
+  return out;
+}
+
+/**
+ * Is this workspace-relative path a member of the workspace? Decided on the
+ * FIRST segment only, so `scope` selects root-level entries — folders or
+ * files — and everything deeper inherits its root entry's verdict.
+ */
+function inScope(rel, scope) {
+  if (!Array.isArray(scope)) return true;
+  const first = String(rel).split('\\').join('/').split('/')[0].toLowerCase();
+  return ALWAYS_IN_SCOPE.includes(first) || scope.includes(first);
 }
 
 module.exports = {
-  HIDDEN_KEEP_NAMES, isHiddenForeignDir, scanIgnoreFrom,
+  HIDDEN_KEEP_NAMES, isHiddenForeignDir,
+  ALWAYS_IN_SCOPE, scopeFrom, inScope,
   SOURCE_MATERIAL_REL, SOURCE_MATERIAL_GITIGNORED_REL,
   CREDENTIALS_ROOT, CREDENTIALS_REL, FOREIGN_REL,
   JUNK_NAMES, BUILD_OUTPUT_NAMES, WORKSPACE_PRIVATE_REL,

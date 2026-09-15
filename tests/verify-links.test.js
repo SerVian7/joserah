@@ -205,14 +205,37 @@ test('a broken link inside .joserah is still caught (hidden but kept)', (t) => {
   assert.strictEqual(runTool('verify-links.js', [d]).status, 1);
 });
 
-test('scanIgnore prefixes from config.json are not scanned', (t) => {
+test('scope in config.json selects the root entries that are scanned', (t) => {
   const d = ws(t, {
-    '.joserah/config.json': JSON.stringify({ scanIgnore: ['tmp', 'old-docs/archive'] }),
+    '.joserah/config.json': JSON.stringify({ scope: ['notes'] }),
+    'notes/ok.md': 'fine\n',
     'tmp/x.md': '[gone](nope.md)\n',
-    'old-docs/archive/y.md': '[gone](nope.md)\n',
-    'old-docs/live.md': 'fine\n',
+    'worktrees/deep/y.md': '[gone](nope.md)\n',
+    'LOOSE.md': '[gone](nope.md)\n',
+    '.joserah/knowledge/wiki/a.md': 'always in scope\n',
   });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
+test('a selected root entry is still checked, and .joserah stays checked without being selected', (t) => {
+  const d = ws(t, {
+    '.joserah/config.json': JSON.stringify({ scope: ['notes'] }),
+    'notes/bad.md': '[gone](nope.md)\n',
+  });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 1);
+  const d2 = ws(t, {
+    '.joserah/config.json': JSON.stringify({ scope: ['notes'] }),
+    '.joserah/knowledge/wiki/a.md': '[gone](nope.md)\n',
+  });
+  assert.strictEqual(runTool('verify-links.js', [d2]).status, 1);
+});
+
+test('no scope key scans everything, as before', (t) => {
+  const d = ws(t, {
+    '.joserah/config.json': JSON.stringify({ workspace: 'w' }),
+    'anything/x.md': '[gone](nope.md)\n',
+  });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 1);
 });
 
 test('a malformed config.json does not break the link check', (t) => {
