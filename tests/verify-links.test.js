@@ -194,3 +194,28 @@ test('a wikilink that matches a note title resolves', (t) => {
   const r = runTool('verify-links.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);
 });
+
+test('hidden directories other than .joserah/.claude are not scanned', (t) => {
+  const d = ws(t, { '.codex/notes/x.md': '[gone](nope.md)\n', '.joserah/knowledge/wiki/a.md': 'ok\n', 'ok.md': 'hi\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
+test('a broken link inside .joserah is still caught (hidden but kept)', (t) => {
+  const d = ws(t, { '.joserah/knowledge/wiki/a.md': '[gone](nope.md)\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 1);
+});
+
+test('scanIgnore prefixes from config.json are not scanned', (t) => {
+  const d = ws(t, {
+    '.joserah/config.json': JSON.stringify({ scanIgnore: ['tmp', 'old-docs/archive'] }),
+    'tmp/x.md': '[gone](nope.md)\n',
+    'old-docs/archive/y.md': '[gone](nope.md)\n',
+    'old-docs/live.md': 'fine\n',
+  });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});
+
+test('a malformed config.json does not break the link check', (t) => {
+  const d = ws(t, { '.joserah/config.json': '{not json', 'a.md': '[b](b.md)\n', 'b.md': '\n' });
+  assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
+});

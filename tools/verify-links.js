@@ -9,9 +9,19 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES, SOURCE_MATERIAL_REL, isUnder } = require('./lib/untouchable');
+const { LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES, SOURCE_MATERIAL_REL, isUnder,
+  isHiddenForeignDir, scanIgnoreFrom } = require('./lib/untouchable');
 
 const ROOT = path.resolve(process.argv[2] || process.cwd());
+
+// The owner's own additions to the skip list, read from the workspace marker.
+// A missing or malformed config never breaks a walk: any failure is an empty
+// list, and the scan proceeds with the built-in sets alone.
+function readConfig(root) {
+  try { return JSON.parse(fs.readFileSync(path.join(root, '.joserah', 'config.json'), 'utf8').replace(/^﻿/, '')); }
+  catch { return {}; }
+}
+const SCAN_IGNORE = scanIgnoreFrom(readConfig(ROOT));
 
 // Which paths this scan may not walk is stated once, in lib/untouchable.js,
 // and composed there per consumer; the two sets below name what this tool
@@ -32,14 +42,14 @@ const SKIP_ANY = new Set(LINK_SCAN_SKIP_NAMES);
 const SKIP_REL = LINK_SCAN_SKIP_REL;
 
 function isSkippedRel(rel) {
-  return isUnder(rel, SKIP_REL);
+  return isUnder(rel, SKIP_REL) || isUnder(rel, SCAN_IGNORE);
 }
 
 function* mdFiles(dir, rel) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const childRel = rel ? `${rel}/${e.name}` : e.name;
     if (e.isDirectory()) {
-      if (SKIP_ANY.has(e.name) || isSkippedRel(childRel)) continue;
+      if (SKIP_ANY.has(e.name) || isHiddenForeignDir(e.name) || isSkippedRel(childRel)) continue;
       yield* mdFiles(path.join(dir, e.name), childRel);
     } else if (e.name.toLowerCase().endsWith('.md')) {
       yield path.join(dir, e.name);
