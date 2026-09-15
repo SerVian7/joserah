@@ -375,3 +375,30 @@ agent pays the same fixed opening cost whatever it is handed — the claim forma
 its own link check, auditing what it wrote — so eight agents over small folders
 pay it eight times for the reading three would have done. Small folders are
 grouped; a folder gets its own agent when it is big enough to earn one.
+
+### Upgrading to 0.11.3
+
+Every walk the plugin makes — the link check, the migration scan, the claims
+audit, the changed-since count, the secret scan, the zip backup and doctor's
+placeholder scan — now skips hidden directories other than `.joserah` and
+`.claude`. A hidden folder is a tool's, not the owner's: editor servers, model
+caches, package caches. A workspace rooted at a home directory holds dozens of
+them, and the scans were reading thousands of their markdown files as notes.
+
+`.joserah/config.json` also accepts an optional `scope` list — the root entries
+that ARE the workspace. When the key is present, nothing else at the root is
+walked, zipped, migrated or link-checked. An ignore list was the wrong way
+round: a home directory grows new tool folders without asking, so the list
+could never be finished, while the handful of folders that are the owner's own
+work can simply be named. The plugin's own shell (`.joserah`, `AGENTS.md`,
+`JOSERAH-ROLE.md`, `keys/`, `projects/`, `imports/`) is always in scope and
+never needs selecting. Nothing writes the key; a workspace rooted at a home
+directory sets it by hand:
+
+```json
+"scope": [".claude", "notes"]
+```
+
+Entries are matched on their first path segment, so naming a folder takes
+everything under it. A workspace without the key, and without hidden tool
+folders, scans exactly as it did before.
