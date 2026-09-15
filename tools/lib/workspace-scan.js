@@ -35,7 +35,8 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { MIGRATION_SKIP_NAMES, MIGRATION_SKIP_REL, isUnder } = require('./untouchable');
+const { MIGRATION_SKIP_NAMES, MIGRATION_SKIP_REL, isUnder,
+  isHiddenForeignDir, scopeFrom, inScope } = require('./untouchable');
 
 // The two directory sets are composed in lib/untouchable.js, the one place
 // that states which paths a tool may not walk; the reasons for this tool's
@@ -49,20 +50,27 @@ const SKIP_FILE_REL = new Set([
   '.joserah/agent.md',
 ]);
 
-function isSkippedRel(rel) {
-  return isUnder(rel, SKIP_REL);
+// untouchable.js stays pure, so the owner's own `scope` selection is read
+// here. A missing or malformed config reads as no selection — everything
+// under the root — so a walk is never broken by the marker file.
+function readConfig(root) {
+  try { return JSON.parse(fs.readFileSync(path.join(root, '.joserah', 'config.json'), 'utf8').replace(/^﻿/, '')); }
+  catch { return {}; }
 }
 
 function scanWorkspace(root) {
   const files = [];
   const boundaries = [];
+  const absRoot = path.resolve(root);
+  const scope = scopeFrom(readConfig(absRoot));
+  const isSkippedRel = (rel) => isUnder(rel, SKIP_REL) || !inScope(rel, scope);
 
   function walk(absDir, rel) {
     for (const e of fs.readdirSync(absDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       const abs = path.join(absDir, e.name);
       if (e.isDirectory()) {
-        if (SKIP_DIR_ANY.has(e.name) || isSkippedRel(childRel)) continue;
+        if (SKIP_DIR_ANY.has(e.name) || isHiddenForeignDir(e.name) || isSkippedRel(childRel)) continue;
         // A nested workspace is a boundary, never a subtree to migrate. `abs`
         // is always a child of `root` here, so this can never mistake the
         // root for its own nested workspace — no `rel !== ''` guard needed.
@@ -78,7 +86,7 @@ function scanWorkspace(root) {
     }
   }
 
-  walk(path.resolve(root), '');
+  walk(absRoot, '');
   return { files, boundaries };
 }
 

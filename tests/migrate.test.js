@@ -638,3 +638,29 @@ test('migrate leaves a hand-edited AGENTS.md alone and says so', (t) => {
   assert.strictEqual(out.prompt.action, 'refused');
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
 });
+
+test('migrate never touches markdown under a hidden tool directory or outside scope', (t) => {
+  const dir = ws(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.scope = ['notes'];
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const foreign = ['.codex/sessions/a.md', 'tmp/b.md', 'LOOSE.md'];
+  for (const rel of foreign) write(dir, rel, '# untouched\n');
+  write(dir, 'notes/mine.md', '# mine\n');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  for (const rel of foreign) {
+    assert.strictEqual(fs.readFileSync(path.join(dir, rel), 'utf8'), '# untouched\n', rel + ' was rewritten');
+  }
+  // the selected tree is still migrated — scope narrows the walk, it does not stop it
+  assert.notStrictEqual(fs.readFileSync(path.join(dir, 'notes', 'mine.md'), 'utf8'), '# mine\n',
+    'notes/mine.md should have been migrated');
+});
+
+test('a hidden tool directory is skipped even when no scope key is set', (t) => {
+  const dir = ws(t);
+  write(dir, '.codex/sessions/a.md', '# untouched\n');
+  assert.strictEqual(runTool('migrate.js', [dir]).status, 0);
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.codex', 'sessions', 'a.md'), 'utf8'), '# untouched\n');
+});
