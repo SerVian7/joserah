@@ -142,3 +142,33 @@ test('--changed-since refuses an instant it cannot parse rather than counting fr
   assert.strictEqual(r.status, 2);
   assert.match(r.stderr, /cannot check/i);
 });
+
+// Deterministic by construction: everything the scaffold wrote is backdated an
+// hour, so the only files newer than `since` are the five written below. The
+// older tests in this file take `since` from the wall clock and race the
+// filesystem's mtime resolution; this one must not.
+test('--changed-since ignores hidden tool directories and out-of-scope root entries', (t) => {
+  const dir = repoWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.scope = ['notes'];
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const old = Date.now() - 3600000;
+  (function backdate(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) backdate(p);
+      else try { fs.utimesSync(p, old / 1000, old / 1000); } catch { /* ignore */ }
+    }
+  })(dir);
+  const since = new Date(old + 1000).toISOString();
+  for (const rel of ['.codex/a.txt', 'tmp/b.txt', 'LOOSE.txt',
+    'notes/c.txt', '.joserah/desk/inbox/new.md']) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), 'x');
+  }
+  const r = runTool('backup-scope.js', [dir, '--changed-since', since]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(Number(r.stdout.trim()), 2,
+    'only notes/c.txt and the inbox note are the workspace');
+});

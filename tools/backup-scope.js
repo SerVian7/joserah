@@ -29,6 +29,7 @@ const {
   ARCHIVE_KEYS_PREFIXES, ARCHIVE_EXCLUDE_ROOT_REL,
   SOURCE_MATERIAL_REL, SOURCE_MATERIAL_GITIGNORED_REL,
   WALK_SKIP_NAMES, JUNK_NAMES,
+  isHiddenForeignDir, scopeFrom, inScope,
 } = require('./lib/untouchable');
 const { isOwnRepoRoot } = require('./lib/git-root');
 
@@ -216,19 +217,30 @@ function changedSince(root, iso) {
   // uses. Nothing under one of those directories is the owner's own work, so
   // counting it would only ever overstate how much has changed.
   const skip = new Set(WALK_SKIP_NAMES);
+  // A hidden directory is a tool's cache, and `scope` names the root entries
+  // that are the workspace at all. Neither is the owner's work, so counting
+  // them would only ever overstate how much has changed.
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(path.join(root, '.joserah', 'config.json'), 'utf8')
+      .replace(/^﻿/, ''));
+  } catch { cfg = {}; }
+  const scope = scopeFrom(cfg);
   let n = 0;
-  (function walk(dir) {
+  (function walk(dir, rel) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const full = path.join(dir, e.name);
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      if (!inScope(childRel, scope)) continue;
       if (e.isDirectory()) {
-        if (!skip.has(e.name)) walk(full);
+        if (!skip.has(e.name) && !isHiddenForeignDir(e.name)) walk(full, childRel);
       } else if (e.isFile()) {
         try { if (fs.statSync(full).mtimeMs > since) n++; } catch { /* vanished mid-walk */ }
       }
     }
-  })(root);
+  })(root, '');
   console.log(String(n));
   process.exit(0);
 }
