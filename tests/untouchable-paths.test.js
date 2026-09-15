@@ -89,6 +89,27 @@ test('isUnder matches a path or anything under it, either separator, either case
   assert.strictEqual(u.isUnder('knowledge/projects/a.md', ['projects']), false);
 });
 
+test('isHiddenForeignDir: a dot-directory is a tool\'s unless it is .joserah or .claude', () => {
+  assert.strictEqual(u.isHiddenForeignDir('.codex'), true);
+  assert.strictEqual(u.isHiddenForeignDir('.vscode-server'), true);
+  assert.strictEqual(u.isHiddenForeignDir('.joserah'), false);
+  assert.strictEqual(u.isHiddenForeignDir('.claude'), false);
+  assert.strictEqual(u.isHiddenForeignDir('docs'), false);
+  assert.strictEqual(u.isHiddenForeignDir('.'), false);   // never a child entry, but must not throw
+  assert.deepStrictEqual(u.HIDDEN_KEEP_NAMES, ['.joserah', '.claude']);
+});
+
+test('scanIgnoreFrom: normalises config.scanIgnore to workspace-relative lowercase prefixes', () => {
+  assert.deepStrictEqual(u.scanIgnoreFrom(null), []);
+  assert.deepStrictEqual(u.scanIgnoreFrom({}), []);
+  assert.deepStrictEqual(u.scanIgnoreFrom({ scanIgnore: 'tmp' }), []);
+  assert.deepStrictEqual(u.scanIgnoreFrom({ scanIgnore: ['tmp/', './Worktrees', '\\docs\\old\\', '', 42] }),
+    ['tmp', 'worktrees', 'docs/old']);
+  // works with the existing matcher
+  assert.strictEqual(u.isUnder('TMP/x.md', u.scanIgnoreFrom({ scanIgnore: ['tmp'] })), true);
+  assert.strictEqual(u.isUnder('tmpx/x.md', u.scanIgnoreFrom({ scanIgnore: ['tmp'] })), false);
+});
+
 test('a scaffolded workspace gets the library beside its own link checker, and it runs', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);

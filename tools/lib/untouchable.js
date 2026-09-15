@@ -103,7 +103,29 @@ function isUnder(rel, prefixes) {
   return prefixes.some((p) => low === p || low.startsWith(p + '/'));
 }
 
+// Hidden directories are a tool's, never the owner's: editor servers, model
+// caches, package caches. A workspace rooted at a home directory holds dozens
+// of them, and 2026-09-15's dry run counted thousands of their markdown files
+// as "notes". Two are the workspace's own and stay: .joserah (the knowledge
+// base) and .claude (settings.json and promoted skills).
+const HIDDEN_KEEP_NAMES = ['.joserah', '.claude'];
+function isHiddenForeignDir(name) {
+  return typeof name === 'string' && name.length > 1 && name[0] === '.' && !HIDDEN_KEEP_NAMES.includes(name);
+}
+
+// Optional `scanIgnore` in .joserah/config.json: workspace-relative prefixes
+// the owner declares off-limits to every walk (a home-root workspace's tmp/,
+// worktrees/, an old docs tree). Normalised to the shape isUnder() matches.
+// Pure: the consumer reads config.json and hands the object in.
+function scanIgnoreFrom(cfg) {
+  const list = cfg && Array.isArray(cfg.scanIgnore) ? cfg.scanIgnore : [];
+  return list.filter((s) => typeof s === 'string')
+    .map((s) => s.split('\\').join('/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '').toLowerCase())
+    .filter(Boolean);
+}
+
 module.exports = {
+  HIDDEN_KEEP_NAMES, isHiddenForeignDir, scanIgnoreFrom,
   SOURCE_MATERIAL_REL, SOURCE_MATERIAL_GITIGNORED_REL,
   CREDENTIALS_ROOT, CREDENTIALS_REL, FOREIGN_REL,
   JUNK_NAMES, BUILD_OUTPUT_NAMES, WORKSPACE_PRIVATE_REL,
