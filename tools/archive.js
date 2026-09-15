@@ -26,7 +26,8 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { ARCHIVE_EXCLUDE_ROOT_REL, ARCHIVE_SKIP_NAMES, ARCHIVE_KEYS_PREFIXES, isUnder } = require('./lib/untouchable');
+const { ARCHIVE_EXCLUDE_ROOT_REL, ARCHIVE_SKIP_NAMES, ARCHIVE_KEYS_PREFIXES, isUnder,
+  isHiddenForeignDir, scopeFrom, inScope } = require('./lib/untouchable');
 
 // The three sets below are composed in lib/untouchable.js. NOTE what is not
 // among them: source material (`imports/`, and its legacy names) is NOT
@@ -92,6 +93,10 @@ function isKeysPath(rel) {
 }
 function isExcludedDir(rel, name) {
   if (EXCLUDE_ANY_DIRS.has(name.toLowerCase())) return true;
+  // A hidden directory is a tool's cache, not the owner's work: a workspace
+  // rooted at a home directory would otherwise drag .cache, .npm and an
+  // editor server into the zip, gigabytes of it, without a word.
+  if (isHiddenForeignDir(name)) return true;
   const low = rel.toLowerCase();
   return EXCLUDE_ROOT_DIRS.some((d) => low === d);
 }
@@ -100,6 +105,15 @@ function collect(root, includeKeys) {
   const files = [];
   const emptyDirs = [];
   const skipped = [];
+  // `scope`, when the owner set it, names the root entries that are the
+  // workspace at all. Read here, not in the pure library; a missing or
+  // malformed config reads as no selection and the zip carries everything.
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(path.join(root, '.joserah', 'config.json'), 'utf8')
+      .replace(/^﻿/, ''));
+  } catch { cfg = {}; }
+  const scope = scopeFrom(cfg);
   (function walk(dir, relBase) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const e of entries) {
@@ -109,6 +123,7 @@ function collect(root, includeKeys) {
       // down; catching it here means the whole backup doesn't abort over one
       // stray link, and the caller learns exactly which path was skipped.
       if (e.isSymbolicLink()) { skipped.push(rel); continue; }
+      if (!inScope(rel, scope)) continue;
       if (e.isDirectory()) {
         if (isExcludedDir(rel, e.name)) continue;
         if (isKeysPath(rel) && !includeKeys) {

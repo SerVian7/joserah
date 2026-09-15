@@ -265,3 +265,39 @@ test('verify passes a good archive and fails a corrupt one', (t) => {
   assert.strictEqual(r.status, 1);
   assert.match(r.stderr, /a\.md/);
 });
+
+test('zip skips hidden tool directories but keeps .joserah and .claude', (t) => {
+  const d = tmpdir(t);
+  const ws = path.join(d, 'ws');
+  make(ws, '.codex/sessions/a.md', 'cache');
+  make(ws, '.vscode-server/x/b.js', 'cache');
+  make(ws, '.claude/settings.json', '{}');
+  make(ws, '.joserah/desk/inbox/captures.md', 'mine');
+  make(ws, 'note.md');
+  const r = runTool('archive.js', ['create', ws, path.join(d, 'o.zip')]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const names = listZip(path.join(d, 'o.zip'));
+  assert.ok(!names.some((n) => n.startsWith('.codex/')), 'no .codex entry');
+  assert.ok(!names.some((n) => n.startsWith('.vscode-server/')), 'no .vscode-server entry');
+  assert.ok(names.includes('.claude/settings.json'), '.claude/settings.json is carried');
+  assert.ok(names.some((n) => n.startsWith('.joserah/')), '.joserah is carried');
+  assert.ok(names.includes('note.md'), 'an ordinary note is carried');
+});
+
+test('zip carries only the selected root entries when config.json names a scope', (t) => {
+  const d = tmpdir(t);
+  const ws = path.join(d, 'ws');
+  make(ws, '.joserah/config.json', JSON.stringify({ scope: ['notes'] }));
+  make(ws, 'notes/keep.md', 'mine');
+  make(ws, 'tmp/drop.md', 'theirs');
+  make(ws, 'worktrees/deep/drop.md', 'theirs');
+  make(ws, 'LOOSE.md', 'theirs');
+  const r = runTool('archive.js', ['create', ws, path.join(d, 'o.zip')]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const names = listZip(path.join(d, 'o.zip'));
+  assert.ok(names.includes('notes/keep.md'), 'the selected tree is carried');
+  assert.ok(names.includes('.joserah/config.json'), '.joserah is always in scope');
+  for (const gone of ['tmp/drop.md', 'worktrees/deep/drop.md', 'LOOSE.md']) {
+    assert.ok(!names.includes(gone), gone + ' must not be archived');
+  }
+});
