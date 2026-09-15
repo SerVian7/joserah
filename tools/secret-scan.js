@@ -15,7 +15,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { SPECIFIC } = require('../hooks/lib/redactions');
 const { isOwnRepoRoot } = require('./lib/git-root');
-const { SECRET_SCAN_SKIP_REL, isUnder } = require('./lib/untouchable');
+const { SECRET_SCAN_SKIP_REL, isUnder,
+  isHiddenForeignDir, scopeFrom, inScope } = require('./lib/untouchable');
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const staged = process.argv.includes('--staged');
@@ -31,6 +32,18 @@ const TEXT_EXT = new Set(['.md', '.json', '.txt', '.yml', '.yaml', '.toml']);
 function isSkipped(rel) {
   return isUnder(rel, SKIP);
 }
+
+// The owner's own selection of what the workspace is. Read here, not in the
+// pure library; a missing or malformed config reads as no selection, and the
+// scan covers everything exactly as it always did. Note this narrows only the
+// filesystem walk: a tracked-file scan reads whatever git reports, because a
+// secret committed to the repository is the repository's problem wherever it
+// sits.
+function readConfig(dir) {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8').replace(/^﻿/, '')); }
+  catch { return {}; }
+}
+const SCOPE = scopeFrom(readConfig(root));
 
 // A placeholder has the SHAPE of a secret slot, not of a secret: the vendor
 // doc's `api_key=bbbbbb`, the wiki's `<SIFRE>`, the sample's `changeme`.
@@ -83,9 +96,11 @@ function walkedFiles() {
   (function walk(dir, rel) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const childRel = rel ? `${rel}/${e.name}` : e.name;
-      if (isSkipped(childRel)) continue;
-      if (e.isDirectory()) walk(path.join(dir, e.name), childRel);
-      else out.push(childRel);
+      if (isSkipped(childRel) || !inScope(childRel, SCOPE)) continue;
+      if (e.isDirectory()) {
+        if (isHiddenForeignDir(e.name)) continue;
+        walk(path.join(dir, e.name), childRel);
+      } else out.push(childRel);
     }
   })(root, '');
   return out;

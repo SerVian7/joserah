@@ -569,3 +569,31 @@ test('the size warning trips before any layer is long enough to be cut', () => {
   assert.ok(agents + MAX_LAYER_CHARS > WARN_TOTAL_CHARS,
     'a file at the cap must already have tripped the warning');
 });
+
+test('the placeholder scan skips hidden tool directories and out-of-scope root entries', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.scope = ['notes'];
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  for (const rel of ['.codex/w.md', 'tmp/z.md', 'LOOSE.md']) {
+    const p = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, 'A bare {{OWNER_NAME}} outside any code block.\n');
+  }
+  const r = runTool('doctor.js', [dir]);
+  assert.match(r.stdout, /^ok\s+no unfilled \{\{placeholders\}\}/m, r.stdout);
+});
+
+test('the placeholder scan still reads a selected tree', (t) => {
+  const dir = freshWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.scope = ['notes'];
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  fs.mkdirSync(path.join(dir, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'notes', 'z.md'), 'A bare {{OWNER_NAME}} here.\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /no unfilled \{\{placeholders\}\}.*1 file/i);
+});

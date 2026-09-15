@@ -28,6 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { denyFor, hostPathsFor, defaultTrustFor } = require('./permission-deny');
+const { HIDDEN_KEEP_NAMES, ALWAYS_IN_SCOPE, scopeFrom } = require('./untouchable');
 const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('./note-format');
 // The standing layers the session-start hook injects, and what they cost: the
 // size check below must measure exactly what a session is handed, so it asks
@@ -558,15 +559,26 @@ const CHECKS = [
     // so a nested knowledge/projects/ stays out of the scan exactly as before.
     // Under `node -e <src> a b`, process.argv[1] is `a` and process.argv[2] is
     // `b`, so `root` keeps its place.
-    run({ root, WALK_SKIP_NAMES }) {
+    run({ root, cfg, WALK_SKIP_NAMES }) {
+      // The hidden-directory rule and the owner's `scope` travel as DATA for
+      // the same reason the skip list does: this walk runs in its own
+      // `node -e` process and cannot require the library. `rel` is tracked
+      // through the recursion so scope can be decided on the first segment.
+      const extra = JSON.stringify({
+        hiddenKeep: HIDDEN_KEEP_NAMES, always: ALWAYS_IN_SCOPE, scope: scopeFrom(cfg),
+      });
       const leftover = spawnSync('node', ['-e', `
   const fs=require('fs'),path=require('path');let hits=0;
-  const SKIP=JSON.parse(process.argv[2]);
+  const SKIP=JSON.parse(process.argv[2]),X=JSON.parse(process.argv[3]);
+  const inScope=(rel)=>{if(!Array.isArray(X.scope))return true;
+    const f=rel.split('/')[0].toLowerCase();return X.always.includes(f)||X.scope.includes(f);};
   function stripCode(t){return t.replace(/\`\`\`[\\s\\S]*?\`\`\`/g,m=>m.replace(/[^\\n]/g,' ')).replace(/\`[^\`\\n]*\`/g,m=>' '.repeat(m.length));}
-  (function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){
-    if(e.isDirectory()){if(!SKIP.includes(e.name))walk(path.join(d,e.name));}
-    else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(stripCode(fs.readFileSync(path.join(d,e.name),'utf8'))))hits++;}})(process.argv[1]);
-  console.log(hits);`, root, JSON.stringify(WALK_SKIP_NAMES)], { encoding: 'utf8' });
+  (function walk(d,rel){for(const e of fs.readdirSync(d,{withFileTypes:true})){
+    const r=rel?rel+'/'+e.name:e.name;
+    if(!inScope(r))continue;
+    if(e.isDirectory()){if(!SKIP.includes(e.name)&&!(e.name.length>1&&e.name[0]==='.'&&!X.hiddenKeep.includes(e.name)))walk(path.join(d,e.name),r);}
+    else if(e.name.endsWith('.md')&&/{{[A-Z_]+}}/.test(stripCode(fs.readFileSync(path.join(d,e.name),'utf8'))))hits++;}})(process.argv[1],'');
+  console.log(hits);`, root, JSON.stringify(WALK_SKIP_NAMES), extra], { encoding: 'utf8' });
       return check('no unfilled {{placeholders}}', leftover.stdout.trim() === '0', `${leftover.stdout.trim()} file(s)`);
     },
   },

@@ -216,3 +216,37 @@ test('--staged skips a file staged for deletion instead of calling it unreadable
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.ok(!/could not read/.test(r.stderr), 'a staged deletion must not be treated as unreadable');
 });
+
+test('secret-scan skips hidden tool directories and out-of-scope root entries', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  const secret = 'sk-' + 'a1b2c3d4'.repeat(3);
+  fs.mkdirSync(path.join(d, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.joserah', 'config.json'), JSON.stringify({ scope: ['notes'] }));
+  for (const rel of ['.codex/x.md', 'tmp/y.md', 'LOOSE.md']) {
+    const p = path.join(d, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, `api key: ${secret}\n`);
+  }
+  fs.mkdirSync(path.join(d, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'notes', 'ok.md'), 'nothing here\n');
+  assert.strictEqual(runTool('secret-scan.js', [d]).status, 0);
+});
+
+test('secret-scan still reads the selected tree and .joserah', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  const secret = 'sk-' + 'a1b2c3d4'.repeat(3);
+  fs.mkdirSync(path.join(d, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.joserah', 'config.json'), JSON.stringify({ scope: ['notes'] }));
+  fs.mkdirSync(path.join(d, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'notes', 'bad.md'), `api key: ${secret}\n`);
+  assert.strictEqual(runTool('secret-scan.js', [d]).status, 1);
+});
+
+test('a hidden tool directory is skipped even with no scope key', (t) => {
+  const d = path.join(tmpdir(t), 'ws');
+  const secret = 'sk-' + 'a1b2c3d4'.repeat(3);
+  fs.mkdirSync(path.join(d, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.codex', 'x.md'), `api key: ${secret}\n`);
+  fs.writeFileSync(path.join(d, 'ok.md'), 'nothing here\n');
+  assert.strictEqual(runTool('secret-scan.js', [d]).status, 0);
+});
