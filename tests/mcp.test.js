@@ -171,3 +171,72 @@ test('a note that fits is not touched', (t) => {
   assert.ok(!/truncated/.test(r.text));
   assert.ok(r.text.endsWith('nothing there has an automatic backup.\n'));
 });
+
+const core = require(path.join(PLUGIN_ROOT, 'mcp', 'lib', 'core'));
+
+test('three tools, in a fixed order, with specification-legal names', (t) => {
+  const tools = core.createServer({ root: fixture(t) }).listTools();
+  assert.deepStrictEqual(tools.map((x) => x.name), ['kb_search', 'kb_read', 'kb_list']);
+  for (const tool of tools) {
+    assert.match(tool.name, /^[A-Za-z0-9_.-]{1,128}$/);
+    assert.ok(tool.description.length > 10, `${tool.name} has no description`);
+    assert.strictEqual(tool.inputSchema.type, 'object');
+  }
+});
+
+// The decision this pins: DECISIONS.md, "MCP design rule: no character in the
+// MCP". The instruction string says how to CALL, never how to BE. Asserting
+// the whole string is the cheapest way to make an edit that adds a sentence
+// about tone fail a test instead of passing a review.
+test('the instruction string carries the conventions and no character at all', () => {
+  assert.strictEqual(core.INSTRUCTIONS,
+    'A markdown knowledge base. Call kb_search or kb_list to find a path, then kb_read. '
+    + 'Paths are workspace-relative. Dates are ISO 8601.');
+  assert.ok(core.INSTRUCTIONS.length < 200, 'this is the short pattern, not a server tour');
+  assert.doesNotMatch(core.INSTRUCTIONS, /\bI\b|\bJoserah\b|assistant/);
+});
+
+test('kb_list and kb_search come back as one text block of JSON', (t) => {
+  const server = core.createServer({ root: fixture(t) });
+  const listed = JSON.parse(server.callTool('kb_list', { type: 'topic' }).content[0].text);
+  assert.deepStrictEqual(listed.map((r) => r.path), ['.joserah/knowledge/wiki/topics/backup.md']);
+  const found = JSON.parse(server.callTool('kb_search', { query: 'seventeen' }).content[0].text);
+  assert.strictEqual(found.length, 1);
+  assert.strictEqual(found[0].line, 15, 'the fixture note puts that word on line 15');
+});
+
+test('kb_read comes back as the note itself', (t) => {
+  const r = core.createServer({ root: fixture(t) })
+    .callTool('kb_read', { path: '.joserah/knowledge/wiki/topics/backup.md' });
+  assert.ok(!r.isError);
+  assert.match(r.content[0].text, /^path: \.joserah\/knowledge\/wiki\/topics\/backup\.md\n/);
+});
+
+test('a mistake the caller can fix comes back as isError, not as a protocol error', (t) => {
+  const server = core.createServer({ root: fixture(t) });
+  const missing = server.callTool('kb_read', { path: 'keys/AGENTS.md' });
+  assert.strictEqual(missing.isError, true);
+  assert.match(missing.content[0].text, /no note at keys\/AGENTS\.md/);
+  assert.strictEqual(server.callTool('kb_search', {}).isError, true);
+  assert.strictEqual(server.callTool('kb_read', {}).isError, true);
+});
+
+test('an unknown tool throws a protocol error, and so does a tool allow hides', (t) => {
+  const root = fixture(t);
+  const open = core.createServer({ root });
+  assert.throws(() => open.callTool('kb_delete', {}), (err) => err.rpcCode === -32602);
+
+  // The whole of the Part 2 seam: a filter over names. The core learns nothing
+  // about who is calling and holds no vocabulary for it.
+  const readOnly = core.createServer({ root, allow: (name) => name !== 'kb_list' });
+  assert.deepStrictEqual(readOnly.listTools().map((x) => x.name), ['kb_search', 'kb_read']);
+  assert.throws(() => readOnly.callTool('kb_list', {}), (err) => err.rpcCode === -32602);
+  assert.ok(readOnly.callTool('kb_search', { query: 'backup' }).content[0].text);
+});
+
+test('the core holds no authentication, identity or panel vocabulary', () => {
+  const src = fs.readFileSync(path.join(PLUGIN_ROOT, 'mcp', 'lib', 'core.js'), 'utf8');
+  for (const forbidden of [/\bACL\b/, /\btoken\b/i, /\bauth/i, /x-zc-/i, /permission/i, /\bemail\b/i]) {
+    assert.doesNotMatch(src, forbidden, `${forbidden} belongs to the corporate wrapper, not the core`);
+  }
+});
