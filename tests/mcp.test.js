@@ -174,9 +174,9 @@ test('a note that fits is not touched', (t) => {
 
 const core = require(path.join(PLUGIN_ROOT, 'mcp', 'lib', 'core'));
 
-test('three tools, in a fixed order, with specification-legal names', (t) => {
+test('four tools, in a fixed order, with specification-legal names', (t) => {
   const tools = core.createServer({ root: fixture(t) }).listTools();
-  assert.deepStrictEqual(tools.map((x) => x.name), ['kb_search', 'kb_read', 'kb_list']);
+  assert.deepStrictEqual(tools.map((x) => x.name), ['kb_search', 'kb_read', 'kb_list', 'kb_append']);
   for (const tool of tools) {
     assert.match(tool.name, /^[A-Za-z0-9_.-]{1,128}$/);
     assert.ok(tool.description.length > 10, `${tool.name} has no description`);
@@ -229,7 +229,7 @@ test('an unknown tool throws a protocol error, and so does a tool allow hides', 
   // The whole of the Part 2 seam: a filter over names. The core learns nothing
   // about who is calling and holds no vocabulary for it.
   const readOnly = core.createServer({ root, allow: (name) => name !== 'kb_list' });
-  assert.deepStrictEqual(readOnly.listTools().map((x) => x.name), ['kb_search', 'kb_read']);
+  assert.deepStrictEqual(readOnly.listTools().map((x) => x.name), ['kb_search', 'kb_read', 'kb_append']);
   assert.throws(() => readOnly.callTool('kb_list', {}), (err) => err.rpcCode === -32602);
   assert.ok(readOnly.callTool('kb_search', { query: 'backup' }).content[0].text);
 });
@@ -332,4 +332,41 @@ test('nothing in mcp/ reaches the network or names a vendor', () => {
       assert.doesNotMatch(src, forbidden, `${rel.join('/')} contains ${forbidden}`);
     }
   }
+});
+
+test('append adds to an existing note and returns where it landed', (t) => {
+  const root = fixture(t);
+  const rel = '.joserah/knowledge/wiki/topics/backup.md';
+  const before = fs.readFileSync(path.join(root, rel), 'utf8');
+  const r = kb.appendNote(root, { path: rel, text: '- [fact] a remote exists now' });
+  const after = fs.readFileSync(path.join(root, rel), 'utf8');
+  assert.strictEqual(after, before + '- [fact] a remote exists now\n');
+  assert.strictEqual(r.offset, Buffer.byteLength(after, 'utf8'));
+  assert.strictEqual(r.appended, '- [fact] a remote exists now\n');
+});
+
+test('append creates nothing, and refuses a path outside the tool surface', (t) => {
+  const root = fixture(t);
+  for (const bad of ['.joserah/knowledge/brand-new.md', 'keys/AGENTS.md', '../outside.md']) {
+    assert.ok(kb.appendNote(root, { path: bad, text: 'x' }).error, `${bad} was writable`);
+  }
+  assert.ok(!fs.existsSync(path.join(root, '.joserah', 'knowledge', 'brand-new.md')));
+});
+
+test('a credential-shaped string is refused and nothing is written', (t) => {
+  const root = fixture(t);
+  const rel = '.joserah/knowledge/wiki/topics/backup.md';
+  const before = fs.readFileSync(path.join(root, rel), 'utf8');
+  const r = kb.appendNote(root, { path: rel, text: 'api_key: "abcd1234efgh5678"' });
+  assert.match(r.error, /secret/i);
+  assert.strictEqual(fs.readFileSync(path.join(root, rel), 'utf8'), before);
+});
+
+test('kb_append is the fourth tool, last, and the allow seam can hide it', (t) => {
+  const root = fixture(t);
+  assert.deepStrictEqual(core.createServer({ root }).listTools().map((x) => x.name),
+    ['kb_search', 'kb_read', 'kb_list', 'kb_append']);
+  const readOnly = core.createServer({ root, allow: (n) => n !== 'kb_append' });
+  assert.throws(() => readOnly.callTool('kb_append', { path: 'x', text: 'y' }),
+    (err) => err.rpcCode === -32602);
 });

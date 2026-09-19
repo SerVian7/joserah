@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The tool surface: three tools, one instruction line, one seam.
+ * The tool surface: four tools, one instruction line, one seam.
  *
  * Passive. It answers requests. It never starts work of its own, never calls
  * a model, never polls anything and never opens a socket.
@@ -75,6 +75,23 @@ const TOOLS = [
       },
     },
     run: (root, a) => json(kb.listNotes(root, { prefix: a.prefix || '', type: a.type || '' })),
+  },
+  {
+    name: 'kb_append',
+    description: 'Append a line or a block to an existing note. It creates no files, overwrites '
+      + 'nothing and never edits frontmatter. Text that looks like a credential is refused.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Workspace-relative path of an existing note.' },
+        text: { type: 'string', description: 'The text to append.' },
+      },
+      required: ['path', 'text'],
+    },
+    run: (root, a) => {
+      const r = kb.appendNote(root, { path: a.path, text: a.text });
+      return r.error ? failed(r.error) : json({ offset: r.offset, appended: r.appended });
+    },
   },
 ];
 

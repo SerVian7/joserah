@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('../../tools/lib/workspace-scan');
 const { parseFrontmatter } = require('../../tools/lib/note-format');
+const { SPECIFIC } = require('../../hooks/lib/redactions');
 
 // A result over this size is cut (spec §1.8). The reserve keeps the cut
 // notice itself inside the budget — the same shape as the hook layer's
@@ -173,4 +174,26 @@ function readNote(root, { path: rel, section = '' } = {}) {
   return { text: truncate(header(n) + body) };
 }
 
-module.exports = { notes, listNotes, searchNotes, readNote, MAX_CHARS, NOTICE_RESERVE, FM_RE, titleOf };
+/**
+ * Append to an EXISTING note. It creates nothing, overwrites nothing, deletes
+ * nothing and never touches frontmatter — the smallest possible "leave an
+ * update". Creation is absent on purpose: a caller here already has its own
+ * file access, so a create tool would duplicate a tool it already holds.
+ */
+function appendNote(root, { path: rel, text: body } = {}) {
+  if (typeof body !== 'string' || !body.trim()) return { error: 'kb_append needs text' };
+  const n = notes(root).find((x) => x.rel === rel);
+  if (!n) return { error: 'no note at ' + rel + ' - kb_append only appends to an existing note' };
+  for (const [re] of SPECIFIC) {
+    re.lastIndex = 0;
+    if (re.test(body)) {
+      re.lastIndex = 0;
+      return { error: 'refused: the text looks like a credential (' + re.source.slice(0, 40) + ') - nothing was written' };
+    }
+  }
+  const appended = body.endsWith('\n') ? body : body + '\n';
+  fs.appendFileSync(n.abs, appended, 'utf8');
+  return { offset: fs.statSync(n.abs).size, appended };
+}
+
+module.exports = { notes, listNotes, searchNotes, readNote, appendNote, MAX_CHARS, NOTICE_RESERVE, FM_RE, titleOf };
