@@ -240,3 +240,96 @@ test('the core holds no authentication, identity or panel vocabulary', () => {
     assert.doesNotMatch(src, forbidden, `${forbidden} belongs to the corporate wrapper, not the core`);
   }
 });
+
+const { spawnSync } = require('child_process');
+const srv = require(path.join(PLUGIN_ROOT, 'mcp', 'server'));
+
+function ask(server, method, params, id = 1) {
+  return srv.handle(server, '9.9.9', { jsonrpc: '2.0', id, method, params });
+}
+
+test('initialize answers in the revision the client asked for, when we speak it', (t) => {
+  const server = core.createServer({ root: fixture(t) });
+  for (const asked of srv.PROTOCOL_VERSIONS) {
+    assert.strictEqual(ask(server, 'initialize', { protocolVersion: asked }).result.protocolVersion, asked);
+  }
+  const unknown = ask(server, 'initialize', { protocolVersion: '1999-01-01' }).result;
+  assert.strictEqual(unknown.protocolVersion, srv.PROTOCOL_VERSIONS[0]);
+  assert.deepStrictEqual(unknown.capabilities, { tools: {} }, 'no resources capability in v1');
+  assert.strictEqual(unknown.serverInfo.name, srv.SERVER_NAME);
+  assert.strictEqual(unknown.instructions, core.INSTRUCTIONS);
+});
+
+test('server/discover answers with the shape the specification prints', (t) => {
+  const r = ask(core.createServer({ root: fixture(t) }), 'server/discover', {}).result;
+  assert.strictEqual(r.resultType, 'complete');
+  assert.deepStrictEqual(r.supportedVersions, srv.PROTOCOL_VERSIONS);
+  assert.deepStrictEqual(r.capabilities, { tools: {} });
+  assert.strictEqual(r._meta['io.modelcontextprotocol/serverInfo'].name, srv.SERVER_NAME);
+  assert.strictEqual(r._meta['io.modelcontextprotocol/serverInfo'].version, '9.9.9');
+  assert.strictEqual(r.ttlMs, 3600000);
+  assert.strictEqual(r.cacheScope, 'public');
+});
+
+test('a notification is not answered, and an unknown method is', (t) => {
+  const server = core.createServer({ root: fixture(t) });
+  assert.strictEqual(srv.handle(server, '9.9.9', { jsonrpc: '2.0', method: 'notifications/initialized' }), null);
+  assert.strictEqual(ask(server, 'nope', {}).error.code, -32601);
+});
+
+test('an unknown tool is a protocol error and a bad argument is not', (t) => {
+  const server = core.createServer({ root: fixture(t) });
+  assert.strictEqual(ask(server, 'tools/call', { name: 'kb_delete', arguments: {} }).error.code, -32602);
+  assert.strictEqual(ask(server, 'tools/call', { name: 'kb_read', arguments: {} }).result.isError, true);
+});
+
+test('the server answers a whole session over stdio, as a child process', (t) => {
+  const root = fixture(t);
+  const requests = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: srv.PROTOCOL_VERSIONS[0] } },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'kb_list', arguments: { type: 'topic' } } },
+  ];
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'mcp', 'server.js'), '--root', root], {
+    input: requests.map((x) => JSON.stringify(x)).join('\n') + '\n', encoding: 'utf8',
+  });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const answers = r.stdout.trim().split('\n').map((l) => JSON.parse(l));
+  assert.deepStrictEqual(answers.map((a) => a.id), [1, 2, 3], 'the notification was answered');
+  assert.deepStrictEqual(answers[1].result.tools.map((x) => x.name), core.TOOL_NAMES);
+  assert.match(answers[2].result.content[0].text, /backup\.md/);
+});
+
+test('no workspace is a one-line message and a non-zero exit, not a stack trace', () => {
+  const nowhere = fs.mkdtempSync(path.join(require('os').tmpdir(), 'joserah-nows-'));
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'mcp', 'server.js'), '--root', nowhere],
+    { input: '', encoding: 'utf8' });
+  fs.rmSync(nowhere, { recursive: true, force: true });
+  assert.notStrictEqual(r.status, 0);
+  assert.strictEqual(r.stderr.trim().split('\n').length, 1, r.stderr);
+  assert.match(r.stderr, /\.joserah\/config\.json/);
+});
+
+// The switch is the registration the owner writes, and nothing else. A plugin
+// that ships its own .mcp.json is a plugin that turned the server on for
+// everyone who installed it.
+test('the plugin registers no MCP server anywhere of its own', () => {
+  assert.ok(!fs.existsSync(path.join(PLUGIN_ROOT, '.mcp.json')),
+    'shipping .mcp.json would start this server for every user, unasked');
+  for (const rel of [['.claude-plugin', 'plugin.json'], ['.claude-plugin', 'marketplace.json'],
+    ['hooks', 'hooks.json']]) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, ...rel), 'utf8');
+    assert.doesNotMatch(text, /mcpServers/, `${rel.join('/')} registers the server`);
+  }
+});
+
+test('nothing in mcp/ reaches the network or names a vendor', () => {
+  for (const rel of [['mcp', 'server.js'], ['mcp', 'lib', 'core.js'], ['mcp', 'lib', 'kb.js']]) {
+    const src = fs.readFileSync(path.join(PLUGIN_ROOT, ...rel), 'utf8');
+    for (const forbidden of [/require\(['"]https?['"]\)/, /require\(['"]net['"]\)/, /\blisten\(/,
+      /127\.0\.0\.1/, /0\.0\.0\.0/, /\bfetch\(/, /claude/i, /openai/i, /chatgpt/i, /cursor/i, /codex/i]) {
+      assert.doesNotMatch(src, forbidden, `${rel.join('/')} contains ${forbidden}`);
+    }
+  }
+});
