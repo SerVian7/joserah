@@ -78,6 +78,8 @@ function scanWorkspace(root) {
           boundaries.push(childRel);
           continue;
         }
+        // A LICENSE beside the files marks a vendored copy, not the owner's notes.
+        if (fs.readdirSync(abs).some((n) => /^licen[cs]e(\.|$)/i.test(n))) continue;
         walk(abs, childRel);
       } else if (e.name.toLowerCase().endsWith('.md')) {
         if (SKIP_FILE_REL.has(childRel) || isSkippedRel(childRel)) continue;

@@ -57,7 +57,7 @@ test('each consumer set is exactly the set that consumer used to carry', () => {
     'imports', 'raw', '.joserah/user', '.joserah/feedback', '.joserah/tools',
     '.joserah/last-time-inject']));
   assert.deepStrictEqual(sorted(u.MIGRATION_SKIP_NAMES), sorted([
-    '.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers']));
+    '.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers', 'assets', 'skills-ref']));
   assert.deepStrictEqual(sorted(u.SECRET_SCAN_SKIP_REL), sorted([
     'keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw',
     'node_modules', '.git', '.venv', '.superpowers', 'dist', 'build']));

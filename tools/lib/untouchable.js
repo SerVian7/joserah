@@ -75,7 +75,11 @@ const LINK_SCAN_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, 'site-packag
 // absence was an oversight, not a rule.
 const MIGRATION_SKIP_REL = [...CREDENTIALS_REL, ...FOREIGN_REL, ...SOURCE_MATERIAL_REL,
   ...WORKSPACE_PRIVATE_REL];
-const MIGRATION_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES];
+// Vendored and asset material (0.13.2): third-party skill copies and scraped
+// source texts are not notes, so a migration must not give them headers. A
+// folder holding a LICENSE is skipped for the same reason (workspace-scan.js).
+const VENDORED_NAMES = ['assets', 'skills-ref'];
+const MIGRATION_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, ...VENDORED_NAMES];
 
 // secret-scan.js: rel-matched, so the junk names here exclude only a
 // root-level one — that is how this tool has always behaved. See the comment

@@ -520,3 +520,5 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **Delegation has a hard threshold.** Where background agents exist, reading more than a couple of files, research, planning, a status or summary sweep and any multi-file change go to subagents (prompt version 7 and the `orchestrate` trigger); only a single small edit stays inline — run `/joserah:update`.
 
 **The never-background rule travels down the chain.** `orchestrate` now says a lead never backgrounds its workers and copies that rule verbatim into every brief it writes, and its new brief template carries it.
+
+**Migration leaves vendored material alone.** `migrate.js` (and every tool sharing its scan) no longer adds frontmatter under an `assets/` or `skills-ref/` folder, or in any folder holding a LICENSE: third-party skill copies and scraped source texts are not notes.

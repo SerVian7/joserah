@@ -182,6 +182,32 @@ test('R8: scan excludes .claude/ so agent and command definitions are not treate
   assert.ok(!files.some((f) => f.startsWith('.claude/')), '.claude/ excluded from scan');
 });
 
+// 0.13.2: a live migration gave title/type headers to third-party skill copies
+// and scraped source texts. Vendored and asset material is not a note: an
+// assets/ or skills-ref/ folder, or any folder with a LICENSE in it, is left
+// byte-identical, while a real note beside it still migrates.
+test('migrate leaves vendored and asset material byte-identical', (t) => {
+  const dir = ws(t);
+  const vendored = [
+    '.joserah/dispatch/sweep/assets/SKILL.md',
+    '.joserah/dispatch/sweep/assets/deep/source.md',
+    '.joserah/knowledge/skills-ref/pdf.md',
+    '.joserah/knowledge/wiki/vendor-kit/README.md',
+    '.joserah/knowledge/wiki/vendor-kit/docs/usage.md',
+  ];
+  const body = '# Copied\n\nNot written here.\n';
+  for (const rel of vendored) write(dir, rel, body);
+  write(dir, '.joserah/knowledge/wiki/vendor-kit/LICENSE', 'MIT\n');
+  write(dir, '.joserah/knowledge/wiki/real-note.md', '# Real note\n');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  for (const rel of vendored) {
+    assert.strictEqual(fs.readFileSync(path.join(dir, rel), 'utf8'), body, `${rel} was rewritten`);
+  }
+  assert.match(fs.readFileSync(path.join(dir, '.joserah/knowledge/wiki/real-note.md'), 'utf8'), /^---\n/,
+    'a real note beside them still migrates');
+});
+
 test('config.json: formatVersion is stamped with a targeted edit, not a re-serialise', (t) => {
   const dir = ws(t);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
