@@ -1,0 +1,51 @@
+<!-- Joserah mail standard (plugin 0.13.0). Every mail sent on Joserah's behalf uses this.
+     Follows the reader's theme: light by default (inline styles), dark where the mail app reports a
+     dark theme (@media prefers-color-scheme: Apple Mail, iOS Mail, Outlook.com/Outlook for Mac…).
+     Gmail does not tell the mail the theme: Gmail on the web shows the light version; the Gmail app
+     in dark mode darkens it by itself. The tone steps are mirrored between the two themes.
+     No tables: divs with max-width, so the text wraps in any reading pane.
+     The logo's J sits faded behind the message (burgundy at 7% on transparent — works on both grounds).
+     The greys are ours, mixed off the burgundy, warm all the way down. A framework's stock palette and
+     a label joined by a middle dot are the two things a generated page is recognised by; every value
+     and every separator here was chosen, and a later edit does not get to hand either of them back.
+     One element per row: {{PATH}} faint path (not a heading), then {{BODY}} 14px/1.65 paragraphs
+     (<p class="p" style="margin:0 0 14px">, last margin:0; links class="a"), then the footer: burgundy
+     rule well below the text, one line — {{SIGNATURE}} left, {{DATE}} right.
+     {{PATH}}: the subject alone, as the reader would say it — 'bakım bildirimi'. Not the brand name,
+     not a section, not two labels stuck together. The brand is already the whole page.
+     {{SIGNATURE}}: the workspace's assistant signs, never the owner or the host. A named assistant:
+     'Yarkın <span class="ft" style="color:#a89ea2">Joserah</span>' — the name, a space, then Joserah
+     carried by tone and nothing else. No assistantName: the assistant is Joserah and the sole author —
+     just 'Joserah', never the name twice. Where the context is plain text and tone cannot be carried,
+     it is written 'Yarkın, Joserah'; a comma, because a plain-text line has no faint.
+     No header strip, no boxes, no bullet walls, no bold paragraphs, no emoji, nothing large.
+     This file lives at ${CLAUDE_PLUGIN_ROOT}/.brand/mail.html. The brand is the plugin's, not the
+     workspace's: a workspace adds its own design decisions elsewhere and never edits this file.
+     Send the whole document (head included) as the HTML body. -->
+<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+@media (prefers-color-scheme: dark) {
+  .bg { background-color:#1c1819 !important; }
+  .tx { color:#ddd5d7 !important; }
+  .pa { color:#75696d !important; }
+  .nm { color:#9a8d91 !important; }
+  .ft { color:#5e5457 !important; }
+  .a  { color:#d9587e !important; }
+}
+</style>
+</head>
+<body style="margin:0;padding:0">
+<div class="bg" style="background-color:#f5f3f2;background-image:url(https://raw.githubusercontent.com/SerVian7/joserah/main/assets/j-faded.png);background-repeat:no-repeat;background-position:center center;background-size:260px 260px;padding:32px 20px">
+  <div class="tx" style="max-width:560px;margin:0 auto;font:14px/1.65 Arial,Helvetica,sans-serif;color:#2a2326;word-wrap:break-word;overflow-wrap:break-word">
+    <div class="pa" style="margin:0 0 18px;font-size:12px;line-height:1.4;color:#8f8387">{{PATH}}</div>
+    <div>{{BODY}}</div>
+    <div class="nm" style="margin-top:56px;padding-top:10px;border-top:1px solid #8B0D32;font-size:12px;line-height:1.4;color:#7a6f73"><span class="ft" style="float:right;font-size:11px;color:#a89ea2">{{DATE}}</span>{{SIGNATURE}}</div>
+  </div>
+</div>
+</body></html>

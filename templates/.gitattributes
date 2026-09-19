@@ -1,0 +1,27 @@
+# Line endings are load-bearing here, the same way they are in the plugin's
+# own repo: this workspace's copy of .joserah/tools/verify-links.js is
+# compared against the plugin's by `doctor.js`, and without this file git's
+# autocrlf decides how that copy checks out. On Windows with autocrlf=true —
+# the plugin's target platform — that would rewrite it to CRLF and doctor
+# would see drift that was never really there. Force LF for everything
+# textual so the copy never diverges from the plugin's in the first place.
+
+* text=auto eol=lf
+
+*.md   text eol=lf
+*.json text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.ts   text eol=lf
+*.sh   text eol=lf
+*.cmd  text eol=crlf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Binary assets must never be touched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text eol=lf
+.gitattributes text eol=lf
