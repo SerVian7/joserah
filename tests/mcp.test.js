@@ -75,3 +75,45 @@ test('prefix and type narrow the listing', (t) => {
     kb.listNotes(root, { type: 'person' }).map((r) => r.path),
     ['.joserah/personal/profile.md']);
 });
+
+test('a title hit outranks a frontmatter hit, which outranks a body hit', (t) => {
+  const hits = kb.searchNotes(fixture(t), { query: 'backup' });
+  // "backup" is this note's title AND a word in its body. The reported line is
+  // the title's (line 2 of the file), not the body's — that is the ranking
+  // working inside one note, where it is easiest to get wrong.
+  assert.strictEqual(hits[0].path, '.joserah/knowledge/wiki/topics/backup.md');
+  assert.strictEqual(hits[0].line, 2);
+  assert.strictEqual(hits[0].title, 'Backup');
+  assert.strictEqual(hits[0].type, 'topic');
+});
+
+test('equal scores are ordered by path, so two runs agree', (t) => {
+  const root = fixture(t);
+  // `type:` is a frontmatter key in three notes and in none of their titles.
+  const once = kb.searchNotes(root, { query: 'type:' }).map((h) => h.path);
+  const twice = kb.searchNotes(root, { query: 'type:' }).map((h) => h.path);
+  assert.deepStrictEqual(once, twice);
+  assert.deepStrictEqual(once, [...once].sort());
+});
+
+test('a hit carries the matching line number and one line of context either side', (t) => {
+  const hits = kb.searchNotes(fixture(t), { query: 'seventeen' });
+  assert.strictEqual(hits.length, 1);
+  assert.strictEqual(hits[0].path, '.joserah/knowledge/wiki/entities/meydan-kontrol.md');
+  const lines = hits[0].snippet.split('\n');
+  assert.strictEqual(lines.length, 3);
+  assert.ok(lines[1].includes('seventeen'), 'the matching line sits in the middle');
+});
+
+test('search is case-insensitive and can be filtered by type and limited', (t) => {
+  const root = fixture(t);
+  assert.strictEqual(kb.searchNotes(root, { query: 'MERKEZI' }).length, 1);
+  assert.deepStrictEqual(
+    kb.searchNotes(root, { query: 'type:', type: 'person' }).map((h) => h.path),
+    ['.joserah/personal/profile.md']);
+  assert.strictEqual(kb.searchNotes(root, { query: 'type:', limit: 1 }).length, 1);
+});
+
+test('nothing found is an empty list, not an error', (t) => {
+  assert.deepStrictEqual(kb.searchNotes(fixture(t), { query: 'zzz-nothing-here' }), []);
+});
