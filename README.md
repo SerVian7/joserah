@@ -147,7 +147,8 @@ system-wide.
 ## MCP
 
 Joserah ships an MCP server that serves one workspace's notes: `mcp/server.js`.
-It is read-only, it answers requests and starts nothing of its own, and it is
+It reads, and appends to a note that already exists — nothing else writes — it
+answers requests and starts nothing of its own, and it is
 **off until you register it** — the plugin writes no configuration anywhere,
 so the registration below is the switch.
 
@@ -173,9 +174,12 @@ looking for `.joserah/config.json`. Any assistant that can start a command can
 use it; nothing in it is specific to one vendor, and no account of ours is
 involved.
 
-Three tools: `kb_search`, `kb_read`, `kb_list`. It never reads `keys/`,
-`imports/`, `projects/`, or the private folders under `.joserah/` — the same
-paths every other Joserah tool is kept out of. It cannot write.
+Four tools: `kb_search`, `kb_read`, `kb_list`, `kb_append`. It never reads
+`keys/`, `imports/`, `projects/`, or the private folders under `.joserah/` — the
+same paths every other Joserah tool is kept out of. Its one write is
+`kb_append`: it adds to a note that already exists and does nothing else — it
+creates no file, overwrites nothing, deletes nothing, leaves frontmatter alone,
+and refuses anything shaped like a credential without writing a byte.
 
 MCP servers a *project* needs are a separate matter: they live in `.mcp.json`
 at the workspace root, outside `.joserah/` entirely. `/joserah:project`
@@ -553,8 +557,9 @@ run: this release adds a server you may start and a manifest addons may carry,
 and both are inert until you use them.
 
 **An MCP server for your notes.** `mcp/server.js` serves one workspace over
-stdio with three tools — search, read, list. It is read-only, it never starts
-work of its own, and it holds no credential. It is off until you put the
+stdio with four tools — search, read, list, and append to a note that already
+exists. Nothing else writes; it never starts work of its own, and it holds no
+credential. It is off until you put the
 registration block from the MCP section above into your assistant's settings;
 the plugin writes no such block anywhere, so its existence is the switch and
 you create it. Any assistant that can start a command can connect: nothing in
