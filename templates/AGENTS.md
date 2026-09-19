@@ -80,7 +80,7 @@ why. Never silently escalate, and never silently substitute a weaker non-privile
 the server's note, not to the person who mentioned it; if you cannot name the subject you do not yet know where it goes.
 
 **A load-bearing fact is a claim line, not a sentence:** `- [measurement|calculation|decision|estimate] <subject> -> <value>`, with
-`condition:` (mandatory for a measurement), `date:`, `by:` and `source:` under it. **Every number is one of those four kinds**, and
+`condition:` (mandatory for a measurement), `date:`, `by:` and `source:` under it. **Every number is one of those four kinds**; these four are the only types — never `[fact]` or one of your own — and
 a number with no source carries no weight in a decision. **A number never travels without its conditions**: hardware, engine, settings
 and date move with it. Cite a source only after opening it and seeing the figure inside. A refuted claim is struck through (`~~…~~`)
 with `superseded:` naming its successor, never deleted. Format: [.joserah/conventions.md](.joserah/conventions.md).

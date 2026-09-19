@@ -149,3 +149,15 @@ test('sweep says where its state file lives and when it goes', () => {
   assert.ok(text.includes('.joserah/desk/sweep-state.md'), 'the state file has one home');
   assert.ok(text.includes('delete it'), 'and a stated end');
 });
+
+// 0.13.2: agents invented `[fact]` and `[inventory]` and wrote live-read
+// measurements without `condition:`. check-claims catches it afterwards; the
+// places that teach the format have to say it first.
+test('the four claim types are the only ones, and a measurement needs its condition, where claims are taught', () => {
+  for (const rel of [['templates', 'AGENTS.md'], ['skills', 'sweep', 'SKILL.md']]) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, ...rel), 'utf8').replace(/\s+/g, ' ');
+    assert.ok(text.includes('[measurement|calculation|decision|estimate]'), `${rel.join('/')}: the four types`);
+    assert.ok(text.includes('these four are the only types'), `${rel.join('/')}: not stated as the only ones`);
+    assert.ok(text.includes('`condition:` (mandatory for a measurement)'), `${rel.join('/')}: condition not mandatory`);
+  }
+});

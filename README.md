@@ -522,3 +522,5 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **The never-background rule travels down the chain.** `orchestrate` now says a lead never backgrounds its workers and copies that rule verbatim into every brief it writes, and its new brief template carries it.
 
 **Migration leaves vendored material alone.** `migrate.js` (and every tool sharing its scan) no longer adds frontmatter under an `assets/` or `skills-ref/` folder, or in any folder holding a LICENSE: third-party skill copies and scraped source texts are not notes.
+
+**Claim types are closed.** The prompt and the `sweep` skill now say measurement, calculation, decision and estimate are the only claim types, and that a measurement always carries `condition:`.

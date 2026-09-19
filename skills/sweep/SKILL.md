@@ -57,8 +57,9 @@ indexes regenerated; `.joserah/desk/inbox/captures.md` triaged to real homes; a 
 answered moved to the queue rather than left mid-page.
 
 **Harvest** — every load-bearing number in that page's prose becomes a claim line
-(`- [measurement|calculation|decision|estimate] <subject> -> <value>` plus `condition:` · `date:` ·
-`by:` · `source:`). A number whose source cannot be named **does not become a claim** — it becomes
+(`- [measurement|calculation|decision|estimate] <subject> -> <value>` plus `condition:` (mandatory for a
+measurement) · `date:` · `by:` · `source:`); these four are the only types — never `[fact]`,
+`[inventory]` or one of your own. A number whose source cannot be named **does not become a claim** — it becomes
 a line in the report, as a question for the owner. Where two pages disagree, both survive: the
 measurement speaks, the calculation is struck and `superseded:` points at it.
 
