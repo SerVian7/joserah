@@ -71,6 +71,22 @@ test('orchestrate says a lead waits on its workers and never backgrounds them', 
   assert.match(text, /completion\s+does\s+not\s+reach/i, 'the reason is missing');
 });
 
+// 0.13.2: a worker that never loaded this skill backgrounded its own workers,
+// and their completion went to the top session. The rule has to travel in the
+// brief itself, so it is stated once in the rules and once in the template a
+// brief is written from.
+test('orchestrate makes the never-background rule travel in every brief', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
+  const rule = 'a lead never backgrounds its workers, and copies this rule verbatim into every brief it writes';
+  const briefing = text.slice(text.indexOf('## Briefing'), text.indexOf('## Checking what comes back'));
+  const template = /```[^\n]*\n([\s\S]*?)```/.exec(briefing);
+  assert.ok(template, 'the Briefing section has no brief template');
+  const flat = (s) => s.replace(/\s+/g, ' ').toLowerCase();
+  const outside = flat(briefing.replace(template[0], ''));
+  assert.ok(outside.includes(rule), 'the rule is not stated in the skill');
+  assert.ok(flat(template[1]).includes(rule), 'the brief template does not carry the rule');
+});
+
 test('the merged skills are gone, not left behind as duplicates', () => {
   for (const gone of ['dispatch', 'plan', 'research']) {
     assert.ok(!fs.existsSync(path.join(PLUGIN_ROOT, 'skills', gone)),

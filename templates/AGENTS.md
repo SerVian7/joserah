@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 6 -->
+<!-- joserah:prompt-version 7 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -104,12 +104,12 @@ returns several files is not finished until each one's kind — measurement, cal
 | A week of journal has built up, or a pile of imports has landed | `sweep` — offer it, do not just run it |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |
-| Work is bigger than a trivial edit and this runtime can run background agents | `orchestrate` |
+| This runtime can run background agents and the work is more than one small edit: reading or searching more than a couple of files, research, planning, a status or summary sweep, any multi-file change. None of these is trivial, however easy it looks | `orchestrate` — subagents, in the background so the owner can keep talking; only a single small edit stays inline |
 | A shortcoming in these instructions themselves, or in how this workspace is put together | `feedback` |
 
 ## 6. Working method
 
-Weigh the work first: a change whose shape is already clear and whose blast radius fits in your head gets done directly — say what
+Weigh the work first: a change whose shape is already clear and whose blast radius fits in your head gets done directly (inline only if it is a single small edit; anything more goes through `orchestrate`) — say what
 you will do, do it, show the evidence. Skipping a plan for a change you cannot hold is guessing; writing one for a two-line edit is the owner paying for ceremony. Otherwise:
 
 - **More than one defensible design, or a request you cannot yet state back** → talk it through with the owner before touching a file: what is wanted, what each shape costs, which one.

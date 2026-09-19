@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when a piece of work is handed to another agent, session or model — deciding where it goes and at what effort, writing the brief, checking what comes back, carrying out a written plan, or reporting a finished round of work to the owner.
+description: Use when the runtime can run background agents and the work is more than one small edit — reading or searching more than a couple of files, research, planning, a status or summary sweep, any multi-file change. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, carrying out a written plan, or reporting a finished round of work to the owner.
 ---
 
 # Orchestrating the work
@@ -49,8 +49,19 @@ any of the four returns something that has to be redone.
 - One deliverable per brief. Two deliverables is two briefs.
 - Name the files it may write and the folders it may not touch. A worker that edits outside
   its brief has done damage, not work.
-- A lead waits on its workers directly, in parallel batches, and never runs them in the
-  background, because their completion does not reach it.
+- A lead waits on its workers directly, in parallel batches, because their completion does not
+  reach it: a lead never backgrounds its workers, and copies this rule verbatim into every brief
+  it writes. A worker that never loaded this skill knows the rule only from its brief.
+
+The template a brief is written from:
+
+```
+Job: <the one deliverable>
+Rules: <what it must not break; the files it may write, the folders it may not touch>
+  A lead never backgrounds its workers, and copies this rule verbatim into every brief it writes.
+Verified by: <the command or check that proves it>
+Report: <the exact shape of what comes back>
+```
 - Resume a worker that has already finished rather than briefing a fresh one from scratch:
   it still holds the context you would have to re-explain.
 
@@ -115,5 +126,5 @@ nobody had the standing to give.
 
 ## When not to run this at all
 
-A change whose shape is clear and whose blast radius fits in one head gets done directly.
+A single small edit whose shape is clear gets done directly.
 Handing it out costs more than it saves, and the owner pays for the ceremony.

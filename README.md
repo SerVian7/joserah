@@ -514,3 +514,9 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 `docs/migrations/0.13.1.md` step 3 says how.
 
 **A lead no longer backgrounds its workers.** A worker's completion notice reaches the top session, not the lead that opened it, so the `orchestrate` skill now says a lead waits on its workers directly, in parallel batches, and never runs them in the background.
+
+### Upgrading to 0.13.2
+
+**Delegation has a hard threshold.** Where background agents exist, reading more than a couple of files, research, planning, a status or summary sweep and any multi-file change go to subagents (prompt version 7 and the `orchestrate` trigger); only a single small edit stays inline — run `/joserah:update`.
+
+**The never-background rule travels down the chain.** `orchestrate` now says a lead never backgrounds its workers and copies that rule verbatim into every brief it writes, and its new brief template carries it.
