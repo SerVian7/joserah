@@ -105,4 +105,72 @@ function searchNotes(root, { query, type = '', limit = 20 } = {}) {
   return hits.slice(0, Math.max(1, Number(limit) || 20)).map(({ score, ...hit }) => hit);
 }
 
-module.exports = { notes, listNotes, searchNotes, MAX_CHARS, NOTICE_RESERVE, FM_RE, titleOf };
+// The two-line header: the path a caller can hand straight back to kb_read,
+// then title and type, then whatever else the note's own frontmatter carries,
+// in the order the note wrote it. Nothing is invented and nothing is dropped.
+function header(n) {
+  const rest = Object.keys(n.data)
+    .filter((k) => k !== 'title' && k !== 'type')
+    .map((k) => ' · ' + k + ': ' + (Array.isArray(n.data[k]) ? n.data[k].join(', ') : n.data[k]))
+    .join('');
+  return 'path: ' + n.rel + '\n'
+    + 'title: ' + n.title + ' · type: ' + (n.type || 'note') + rest + '\n'
+    + '---\n';
+}
+
+// One heading's block: from that heading down to the next heading of the same
+// or higher level. Matched on the heading's text, case-insensitively, because
+// that is what the truncation notice hands a caller to retry with.
+function sectionOf(body, heading) {
+  const lines = body.split(/\r?\n/);
+  const want = String(heading).trim().toLowerCase();
+  let start = -1;
+  let level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(#{1,6})\s+(.+?)\s*$/.exec(lines[i]);
+    if (m && m[2].toLowerCase() === want) { start = i; level = m[1].length; break; }
+  }
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    const m = /^(#{1,6})\s+/.exec(lines[i]);
+    if (m && m[1].length <= level) { end = i; break; }
+  }
+  return lines.slice(start, end).join('\n');
+}
+
+// Cut at a heading when one sits near the limit, otherwise at the last line
+// break — a heading far above the limit would throw away most of the note to
+// find a tidy edge. The notice names the next heading when there is one, so
+// the caller has a usable way to get the rest and not merely the news that
+// something is missing.
+function truncate(text) {
+  if (text.length <= MAX_CHARS) return text;
+  const budget = MAX_CHARS - NOTICE_RESERVE;
+  let at = text.lastIndexOf('\n#', budget);
+  if (at < MAX_CHARS / 2) at = text.lastIndexOf('\n', budget);
+  at = at > 0 ? at + 1 : budget;
+  const next = (/^#{1,6}\s+(.+?)\s*$/m.exec(text.slice(at)) || [])[1] || '';
+  return text.slice(0, at)
+    + '\n[truncated — ' + (text.length - at) + ' more characters'
+    + (next ? '; call kb_read with section: "' + next + '"]' : ']') + '\n';
+}
+
+/**
+ * One note. `path` must be a path the scan produced — that single check is
+ * also the containment check: a traversal, a secret, a foreign repository and
+ * a typo all fail the same way, because none of them is in the scan.
+ */
+function readNote(root, { path: rel, section = '' } = {}) {
+  const n = notes(root).find((x) => x.rel === rel);
+  if (!n) return { error: 'no note at ' + rel + ' - call kb_list or kb_search for a path' };
+  let body = n.body;
+  if (section) {
+    const found = sectionOf(n.body, section);
+    if (found === null) return { error: 'no heading "' + section + '" in ' + rel };
+    body = found;
+  }
+  return { text: truncate(header(n) + body) };
+}
+
+module.exports = { notes, listNotes, searchNotes, readNote, MAX_CHARS, NOTICE_RESERVE, FM_RE, titleOf };

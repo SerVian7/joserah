@@ -117,3 +117,57 @@ test('search is case-insensitive and can be filtered by type and limited', (t) =
 test('nothing found is an empty list, not an error', (t) => {
   assert.deepStrictEqual(kb.searchNotes(fixture(t), { query: 'zzz-nothing-here' }), []);
 });
+
+test('a read carries the two-line header, then the body exactly as it sits on disk', (t) => {
+  const r = kb.readNote(fixture(t), { path: '.joserah/knowledge/wiki/entities/meydan-kontrol.md' });
+  const lines = r.text.split('\n');
+  assert.strictEqual(lines[0], 'path: .joserah/knowledge/wiki/entities/meydan-kontrol.md');
+  assert.strictEqual(lines[1],
+    'title: Meydan Kontrol · type: entity · snapshot: 2026-01-02 · source: ops-handoff');
+  assert.strictEqual(lines[2], '---');
+  assert.ok(r.text.includes('- [fact] 31 registered modules'), 'the body is not rewritten');
+  assert.ok(r.text.includes('Merkezi kontrol paneli.'), 'and not translated');
+});
+
+test('section returns that heading block and nothing after it', (t) => {
+  const r = kb.readNote(fixture(t),
+    { path: '.joserah/knowledge/wiki/entities/meydan-kontrol.md', section: 'Modules' });
+  assert.ok(r.text.includes('## Modules'));
+  assert.ok(r.text.includes('seventeen of type module'));
+  assert.ok(!r.text.includes('31 registered modules'), 'the earlier section is not included');
+});
+
+test('a path outside the tool surface reads as no such note, never as a file', (t) => {
+  const root = fixture(t);
+  for (const bad of ['keys/AGENTS.md', 'imports/dump.md', '../outside.md',
+    '.joserah/user/cv.md', 'projects/Owner/Proj/README.md']) {
+    const r = kb.readNote(root, { path: bad });
+    assert.ok(r.error, `${bad} was readable`);
+    assert.ok(!r.text, `${bad} returned content`);
+  }
+});
+
+test('an unknown heading is an error the caller can correct, naming the note', (t) => {
+  const r = kb.readNote(fixture(t),
+    { path: '.joserah/knowledge/wiki/topics/backup.md', section: 'No Such Heading' });
+  assert.match(r.error, /No Such Heading/);
+  assert.match(r.error, /backup\.md/);
+});
+
+test('an oversized note is cut inside the budget and says how to get the rest', (t) => {
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, '.joserah', 'knowledge', 'big.md'),
+    '---\ntitle: Big\ntype: note\n---\n\n# Big\n\n' +
+    'a filler line long enough to matter, repeated.\n'.repeat(1500) +
+    '\n## Second half\n\nthe rest\n', 'utf8');
+  const r = kb.readNote(root, { path: '.joserah/knowledge/big.md' });
+  assert.ok(r.text.length <= kb.MAX_CHARS, `cut to ${r.text.length}, budget is ${kb.MAX_CHARS}`);
+  assert.match(r.text, /\[truncated — \d+ more characters; call kb_read with section: "Second half"\]/);
+  assert.ok(r.text.endsWith('\n'));
+});
+
+test('a note that fits is not touched', (t) => {
+  const r = kb.readNote(fixture(t), { path: '.joserah/knowledge/wiki/topics/backup.md' });
+  assert.ok(!/truncated/.test(r.text));
+  assert.ok(r.text.endsWith('nothing there has an automatic backup.\n'));
+});
