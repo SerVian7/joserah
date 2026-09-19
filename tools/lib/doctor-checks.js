@@ -820,6 +820,49 @@ const CHECKS = [
         `${clone} can no longer fast-forward from ${ref} — its history was rewritten upstream, so the pull that refreshes it fails and no plugin updates arrive; run: git -C ${clone} fetch origin && git -C ${clone} reset --hard origin/main (discards local changes there), or remove and re-add the marketplace in Claude Code`)];
     },
   },
+
+  {
+    id: 'addon-needs',
+    remedies: [
+      {
+        key: '`addon <name>` warn (missing secret / command not on PATH)',
+        text: 'The addon is installed but something it declared in its own `joserah.json` is not here: a vault name it needs, or a command it runs. Say which one in plain words and run that addon\'s own setup — the path is the `setup` key in the same file. Never guess a secret\'s value or install a command on the owner\'s machine without asking. A credential the addon takes through the host\'s own prompt (the keychain route) cannot be checked by doctor at all; if the addon\'s skills say a credential is missing while this line reads ok, that is the case, and the addon\'s setup is still the answer.',
+      },
+    ],
+    // The market's whole integration with doctor: read each installed addon's
+    // joserah.json and say what it declared it needs but does not have. It
+    // prints NOTHING when no addon carries a manifest — tests/doctor-registry
+    // .test.js pins the exact lines a fresh workspace produces, and an owner
+    // with no addons should never be told about a system they do not use.
+    //
+    // The vault is asked through the workspace's own copy of secret.js, the
+    // same call shape an addon itself uses (--has: exit 0 present, non-zero
+    // absent, and it never prints a value). A command is looked up on PATH and
+    // never executed: the name comes from a manifest we did not write.
+    run({ root, pluginDir }) {
+      const { installedAddons, commandOnPath } = require('./addon-manifest');
+      const found = installedAddons();
+      if (!found.length) return null;
+      const local = path.join(root, '.joserah', 'tools', 'secret.js');
+      const secretTool = fs.existsSync(local) ? local : path.join(pluginDir, 'secret.js');
+      const out = [];
+      for (const addon of found) {
+        const missing = [];
+        for (const name of addon.manifest.needs.secrets) {
+          const r = spawnSync(process.execPath, [secretTool, '--has', name],
+            { cwd: root, encoding: 'utf8' });
+          if (r.status !== 0) missing.push('secret ' + name);
+        }
+        for (const cmd of addon.manifest.needs.commands) {
+          if (!commandOnPath(cmd)) missing.push('command ' + cmd);
+        }
+        out.push(missing.length
+          ? warn('addon ' + addon.name, 'not ready — missing ' + missing.join(', '))
+          : check('addon ' + addon.name, true, 'everything it declared is here'));
+      }
+      return out;
+    },
+  },
 ];
 
 module.exports = { CHECKS };

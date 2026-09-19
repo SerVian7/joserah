@@ -85,3 +85,51 @@ test('the contract is written down where an addon author can read it', () => {
     assert.ok(doc.includes(must), `docs/addons.md does not mention ${must}`);
   }
 });
+
+const { runTool } = require('./helpers');
+const { CHECKS } = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'doctor-checks'));
+
+function workspace(t) {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B',
+    '--language', 'English', '--role', '']);
+  return dir;
+}
+
+test('the registry carries the addon check, and it is a data change', () => {
+  assert.ok(CHECKS.some((c) => c.id === 'addon-needs'), 'no addon-needs entry');
+});
+
+test('a workspace with no addons installed says nothing about addons', (t) => {
+  const r = runTool('doctor.js', [workspace(t)], { env: { CLAUDE_CONFIG_DIR: tmpdir(t) } });
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.doesNotMatch(r.stdout, /addon/i, 'an owner with no addons hears nothing about them');
+});
+
+test('an addon whose needs are unmet is a warning that names what is missing', (t) => {
+  const { dir } = configWithAddon(t, {
+    tier: 'open', minJoserah: '0.14.0',
+    needs: { secrets: ['demo.service.api-token'], commands: ['zzz-no-such-command'] },
+    setup: 'setup/SETUP.md',
+  });
+  const r = runTool('doctor.js', [workspace(t)], { env: { CLAUDE_CONFIG_DIR: dir } });
+  assert.strictEqual(r.status, 0, 'an unmet addon need is a warning, not a failure');
+  assert.match(r.stdout, /warn\s+addon demo-addon@market/);
+  assert.match(r.stdout, /demo\.service\.api-token/, 'the missing secret is named');
+  assert.match(r.stdout, /zzz-no-such-command/, 'the missing command is named');
+  assert.match(r.stdout, /warning\(s\)/, 'the summary line carries the warning count');
+});
+
+test('an addon whose needs are met reports ok, and no value is ever printed', (t) => {
+  const ws = workspace(t);
+  const { dir } = configWithAddon(t, {
+    tier: 'open', needs: { secrets: ['demo.service.api-token'], commands: ['node'] }, setup: '',
+  });
+  const set = runTool('secret.js', ['--set', 'demo.service.api-token'],
+    { cwd: ws, input: 'not-a-real-value' });
+  assert.strictEqual(set.status, 0, set.stderr);
+  const r = runTool('doctor.js', [ws], { env: { CLAUDE_CONFIG_DIR: dir } });
+  assert.match(r.stdout, /ok\s+addon demo-addon@market/);
+  assert.doesNotMatch(r.stdout, /not-a-real-value/, 'doctor printed a vault value');
+  assert.doesNotMatch(r.stdout, /warn\s+addon/);
+});
