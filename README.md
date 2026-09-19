@@ -146,11 +146,42 @@ system-wide.
 
 ## MCP
 
-MCP server configuration lives in `.mcp.json` at the workspace root, outside
-`.joserah/` entirely. `/joserah:project` proposes specific servers when a
-project needs to reach outside data — naming candidates and what each would
-need — but it never configures one on its own initiative; the owner always
-decides.
+Joserah ships an MCP server that serves one workspace's notes: `mcp/server.js`.
+It is read-only, it answers requests and starts nothing of its own, and it is
+**off until you register it** — the plugin writes no configuration anywhere,
+so the registration below is the switch.
+
+It talks over stdio. The client starts it as a child process: there is no port,
+nothing listening, and nothing reachable from another machine. That is why it
+needs no password — the boundary is the same one already protecting the folder.
+
+Three lines in whichever settings file your assistant reads:
+
+```json
+{
+  "mcpServers": {
+    "joserah": {
+      "command": "node",
+      "args": ["<plugin>/mcp/server.js", "--root", "<workspace root>"]
+    }
+  }
+}
+```
+
+`--root` is optional: without it the server walks up from its working directory
+looking for `.joserah/config.json`. Any assistant that can start a command can
+use it; nothing in it is specific to one vendor, and no account of ours is
+involved.
+
+Three tools: `kb_search`, `kb_read`, `kb_list`. It never reads `keys/`,
+`imports/`, `projects/`, or the private folders under `.joserah/` — the same
+paths every other Joserah tool is kept out of. It cannot write.
+
+MCP servers a *project* needs are a separate matter: they live in `.mcp.json`
+at the workspace root, outside `.joserah/` entirely. `/joserah:project`
+proposes specific servers when a project needs to reach outside data — naming
+candidates and what each would need — but it never configures one on its own
+initiative; the owner always decides.
 
 ## Upgrading from 0.1.x
 
@@ -514,3 +545,34 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 `docs/migrations/0.13.1.md` step 3 says how.
 
 **A lead no longer backgrounds its workers.** A worker's completion notice reaches the top session, not the lead that opened it, so the `orchestrate` skill now says a lead waits on its workers directly, in parallel batches, and never runs them in the background.
+
+### Upgrading to 0.14.0
+
+**Nothing in your workspace changes.** There is no migration and nothing to
+run: this release adds a server you may start and a manifest addons may carry,
+and both are inert until you use them.
+
+**An MCP server for your notes.** `mcp/server.js` serves one workspace over
+stdio with three tools — search, read, list. It is read-only, it never starts
+work of its own, and it holds no credential. It is off until you put the
+registration block from the MCP section above into your assistant's settings;
+the plugin writes no such block anywhere, so its existence is the switch and
+you create it. Any assistant that can start a command can connect: nothing in
+the server is specific to one vendor, and the instruction string it hands a
+client says how to call it and nothing about how to behave.
+
+What it will not read is not a new list: it reuses the one place this plugin
+already states which paths a tool may not walk, so `keys/`, `imports/`,
+`projects/` and the private folders under `.joserah/` are out of reach for the
+same reason they always were. A note over 64 KB comes back cut at a heading,
+with a line saying how many characters were left and which section to ask for
+next.
+
+**Addons.** An addon is an ordinary plugin from an ordinary marketplace; there
+is no installer of ours. What is new is one small file an addon may carry —
+`joserah.json` — declaring the vault names and the commands it needs. Doctor
+reads it for every installed addon and says what is missing, and says nothing
+at all if you have none. `docs/addons.md` is the contract. The `setup` and
+`update` skills gained the words for listing, installing and updating one,
+including the rule that an addon nobody reviewed is announced as such before it
+is installed, because its hooks run on your machine with your own permissions.
