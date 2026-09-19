@@ -133,3 +133,30 @@ test('sweep says where its state file lives and when it goes', () => {
   assert.ok(text.includes('.joserah/desk/sweep-state.md'), 'the state file has one home');
   assert.ok(text.includes('delete it'), 'and a stated end');
 });
+
+// 0.14.0: the market is words, not code. These two rules are the ones that
+// cost something if they are missing — an unreviewed plugin's hooks run as
+// the owner, and a hand-cloned addon never updates again.
+test('setup warns before installing anything that is not ours, and asks first', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'setup', 'SKILL.md'), 'utf8');
+  assert.match(text, /official/, 'the trust tier is not mentioned');
+  assert.match(text, /hooks/i, 'the actual risk — code that runs at session start — is not stated');
+  assert.match(text, /ask/i, 'the assistant does not have to ask');
+  assert.match(text, /restart/i, 'the restart an install needs is not stated');
+  assert.doesNotMatch(text, /we review|we vet|reviewed by us/i,
+    'whether submissions are checked is the owner\'s to answer, not this file\'s');
+});
+
+test('setup says a failed install is reported once and never worked around', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'setup', 'SKILL.md'), 'utf8');
+  assert.match(text, /do not retry|never retry/i);
+  assert.match(text, /clone/i, 'hand-cloning is the specific thing that must not happen');
+});
+
+test('update tells the two market steps in the order that works', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'update', 'SKILL.md'), 'utf8');
+  const market = text.indexOf('marketplace update <market>');
+  const plugin = text.indexOf('/plugin update');
+  assert.ok(market !== -1 && plugin !== -1, 'the market update steps are missing');
+  assert.ok(market < plugin, 'refreshing the market is what teaches the second step a version exists');
+});

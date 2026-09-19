@@ -315,3 +315,54 @@ workspace now holds — file counts per folder, not a recital of contents.
 - No credential is ever written into markdown: one the owner shares is saved at once with
   `node .joserah/tools/secret.js --set <name>`, and notes carry only the name.
 - If the owner shares something sensitive, put it in `.joserah/personal/` and say so.
+
+---
+
+## Addons
+
+An addon is an ordinary plugin that adds one capability — a service to reach, a
+routine to run. It is installed, updated and removed by the host's own plugin
+commands; nothing here installs anything on its own.
+
+**Listing.** The catalogue is a marketplace file. Added once, by the owner:
+
+```
+/plugin marketplace add <market>
+```
+
+Then `/plugin` browses it. Do not turn on automatic updates for a market: a
+market that refreshes itself in the background is a market where someone else's
+code changes on this machine with nobody deciding it should.
+
+**Before installing anything whose category is not `official`, say one plain
+line and ask.** Name who published it, say that we did not review it, and say
+that once enabled its hooks run on this machine with the owner's own
+permissions — a plugin's hooks execute code at the start of every session.
+Then let them decide. This is not a formality; it is the only boundary there
+is.
+
+**Installing.**
+
+```
+/plugin install <name>@<market>
+```
+
+Say in one line that the addon's skills and hooks exist only after a restart.
+Never imply it is working before then.
+
+**What it may need.** An addon declares what it needs from this workspace in its
+own `joserah.json`: vault names, and commands that must be on `PATH`. Doctor
+reports whatever is missing. Its `setup` key points at the addon's own
+instructions — follow those, and never invent a credential's value.
+
+**When an install fails.** Two different things, and they are not the same
+event: the install itself fails (the addon is not added), or the install
+succeeds and the addon fails to load (it is installed, it appears with an
+error, and it does nothing). Say in one line what failed and which addon.
+**Do not retry, do not clone the repository by hand, do not work around it** —
+a hand-cloned addon is an addon no update will ever reach.
+
+**Removing.** `/plugin uninstall <name>@<market>` removes one addon. Removing
+the *market* removes every addon from it at once, so that is never the way to
+remove one. Its skills go; whatever it wrote stays readable, because an addon
+writes plain markdown and nothing else.

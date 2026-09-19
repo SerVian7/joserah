@@ -38,6 +38,23 @@ If that command is unavailable or fails, try the clone directly —
 neither works, say so in one line and continue: the tools then fall back to the installed
 plugin's own copy, which may be older.
 
+### If an addon market is installed
+
+An addon market is refreshed the same way, and the two steps are ordered
+because the first is what teaches the second that a new version exists:
+
+```
+claude plugin marketplace update <market>
+/plugin update <name>@<market>
+```
+
+If the first command is unavailable or fails, pull the clone directly —
+`git -C "<clone>" pull --ff-only`, where `<clone>` is that market's
+`installLocation` in `~/.claude/plugins/known_marketplaces.json`. If neither
+works, say so in one line and carry on: an addon that did not update is not a
+broken workspace. The restart rule is the plugin's own — a new version of an
+addon's hooks and skills exists after a restart, not before.
+
 ## 2. See what is behind
 
 ```
