@@ -184,7 +184,53 @@ function standingContextSize(root) {
   return { total: parts.reduce((n, [, len]) => n + len, 0), parts };
 }
 
+// 0.13.3: the workspace-root CLAUDE.md, plugin-owned, that @-imports the
+// standing files. Measured 2026-09-23 with file tools disabled: headless CLI
+// 2.1.251 never loaded AGENTS.md (the IDE on 2.1.278 did), but loaded CLAUDE.md
+// and expanded an @ import in it whole — 59,928 bytes arrived, with no cliff —
+// while a hook command over 10,000 characters arrives as a ~2,000-character
+// stub. So the files travel this way and the hook stands down for them.
+// Also measured on 2.1.251: from a SUBFOLDER of the workspace, the parent
+// CLAUDE.md loads but its @ lines are not expanded. That is why the hook stands
+// down only when the session starts at the workspace root (layersViaClaudeMd).
+// .joserah/agent.md is not imported: only the text below its marker is the
+// owner's overlay, the rest is the shipped explanation, so it stays in the hook.
+const CLAUDE_MD_MARKER = '<!-- joserah:claude-md';
+const CLAUDE_MD_IMPORTS = ['AGENTS.md', 'JOSERAH-ROLE.md', '.joserah/directives.md'];
+const CLAUDE_MD = `${CLAUDE_MD_MARKER} — written by the Joserah plugin and rewritten by every update. ` +
+  'Your own rules go in .joserah/directives.md, never here. -->\n' +
+  CLAUDE_MD_IMPORTS.map((rel) => `@${rel}\n`).join('');
+
+// The workspace-relative paths a root CLAUDE.md imports, one `@path` per line —
+// whoever wrote the file. An owner-written CLAUDE.md that imports a layer by
+// hand is honoured the same way as the stub.
+function claudeMdImports(root) {
+  const text = readText(path.join(root, 'CLAUDE.md')).replace(/\r\n/g, '\n');
+  return new Set(text.split('\n').map((l) => /^@(?:\.\/)?(\S+)\s*$/.exec(l.trim())).filter(Boolean).map((m) => m[1]));
+}
+
+// The layers this session already gets through CLAUDE.md, so the hook must not
+// send them again. Empty unless the session starts at the workspace root —
+// see the subfolder measurement above.
+function layersViaClaudeMd(root, cwd) {
+  return path.resolve(cwd) === path.resolve(root) ? claudeMdImports(root) : new Set();
+}
+
+// Install or refresh the stub. A CLAUDE.md without the marker is the owner's
+// (or another tool's) and is never written, whatever it says: 'foreign'.
+// Returns 'created' | 'refreshed' | 'current' | 'foreign'; writes nothing on a dry run.
+function installClaudeMd(root, { dryRun = false } = {}) {
+  const file = path.join(root, 'CLAUDE.md');
+  const exists = fs.existsSync(file);
+  const text = readText(file);
+  if (exists && !text.includes(CLAUDE_MD_MARKER)) return 'foreign';
+  if (exists && text.replace(/\r\n/g, '\n') === CLAUDE_MD) return 'current';
+  if (!dryRun) fs.writeFileSync(file, CLAUDE_MD, 'utf8');
+  return exists ? 'refreshed' : 'created';
+}
+
 module.exports = {
   AGENT_OVERLAY_MARKER, MAX_LAYER_CHARS, WARN_TOTAL_CHARS, MAX_HOOK_CHARS, NOTICE_RESERVE,
   carriesRules, roleBlock, directivesBlock, agentOverlayBody, standingContextSize, withinBudget,
+  CLAUDE_MD, CLAUDE_MD_MARKER, CLAUDE_MD_IMPORTS, claudeMdImports, layersViaClaudeMd, installClaudeMd,
 };

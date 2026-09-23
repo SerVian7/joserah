@@ -33,7 +33,8 @@ const { FORMAT_VERSION, roleFor, parseFrontmatter, FEEDBACK_AREAS } = require('.
 // The standing layers the session-start hook injects, and what they cost: the
 // size check below must measure exactly what a session is handed, so it asks
 // the hook's own library rather than re-deriving it here.
-const { standingContextSize, WARN_TOTAL_CHARS } = require('../../hooks/lib/standing-context');
+const { standingContextSize, WARN_TOTAL_CHARS, CLAUDE_MD, CLAUDE_MD_MARKER, CLAUDE_MD_IMPORTS, claudeMdImports } =
+  require('../../hooks/lib/standing-context');
 
 // The two result shapes, named as they were when they pushed onto doctor's own
 // array — so the body of a check reads here exactly as it read there.
@@ -107,9 +108,9 @@ const CHECKS = [
       },
     ],
     run({ root, cfg }) {
-      // `CLAUDE.md` is deliberately NOT required: a workspace carries `AGENTS.md`
-      // only, so it is not tied to one vendor's tool (owner, 2026-08-30: "CLAUDE.md
-      // dosyası olmasına gerek yok, sonsuza dek claude ile çalışmayabiliriz").
+      // `AGENTS.md` stays the router, so no workspace is tied to one vendor's tool
+      // (owner, 2026-08-30). Since 0.13.3 Claude Code gets it through a CLAUDE.md
+      // stub that only imports it; that file has its own check (`claude-md`).
       const required = ['AGENTS.md', '.joserah/desk/tasks/now.md', '.joserah/learned.md',
                         '.joserah/desk/inbox/captures.md', '.joserah/personal/profile.md',
                         '.joserah/agent.md', '.joserah/directives.md'];
@@ -340,6 +341,39 @@ const CHECKS = [
           hasMarker ? '' : 'missing — the session-start hook injects only text below this marker, so nothing in this file reaches any session right now');
       }
       return null;
+    },
+  },
+
+  {
+    id: 'claude-md',
+    remedies: [
+      {
+        key: '`CLAUDE.md imports the standing layers` FAIL',
+        text: 'Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it writes the plugin\'s CLAUDE.md, or refreshes it, and never touches one the owner wrote. Until then the session-start hook still carries the layers, cut to its budget.',
+      },
+      {
+        key: '`CLAUDE.md imports the standing layers` warn',
+        text: 'The workspace\'s CLAUDE.md is the owner\'s own, so nothing rewrites it. Tell the owner in one line and offer to add the `@` lines doctor names to it, on their yes. Nothing is lost meanwhile: the session-start hook carries every layer the file does not import, cut to its budget.',
+      },
+    ],
+    // 0.13.3: the standing layers reach a session through the workspace-root
+    // CLAUDE.md that @-imports them (CLAUDE_MD in hooks/lib/standing-context.js).
+    // The plugin's stub must be exactly the current one; an owner-written file
+    // is never rewritten, so a missing import there is a warning, not a failure.
+    run({ root }) {
+      const name = 'CLAUDE.md imports the standing layers';
+      const file = path.join(root, 'CLAUDE.md');
+      if (!fs.existsSync(file)) return check(name, false, `missing — run: node tools/migrate.js ${root}`);
+      const text = fs.readFileSync(file, 'utf8');
+      if (text.includes(CLAUDE_MD_MARKER)) {
+        return text.replace(/\r\n/g, '\n') === CLAUDE_MD ? check(name, true)
+          : check(name, false, `differs from the plugin's stub — run: node tools/migrate.js ${root}`);
+      }
+      const imported = claudeMdImports(root);
+      const lacking = CLAUDE_MD_IMPORTS.filter((rel) => !imported.has(rel));
+      return lacking.length
+        ? warn(name, `owner-written, so never rewritten; the session-start hook carries what it does not import — add: ${lacking.map((r) => '@' + r).join(' ')}`)
+        : check(name, true, 'owner-written');
     },
   },
 

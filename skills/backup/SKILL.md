@@ -519,7 +519,7 @@ Measure-Object -Line).Lines`), or on the zip route
    reaching for it.
 4. Run `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <target>` and report the
    result. A restored workspace that fails doctor is not restored.
-5. A `.joserah`-only backup restores no root shell: `AGENTS.md`,
+5. A `.joserah`-only backup restores no root shell: `AGENTS.md`, `CLAUDE.md`,
    `JOSERAH-ROLE.md`, `.gitignore`, `imports/README.md` and
    `.claude/settings.json` are not in it by design. Regenerate them — never
    by hand, never copied from another workspace:

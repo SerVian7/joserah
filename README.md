@@ -92,6 +92,7 @@ own guesses back at you is worse than no knowledge base.
 ```
 <workspace>/
 ├── AGENTS.md          the router — read this first
+├── CLAUDE.md          imports AGENTS.md, JOSERAH-ROLE.md and directives.md for Claude Code
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
@@ -524,3 +525,11 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **Migration leaves vendored material alone.** `migrate.js` (and every tool sharing its scan) no longer adds frontmatter under an `assets/` or `skills-ref/` folder, or in any folder holding a LICENSE: third-party skill copies and scraped source texts are not notes.
 
 **Claim types are closed.** The prompt and the `sweep` skill now say measurement, calculation, decision and estimate are the only claim types, and that a measurement always carries `condition:`.
+
+### Upgrading to 0.13.3
+
+**The standing layers travel through CLAUDE.md.** Every workspace gets a small plugin-owned `CLAUDE.md` at its root that `@`-imports `AGENTS.md`, `JOSERAH-ROLE.md` and `.joserah/directives.md`. Measured on 2026-09-23: the headless CLI (2.1.251) never loaded `AGENTS.md` at all, but loaded `CLAUDE.md` and expanded its imports whole — a 59,928-byte file arrived — while a hook command over 10,000 characters arrives as a 2,000-character stub. A directives file no longer has to stay under the hook's 5,000-character cap to reach a session.
+
+**The hook stands down only where the imports arrive.** When a session starts at the workspace root and `CLAUDE.md` imports a layer, `session-start.js` no longer injects it, so nothing is sent twice; the identity block, the agent overlay (`.joserah/agent.md`, only the text below its marker) and the computed briefing stay in the hooks. With no `CLAUDE.md`, an owner-written one that lacks the lines, or a session started in a subfolder — where, measured, the parent `CLAUDE.md` loads but its imports do not expand — the hook injects every layer exactly as before.
+
+**An owner-written CLAUDE.md is never touched.** `migrate.js` used to delete any `CLAUDE.md` it found; it now installs or refreshes only the plugin's own stub (recognised by its first-line marker), leaves any other `CLAUDE.md` as it is and lists it in `skipped`. Doctor's new `CLAUDE.md imports the standing layers` check fails on a missing or stale stub and warns on an owner-written file that lacks the import lines, naming them. Prompt version 8 says the layers are imported or injected. Run `/joserah:update`.

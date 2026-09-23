@@ -48,6 +48,9 @@ const SKIP_FILE_REL = new Set([
   'AGENTS.md',
   'JOSERAH-ROLE.md',
   '.joserah/agent.md',
+  // 0.13.3: the plugin's stub or an owner's file for Claude Code — a tool's
+  // configuration either way, never a note to give frontmatter to.
+  'CLAUDE.md',
 ]);
 
 // untouchable.js stays pure, so the owner's own `scope` selection is read

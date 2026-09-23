@@ -26,6 +26,7 @@ const FRESH_ORDER = [
   'no legacy .joserah/keys directory',
   'exists: JOSERAH-ROLE.md',
   'agent.md overlay marker present',
+  'CLAUDE.md imports the standing layers',
   'standing context size',
   'workspace/plugin version',
   'format version',

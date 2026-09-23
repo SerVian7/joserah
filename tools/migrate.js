@@ -22,6 +22,7 @@ const { scanWorkspace } = require('./lib/workspace-scan');
 const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION, roleFor } = require('./lib/note-format');
 const { stampKey } = require('./lib/config-stamp');
 const { resolvePromptSource, promptState, decidePromptAction, installPrompt } = require('./lib/prompt');
+const { installClaudeMd, CLAUDE_MD_IMPORTS } = require('../hooks/lib/standing-context');
 
 const TEMPLATES = path.join(__dirname, '..', 'templates');
 const PLUGIN_ROOT = path.join(__dirname, '..');
@@ -174,14 +175,6 @@ for (const rel of migratable) {
   if (!dryRun) fs.writeFileSync(abs, text, 'utf8');
 }
 
-// A workspace carries AGENTS.md only, so it is not tied to one vendor's tool.
-const removed = [];
-const claudeMd = path.join(root, 'CLAUDE.md');
-if (fs.existsSync(claudeMd)) {
-  removed.push('CLAUDE.md');
-  if (!dryRun) fs.unlinkSync(claudeMd);
-}
-
 // Computed regardless of --dry-run so the decision (and non-decision) is the
 // same in both modes; only the write itself is gated. A config already at
 // the target version is not opened for writing at all, not even a no-op
@@ -270,6 +263,20 @@ for (const rel of LOCAL_TOOLS) {
   }
 }
 
+// 0.13.3: the workspace-root CLAUDE.md that imports the standing layers (see
+// CLAUDE_MD in hooks/lib/standing-context.js). Until 0.13.3 this tool DELETED
+// any CLAUDE.md it found, owner-written or not. Now the plugin's own stub is
+// installed or refreshed, and a CLAUDE.md without the stub's marker is the
+// owner's: never written, never deleted, only reported in `skipped` — the hook
+// keeps injecting whatever it does not import, and doctor names the lines to add.
+const claudeMdState = installClaudeMd(root, { dryRun });
+if (claudeMdState === 'created') created.push('CLAUDE.md');
+if (claudeMdState === 'refreshed') refreshed.push('CLAUDE.md');
+if (claudeMdState === 'foreign') {
+  skipped.push({ file: 'CLAUDE.md', reason: 'owner-written, left as is — to deliver the standing layers through it, add the lines ' +
+    CLAUDE_MD_IMPORTS.map((r) => '@' + r).join(', ') });
+}
+
 // AGENTS.md is plugin-owned and versioned apart from the plugin (lib/prompt.js).
 // The decision is shared with refresh-prompt.js so the two tools agree: a
 // missing or pristine-but-behind file is brought current, an unrecorded file
@@ -294,7 +301,7 @@ if (!dryRun && (promptAction === 'install' || promptAction === 'record')) {
   installPrompt(root, promptSource, { recordOnly: promptAction === 'record' });
 }
 
-// `skipped` sits beside changed/removed/created so a --dry-run tells the
+// `skipped` sits beside changed/created so a --dry-run tells the
 // owner what this tool refused to touch and why, rather than leaving the
 // refusal silent and indistinguishable from "nothing needed doing".
-console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, removed, created, refreshed, skipped, prompt }));
+console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, created, refreshed, skipped, prompt }));

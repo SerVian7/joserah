@@ -64,6 +64,8 @@ Propose the specific repair for each failure and wait for a yes:
 | `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
 | `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
 | `legacy raw/ at the workspace root` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — the same one command: from a root `raw/` it moves the source material to `imports/`, flattening `raw/imports/`, and rewrites citations. |
+| `CLAUDE.md imports the standing layers` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it writes the plugin's CLAUDE.md, or refreshes it, and never touches one the owner wrote. Until then the session-start hook still carries the layers, cut to its budget. |
+| `CLAUDE.md imports the standing layers` warn | The workspace's CLAUDE.md is the owner's own, so nothing rewrites it. Tell the owner in one line and offer to add the `@` lines doctor names to it, on their yes. Nothing is lost meanwhile: the session-start hook carries every layer the file does not import, cut to its budget. |
 | `standing context size` warn | Nothing is broken: it means every session now starts by reading more than it comfortably should, before a word of the actual work. Say the number in plain words and offer to prune `.joserah/directives.md` — keep the rules that must hold in *every* session, move the detail into `.joserah/knowledge/` notes that can be read when they are needed, and delete what stopped being true. Never edit that file without the owner: it is theirs. Left alone it eventually passes the injector's per-file cap, and a file over that cap arrives cut short (with a `[cut]` line saying so). |
 | `prompt (AGENTS.md) current` FAIL — *behind* | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/refresh-prompt.js" <workspace>`. Then tell the owner a **new conversation** is enough — no restart. |
 | `prompt (AGENTS.md) current` FAIL — *hand-edited* or *no install record and differs* | Do not overwrite. Follow `/joserah:update` step 4: show the owner what differs, move their lines to `.joserah/directives.md`, then `refresh-prompt.js <workspace> --force` on their yes — the displaced text is kept as `AGENTS.md.replaced-<date>` beside it. |
@@ -114,9 +116,9 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace-root> --dry-run
 ```
 
 The output is a JSON object with `scanned` (note count), `changed` (notes that gained frontmatter or relations),
-`boundaries` (nested workspaces that were refused — each migrates on its own update), and `removed` (files that
-will be deleted, typically `CLAUDE.md`). Show the owner these counts and lists, and say plainly what will be
-removed. Once they agree, run it again without `--dry-run`. Migration is additive and idempotent: it adds
+`boundaries` (nested workspaces that were refused — each migrates on its own update), `created` and `refreshed`
+(plugin files it installs, `CLAUDE.md` among them) and `skipped` (files it refused to touch — an owner-written
+`CLAUDE.md` is one: it is never rewritten or deleted). Show the owner these counts and lists. Once they agree, run it again without `--dry-run`. Migration is additive and idempotent: it adds
 frontmatter and a `## Relations` block, and never edits prose.
 
 ## Migrate a pre-0.3.0 workspace

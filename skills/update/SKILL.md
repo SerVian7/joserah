@@ -59,8 +59,9 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace-root> --dry-run
 ```
 
 Show the owner the counts in plain words — notes that gain frontmatter, files that will be created
-(`created`: `directives.md`, `JOSERAH-ROLE.md`, `.joserah/agent.md`, `AGENTS.md`), files removed
-(`CLAUDE.md`) — and what `prompt` says. On yes, run it again without `--dry-run`. Migrate is
+(`created`: `directives.md`, `JOSERAH-ROLE.md`, `.joserah/agent.md`, `AGENTS.md`, `CLAUDE.md`), files
+refused (`skipped` — an owner-written `CLAUDE.md` is never rewritten; doctor names the lines it lacks) —
+and what `prompt` says. On yes, run it again without `--dry-run`. Migrate is
 additive and idempotent: it never edits prose and never touches an existing `directives.md`.
 
 `prompt.action`:

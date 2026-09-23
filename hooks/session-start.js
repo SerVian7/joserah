@@ -27,7 +27,7 @@
 // Closed set on purpose: argv is not an event name, it only selects one.
 const EVENT = process.argv[2] === 'subagent' ? 'SubagentStart' : 'SessionStart';
 const { findWorkspace, readConfig } = require('./lib/workspace');
-const { roleBlock, directivesBlock, agentOverlayBody, withinBudget } = require('./lib/standing-context');
+const { roleBlock, directivesBlock, agentOverlayBody, withinBudget, layersViaClaudeMd } = require('./lib/standing-context');
 
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
@@ -113,7 +113,16 @@ if (cfg.kind === 'hosted') {
 // and does not.
 const parts = [];
 
-const role = roleBlock(ROOT);
+// 0.13.3: a layer the workspace-root CLAUDE.md imports reaches the session
+// through CLAUDE.md, whole and without this command's 10,000-character cliff,
+// so it is not sent a second time here. Everything else stays: the identity
+// block and the agent overlay are always this hook's, and a workspace with no
+// stub, an owner-written CLAUDE.md that imports nothing, or a session started
+// in a subfolder (where the imports do not expand) gets every layer from here
+// exactly as before. See CLAUDE_MD in lib/standing-context.js.
+const viaClaudeMd = layersViaClaudeMd(ROOT, process.cwd());
+
+const role = viaClaudeMd.has('JOSERAH-ROLE.md') ? '' : roleBlock(ROOT);
 if (role) parts.push(role.trim());
 
 parts.push(
@@ -148,7 +157,7 @@ if (agentBody) parts.push('\n## This assistant\n' + agentBody);
 
 // Layer 5 — the owner's own standing rules. Last of the standing layers
 // because they win over every one of them, AGENTS.md included.
-const directives = directivesBlock(ROOT);
+const directives = viaClaudeMd.has('.joserah/directives.md') ? '' : directivesBlock(ROOT);
 if (directives) parts.push(directives);
 
 process.stdout.write(JSON.stringify({

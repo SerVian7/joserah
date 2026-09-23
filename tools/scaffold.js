@@ -119,6 +119,7 @@ const args = parseArgs(process.argv.slice(2));
 const { PERMISSION_DENY, denyFor, hostPathsFor, defaultTrustFor } = require('./lib/permission-deny');
 const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 const { readPromptVersion, promptSha } = require('./lib/prompt');
+const { installClaudeMd } = require('../hooks/lib/standing-context');
 
 // `--feedback` and `--identity-mode` share one three-value vocabulary.
 // Defined once, up here, so both the main create path and --identity-only
@@ -215,6 +216,9 @@ if (args.rootShellOnly) {
   writeIfMissing('JOSERAH-ROLE.md',
     fs.readFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(cfg.kind)}.md`)));
   writeIfMissing('.gitignore', GITIGNORE_LINES.join('\n'));
+  // The CLAUDE.md stub: written when missing, refreshed when it is the
+  // plugin's, never touched when it is the owner's (see installClaudeMd).
+  console.log(`${installClaudeMd(root) === 'foreign' ? 'kept' : 'wrote'} CLAUDE.md`);
   // imports/ is a root shell path too (outside .joserah/, gitignored by
   // construction) — a `.joserah`-only backup never carried it, so a restore
   // leaves the owner with an empty, unexplained folder unless this writes
@@ -456,6 +460,13 @@ copyTree(TEMPLATES, root);
 // plugin-owned and carries no tokens to substitute.
 fs.copyFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(args.kind)}.md`),
   path.join(root, 'JOSERAH-ROLE.md'));
+
+// 0.13.3: the CLAUDE.md stub that @-imports AGENTS.md, JOSERAH-ROLE.md and
+// .joserah/directives.md — how the standing layers reach a session (see
+// CLAUDE_MD in hooks/lib/standing-context.js). Not in the collision check: an
+// owner-written CLAUDE.md is never overwritten, not even with --force, and the
+// session-start hook carries every layer it does not import.
+installClaudeMd(root);
 
 // Journal year dir so the first session has somewhere to land.
 fs.mkdirSync(path.join(root, '.joserah', 'desk', 'daily', String(new Date().getFullYear())), { recursive: true });

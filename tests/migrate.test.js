@@ -87,13 +87,10 @@ test('migrate is idempotent: a second run changes nothing', (t) => {
   assert.strictEqual(fs.readFileSync(path.join(dir, '.joserah/knowledge/people/ada-lovelace.md'), 'utf8'), after1);
 });
 
-test('migrate sets formatVersion and removes CLAUDE.md', (t) => {
+// 0.13.3: CLAUDE.md is no longer deleted — see tests/claude-md.test.js.
+test('migrate sets formatVersion', (t) => {
   const dir = ws(t);
-  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), 'see AGENTS.md\n');
-  const r = runTool('migrate.js', [dir]);
-  const out = JSON.parse(r.stdout);
-  assert.ok(out.removed.includes('CLAUDE.md'));
-  assert.ok(!fs.existsSync(path.join(dir, 'CLAUDE.md')));
+  runTool('migrate.js', [dir]);
   const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
   assert.strictEqual(cfg.formatVersion, 2);
 });

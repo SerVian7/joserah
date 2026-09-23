@@ -9,6 +9,10 @@ const { tmpdir, runTool, PLUGIN_ROOT, HERMETIC_CONFIG_DIR, fakeMarketplace } = r
 function hookWs(t) {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'O', '--language', 'en', '--role', 'r']);
+  // 0.13.3: with the CLAUDE.md stub in place the hook leaves the role file and
+  // the directives to it (tests/claude-md.test.js). These tests exercise the
+  // hook's own injection, the fallback for a workspace without the stub.
+  fs.rmSync(path.join(dir, 'CLAUDE.md'));
   return dir;
 }
 // Hermetic like runTool: the session-start hook resolves the prompt source
@@ -373,6 +377,7 @@ test('session-start injects the role file and the workspace directives', (t) => 
 test('a shared workspace is injected the server role, a hosted one the hosted role', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--kind', 'shared']);
+  fs.rmSync(path.join(dir, 'CLAUDE.md'));
   writeDirectives(dir, '- Answer only within what the asker is permitted to see.');
 
   const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
@@ -382,6 +387,7 @@ test('a shared workspace is injected the server role, a hosted one the hosted ro
 
   const hosted = path.join(tmpdir(t), 'hosted');
   runTool('scaffold.js', ['--target', hosted, '--workspace', 'h', '--kind', 'hosted']);
+  fs.rmSync(path.join(hosted, 'CLAUDE.md'));
   writeDirectives(hosted, '- The host never speaks for the owner.');
   const hostedCtx = JSON.parse(runHook('session-start.js', hosted).stdout).hookSpecificOutput.additionalContext;
   assert.match(hostedCtx, /The host never speaks for the owner/);

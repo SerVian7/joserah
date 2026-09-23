@@ -1,8 +1,8 @@
-<!-- joserah:prompt-version 7 -->
+<!-- joserah:prompt-version 8 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
-> wholesale by the plugin — never hand-edit it. Two further layers are injected into your context at session start:
+> wholesale by the plugin — never hand-edit it. Two further layers reach your context at session start (imported by CLAUDE.md, else injected):
 > **JOSERAH-ROLE.md** (who you are talking to) and **.joserah/directives.md** (this workspace's own rules). **Directives win.**
 > Open either only if it did not reach you, or came with a `[cut]` line.
 

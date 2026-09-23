@@ -89,11 +89,13 @@ test('scaffold --assistant records the assistant name', (t) => {
   assert.strictEqual(cfg.assistantName, 'Yarkın');
 });
 
-test('scaffold no longer writes CLAUDE.md', (t) => {
+// 0.13.3: CLAUDE.md is back, as a stub that only imports AGENTS.md and the
+// other standing files — AGENTS.md stays the router. See tests/claude-md.test.js.
+test('scaffold writes AGENTS.md, and CLAUDE.md only as the importing stub', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
   assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')), 'AGENTS.md is written');
-  assert.ok(!fs.existsSync(path.join(dir, 'CLAUDE.md')), 'CLAUDE.md is not');
+  assert.match(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8'), /^@AGENTS\.md$/m);
 });
 
 test('scaffold rejects an unknown trust level instead of guessing', (t) => {
