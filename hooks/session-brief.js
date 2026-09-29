@@ -82,13 +82,37 @@ function weekday(d) {
   return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
 }
 
+function stubText(day) { return `# ${day}\n\n## Top of mind\n-\n\n## Done today\n-\n\n## Notes\n`; }
+// 0.13.4: the stub this hook writes, still untouched — whitespace aside, so an
+// editor that re-saves it with CRLF or a trailing newline does not make it news.
+function isStub(text, day) { return text.replace(/\s/g, '') === stubText(day).replace(/\s/g, ''); }
+
 function ensureDailyStub(today) {
   const p = path.join(ROOT, '.joserah', 'desk', 'daily', today.slice(0, 4), `${today}.md`);
   if (!fs.existsSync(p)) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, `# ${today}\n\n## Top of mind\n-\n\n## Done today\n-\n\n## Notes\n`, 'utf8');
+    fs.writeFileSync(p, stubText(today), 'utf8');
   }
   return p;
+}
+
+// 0.13.4: today's journal was the one uncapped part of the brief — 5,394 of
+// 10,062 characters in a mature workspace, enough to push the learnings past
+// the budget. Its head (title and Top of mind) and its newest lines are what a
+// session needs; the middle is announced, never dropped silently.
+const JOURNAL_TAIL_CHARS = 1500;
+function cappedJournal(text) {
+  // The head ends where the section after "Top of mind" begins; a head that
+  // is itself huge shrinks to the title line.
+  const second = text.indexOf('\n## ', text.indexOf('## ') + 1);
+  let headEnd = second === -1 ? 0 : second + 1;
+  if (!headEnd || headEnd > JOURNAL_TAIL_CHARS) headEnd = text.indexOf('\n') + 1;
+  if (text.length - headEnd <= JOURNAL_TAIL_CHARS) return text;
+  // The tail starts on a line boundary, so no entry arrives cut mid-line.
+  const from = text.length - JOURNAL_TAIL_CHARS;
+  const tailStart = text.indexOf('\n', from - 1) + 1 || from;
+  return `${text.slice(0, headEnd)}\n[cut] ${tailStart - headEnd} character(s) of today's journal omitted here; ` +
+    `open the file for them.\n\n${text.slice(tailStart)}`;
 }
 
 // A task is often a wrapped paragraph, not one line — the marker plus its
@@ -192,7 +216,7 @@ function allFileMtimes(dirs) {
         const p = path.join(d, e.name);
         if (e.isDirectory()) walk(p);
         else {
-          try { out.push(fs.statSync(p).mtimeMs); } catch { /* raced deletion — skip */ }
+          try { out.push({ p, m: fs.statSync(p).mtimeMs }); } catch { /* raced deletion — skip */ }
         }
       }
     })(dir);
@@ -232,7 +256,11 @@ function backupStalenessLine(root, cfg, now) {
   // future change to either route's scope should double check this still
   // matches whichever route the owner actually uses.
   const dirs = ['desk', 'knowledge', 'personal'].map((d) => path.join(root, '.joserah', d));
-  const changed = allFileMtimes(dirs).filter((m) => m > sinceMs);
+  // 0.13.4: an untouched journal stub, of any day, is this hook's own write.
+  // The ordering above covered only the session that creates it; from the next
+  // one on it read as "1 file(s) changed" in a workspace holding nothing.
+  const changed = allFileMtimes(dirs).filter(({ p, m }) => m > sinceMs &&
+    !(/^\d{4}-\d{2}-\d{2}\.md$/.test(path.basename(p)) && isStub(readText(p), path.basename(p, '.md'))));
   if (!changed.length) return null;
   const agoLabel = neverBackedUp ? 'no backup taken yet' : `${formatAgo(now.getTime() - sinceMs)} ago`;
   return `[backup] ${changed.length} file(s) changed since last backup (${agoLabel}).`;
@@ -261,20 +289,22 @@ const tasks = firstNOpenTasks(path.join(ROOT, '.joserah', 'desk', 'tasks', 'now.
 if (tasks.length) parts.push('\n### Current focus (.joserah/desk/tasks/now.md)\n' + tasks.join('\n'));
 
 const dailyText = readText(dailyPath);
-if (dailyText.split(/\r?\n/).length > 5) {
-  parts.push(`\n### Today's journal (.joserah/desk/daily/${today.slice(0, 4)}/${today}.md)\n${dailyText}`);
+if (dailyText.trim() && !isStub(dailyText, today)) {
+  parts.push(`\n### Today's journal (.joserah/desk/daily/${today.slice(0, 4)}/${today}.md)\n${cappedJournal(dailyText)}`);
 }
 
-const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);
-if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);
-
+// 0.13.4: ahead of the learnings. The budget cut takes the end, and these are
+// the lines that exist to be acted on; the learnings are always on file.
 if (staleness) parts.push('\n' + staleness);
 
 for (const line of updateLines(cfg, now)) parts.push('\n' + line);
 
+const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);
+if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);
+
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'SessionStart',
-    additionalContext: withinBudget(parts.join('\n')),
+    additionalContext: withinBudget(parts.join('\n'), "today's journal and recent learnings (.joserah/learned.md)"),
   },
 }));

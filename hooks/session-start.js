@@ -27,12 +27,18 @@
 // Closed set on purpose: argv is not an event name, it only selects one.
 const EVENT = process.argv[2] === 'subagent' ? 'SubagentStart' : 'SessionStart';
 const { findWorkspace, readConfig } = require('./lib/workspace');
-const { roleBlock, directivesBlock, agentOverlayBody, withinBudget, layersViaClaudeMd } = require('./lib/standing-context');
+const { roleBlock, directivesBlock, agentOverlayBody, withinBudget, layersViaClaudeMd, MAX_HOOK_CHARS } = require('./lib/standing-context');
 
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
 
 const cfg = readConfig(ROOT) || {};
+// 0.13.4: a subagent is a worker, not a second main session. It keeps the
+// facts it works in — name, owner, language, trust, the owner's layers — and
+// loses what only the conversation with the owner needs: the greeting and the
+// signature. Never told it was a worker, it read a workspace rule such as
+// "Default: delegate" as its own and delegated again.
+const WORKER = EVENT === 'SubagentStart';
 
 // Context arrives in layers, and the order is deliberate — it is how the
 // model weighs what it reads. Each one is more specific than the one above it,
@@ -67,7 +73,7 @@ if (cfg.assistantName) {
 }
 if (cfg.ownerName) who.push(`The owner of this workspace is **${cfg.ownerName}**.`);
 if (cfg.dialogueLanguage) who.push(`Speak **${cfg.dialogueLanguage}** to them.`);
-if (cfg.ownerName && cfg.assistantName) {
+if (cfg.ownerName && cfg.assistantName && !WORKER) {
   who.push(`Open by greeting them by name and giving yours — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
 }
 // 0.13.1: this line used to assert the owner is *not* a developer of this
@@ -91,7 +97,7 @@ who.push(cfg.ownerIsDeveloper
 // space, then Joserah, and the template carries the second word a shade
 // fainter — nothing else joins them. This briefing is plain text, so it
 // also hands over the comma form for anywhere the tone cannot travel.
-who.push(cfg.assistantName
+if (!WORKER) who.push(cfg.assistantName
   ? `Anything you send outside this workspace — a mail, a report, a document — you sign **${cfg.assistantName} Joserah**: your own name, never the owner's and never the host's, and then Joserah, a space later and a shade fainter. Nothing joins the two words but that space — never a middle dot. Where the tone cannot be carried, as in plain text, write it **${cfg.assistantName}, Joserah**.`
   : `Anything you send outside this workspace — a mail, a report, a document — you sign **Joserah**: you are Joserah and the sole author here, so the name is written once and once only, never the owner's and never the host's.`);
 if (cfg.trust === 'guest') {
@@ -159,10 +165,16 @@ if (agentBody) parts.push('\n## This assistant\n' + agentBody);
 // because they win over every one of them, AGENTS.md included.
 const directives = viaClaudeMd.has('.joserah/directives.md') ? '' : directivesBlock(ROOT);
 if (directives) parts.push(directives);
+// First, ahead of the budget cut, so a cut can never take it; the budget
+// shrinks by its length.
+const workerLine = WORKER
+  ? 'You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text.\n\n'
+  : '';
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: EVENT,
-    additionalContext: withinBudget(parts.join('\n')),
+    additionalContext: workerLine +
+      withinBudget(parts.join('\n'), '.joserah/directives.md, the last standing layer', MAX_HOOK_CHARS - workerLine.length),
   },
 }));

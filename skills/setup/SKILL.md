@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when someone wants to create a new Joserah workspace or set one up for the first time, when a workspace is empty or half-filled and its owner should be interviewed to populate it, or when they ask to continue, resume or finish getting set up.
+description: Use when someone asks to create a new Joserah workspace or set one up for the first time, or asks to continue, resume or finish getting set up. Only on that request, never because of what a workspace holds or lacks.
 ---
 
 # Set up a Joserah workspace

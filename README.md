@@ -533,3 +533,13 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **The hook stands down only where the imports arrive.** When a session starts at the workspace root and `CLAUDE.md` imports a layer, `session-start.js` no longer injects it, so nothing is sent twice; the identity block, the agent overlay (`.joserah/agent.md`, only the text below its marker) and the computed briefing stay in the hooks. With no `CLAUDE.md`, an owner-written one that lacks the lines, or a session started in a subfolder — where, measured, the parent `CLAUDE.md` loads but its imports do not expand — the hook injects every layer exactly as before.
 
 **An owner-written CLAUDE.md is never touched.** `migrate.js` used to delete any `CLAUDE.md` it found; it now installs or refreshes only the plugin's own stub (recognised by its first-line marker), leaves any other `CLAUDE.md` as it is and lists it in `skipped`. Doctor's new `CLAUDE.md imports the standing layers` check fails on a missing or stale stub and warns on an owner-written file that lacks the import lines, naming them. Prompt version 8 says the layers are imported or injected. Run `/joserah:update`.
+
+### Upgrading to 0.13.4
+
+**The session briefing keeps what matters when it overflows.** Today's journal is capped in the brief: its title and Top of mind, then its newest ~1,500 characters, with a `[cut]` line saying how much was left out. The `[update]` and `[backup]` lines now come before the learnings, so a budget cut drops learnings first. The cut notice names what was actually cut instead of always sending the session to `directives.md`.
+
+**A fresh workspace stops briefing itself about nothing.** The untouched journal stub is no longer injected, and no longer counts as "1 file changed" in the backup line. The `setup` skill fires only on an explicit request to set up or continue setting up, never because a workspace looks empty.
+
+**Subagents get a worker payload.** At SubagentStart the hook keeps the workspace facts and the language but drops the greeting and the signature, and opens with "You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text."
+
+**Delegation says one thing.** Prompt version 9: the §5 routines (journal, tasks and captures, people, learned) are always inline, however many files they touch; research, planning, multi-file work and sweeps go through `orchestrate`, in the background by default. `orchestrate` no longer says a lead never backgrounds its workers; its brief template carries "a worker does not delegate further" instead. Run `/joserah:update`.

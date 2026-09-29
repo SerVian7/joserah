@@ -742,17 +742,32 @@ test('the agent overlay is capped and announces its cut, like every other layer'
 // — only the envelope's `hookEventName` must be the literal of the FIRING
 // event, and the firing event has to be known without reading stdin (a piped
 // stdin that never delivers `end` on Windows would hang every spawn).
-test('the subagent marker emits SubagentStart with the same standing context', (t) => {
+// 0.13.4: a worker got the main session's payload unchanged — the greeting,
+// the signature, and in one workspace "Default: delegate" — and was never told
+// it is a worker, so it could delegate again. It keeps the facts it works in.
+test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.assistantName = 'Yarkın';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
   const sub = runHook('session-start.js', dir, undefined, undefined, ['subagent']);
   assert.strictEqual(sub.status, 0, sub.stderr);
   const main = runHook('session-start.js', dir);
   assert.strictEqual(main.status, 0, main.stderr);
   assert.strictEqual(JSON.parse(sub.stdout).hookSpecificOutput.hookEventName, 'SubagentStart');
   assert.strictEqual(JSON.parse(main.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
-  assert.strictEqual(JSON.parse(sub.stdout).hookSpecificOutput.additionalContext,
-    JSON.parse(main.stdout).hookSpecificOutput.additionalContext,
-    'a subagent gets the same standing layers the main session gets');
+  const worker = JSON.parse(sub.stdout).hookSpecificOutput.additionalContext;
+  const lead = JSON.parse(main.stdout).hookSpecificOutput.additionalContext;
+  for (const fact of [/The owner of this workspace is \*\*O\*\*/, /Speak \*\*en\*\*/, /Yarkın/]) {
+    assert.match(worker, fact, 'a worker keeps the workspace facts');
+  }
+  assert.doesNotMatch(worker, /Open by greeting/, 'a worker greets nobody');
+  assert.doesNotMatch(worker, /you sign/, 'a worker signs nothing');
+  assert.match(worker, /You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text\./);
+  assert.match(lead, /Open by greeting/, 'the main session is unchanged');
+  assert.match(lead, /you sign/);
+  assert.doesNotMatch(lead, /You are a worker/);
 });
 
 test('an unknown or absent argument still means SessionStart', (t) => {
@@ -778,4 +793,94 @@ test('SubagentStart is registered for every subagent, standing layers only', () 
   assert.match(commands[0].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/session-start\.js" subagent$/);
   assert.doesNotMatch(commands[0].command, /session-brief\.js/,
     'the per-moment layer is the parent session\'s state, not a subagent\'s');
+});
+
+// ---- 0.13.4: the briefing's own weight (plugin audit 19) --------------------
+// Measured in a mature workspace: today's journal was 5,394 of a 10,062-char
+// brief, the [update]/[backup] lines sat last and were the first thing the cut
+// dropped, and the cut notice sent the model to directives.md, a file that was
+// never cut. A fresh workspace was briefed its own empty stub and, from the
+// second session on, told that stub was "1 file changed".
+const { withinBudget } = require(path.join(PLUGIN_ROOT, 'hooks', 'lib', 'standing-context'));
+function todayPath(dir) {
+  const d = new Date();
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return path.join(dir, '.joserah', 'desk', 'daily', iso.slice(0, 4), `${iso}.md`);
+}
+function brief(dir, configDir) {
+  const r = runHook('session-brief.js', dir, undefined, configDir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+}
+
+// Over budget the way a mature workspace is: a full task list, a long day,
+// and learnings whose three newest entries are long. Backed up a week ago.
+function overlongBrief(dir) {
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.lastBackup = new Date(Date.now() - 7 * 864e5).toISOString();
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, '.joserah', 'desk', 'tasks', 'now.md'),
+    '# now\n\n' + '- [ ] a task long enough to matter, written out at length.\n'.repeat(40));
+  fs.mkdirSync(path.dirname(todayPath(dir)), { recursive: true });
+  fs.writeFileSync(todayPath(dir), '# today\n\n## Top of mind\n- x\n\n## Done today\n' + '- done, at length.\n'.repeat(200));
+  const entry = (d) => `## 2026-09-${d} a rule\n\n` + 'a long body, the way real rules are written.\n'.repeat(45);
+  fs.writeFileSync(path.join(dir, '.joserah', 'learned.md'), '# learned\n\n' + ['10', '11', '12', '13'].map(entry).join('\n'));
+}
+
+test('today\'s journal is capped: its head and its tail arrive, the middle is announced as cut', (t) => {
+  const dir = hookWs(t);
+  brief(dir);
+  fs.writeFileSync(todayPath(dir), '# today\n\n## Top of mind\n- JOURNAL-HEAD-MARKER\n\n## Done today\n' +
+    '- MIDDLE-MARKER\n' + '- a long line of what got done today, repeated.\n'.repeat(200) + '- JOURNAL-TAIL-MARKER\n');
+  const ctx = brief(dir);
+  assert.match(ctx, /JOURNAL-HEAD-MARKER/, 'heading and Top of mind stay');
+  assert.match(ctx, /JOURNAL-TAIL-MARKER/, 'the newest lines stay');
+  assert.doesNotMatch(ctx, /MIDDLE-MARKER/, 'the middle is cut');
+  assert.match(ctx, /\[cut\] \d+ character\(s\) of today's journal/);
+  assert.ok(ctx.length < 4500, `the journal alone still fills the brief: ${ctx.length}`);
+});
+
+test('the [update] and [backup] lines come before the learnings, so a cut drops learnings first', (t) => {
+  const dir = hookWs(t);
+  overlongBrief(dir);
+  const promptV = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).promptVersion;
+  const ctx = brief(dir, fakeMarketplace(t, promptV, null, { pluginVersion: '99.0.0' }));
+  assert.match(ctx, /\[update\] Joserah plugin 99\.0\.0/, 'the update line survived the cut');
+  assert.match(ctx, /\[backup\]/, 'the backup line survived the cut');
+  assert.ok(ctx.indexOf('[backup]') < ctx.indexOf('### Recent learnings'));
+  assert.ok(ctx.indexOf('[update]') < ctx.indexOf('### Recent learnings'));
+});
+
+test('the cut notice names what was cut, never directives.md by default', (t) => {
+  const cut = withinBudget('a line\n'.repeat(2000), "today's journal and recent learnings");
+  assert.match(cut, /^\[cut\] This session briefing was/);
+  assert.match(cut.slice(0, 2000), /today's journal and recent learnings/);
+  assert.doesNotMatch(cut, /directives/);
+
+  const dir = hookWs(t);
+  overlongBrief(dir);
+  const ctx = brief(dir);
+  assert.match(ctx, /^\[cut\]/);
+  assert.doesNotMatch(ctx.slice(0, 600), /directives/, 'hook 2 never cuts directives.md');
+  assert.match(ctx.slice(0, 600), /learned\.md/);
+
+  const standing = JSON.parse(runHook('session-start.js', overlongWorkspace(t)).stdout).hookSpecificOutput.additionalContext;
+  assert.match(standing.slice(0, 600), /directives\.md/, 'hook 1 still names its own last layer');
+});
+
+test('the untouched journal stub is neither briefed nor counted as a change', (t) => {
+  const dir = hookWs(t);
+  const first = brief(dir);
+  assert.ok(fs.existsSync(todayPath(dir)), 'the stub is written');
+  assert.doesNotMatch(first, /### Today's journal/, 'an empty stub is not a briefing');
+  const second = brief(dir);
+  assert.doesNotMatch(second, /### Today's journal/);
+  assert.doesNotMatch(second, /\[backup\]/, 'the hook\'s own stub is not "1 file changed"');
+
+  fs.appendFileSync(todayPath(dir), '- met the counterparty\n');
+  const third = brief(dir);
+  assert.match(third, /### Today's journal/);
+  assert.match(third, /met the counterparty/);
+  assert.match(third, /\[backup\] 1 file/, 'a real entry is a change');
 });

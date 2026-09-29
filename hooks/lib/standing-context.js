@@ -111,16 +111,19 @@ function capped(relPath, body) {
 // per-file cap above cannot guarantee this on its own — several layers, each
 // legally under their own cap, still add up — so this is the guarantee and the
 // cap is only good manners. Unlike capped(), the notice goes FIRST: see
-// NOTICE_RESERVE.
-function withinBudget(text, budget = MAX_HOOK_CHARS) {
+// NOTICE_RESERVE. `what` names the part that sits last and is therefore what
+// the cut takes — each caller knows its own order; this function does not.
+// 0.13.4: it used to say directives.md for both hooks, so a cut journal or
+// learnings index sent the session to reread a file that was never cut.
+function withinBudget(text, what, budget = MAX_HOOK_CHARS) {
   if (text.length <= budget) return text;
   const room = text.slice(0, budget - NOTICE_RESERVE);
   const lastBreak = room.lastIndexOf('\n');
   const kept = lastBreak > room.length / 2 ? room.slice(0, lastBreak) : room;
   return `[cut] This session briefing was ${text.length} characters, over the ${budget}-character ` +
     `budget: ${text.length - kept.length} character(s) were dropped from the end and are missing ` +
-    'below. Open .joserah/directives.md yourself before relying on any rule from it, and tell the ' +
-    'owner their standing rules have outgrown the session briefing.\n\n' + kept;
+    `below, from ${what}. Open it yourself before relying on it, and tell the owner the session ` +
+    'briefing has outgrown its budget.\n\n' + kept;
 }
 
 // One standing layer, built the way every other block in the session-start
