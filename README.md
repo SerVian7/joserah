@@ -566,3 +566,7 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 ### Upgrading to 0.13.7
 
 **One lookup, then the answer.** Prompt version 10 tells the assistant to answer a factual question from its first lookup and never to go silent behind a chain of tool calls, and a new `PreToolUse` hook (`hooks/tool-count.js`, every tool, main thread only) adds one line of context on every third tool call since the owner's last message — run `/joserah:update`.
+
+### Upgrading to 0.13.8
+
+**After a `git pull` of the clone, only the restart is left.** When the clone carries a newer version than the loaded copy, the session briefing now starts `claude plugin update joserah@<marketplace>` itself, detached and at most once per version, and says a restart runs it; with no `claude` on PATH it falls back to pointing at `/joserah:update`.

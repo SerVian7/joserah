@@ -15,7 +15,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 const { withinBudget } = require('./lib/standing-context');
 
@@ -65,6 +65,41 @@ function commitsBehindLine(checkout, now) {
   return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update. Tell the owner in one line, in their language.` : null;
 }
 
+// 0.13.8: a pulled checkout ahead of the loaded copy is re-copied here, so
+// nothing is left after a `git pull` but the restart. Detached and unref'd —
+// never waits on it — and at most once per checkout and version. `claude` on
+// Windows is an npm `.cmd` shim, which spawn finds only through a shell, so the
+// binary is looked up by hand and the one argument that varies is sanitised.
+function findOnPath(name) {
+  const exts = process.platform === 'win32'
+    ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+    : [''];
+  for (const dir of (process.env.PATH || process.env.Path || '').split(path.delimiter)) {
+    for (const ext of exts) {
+      const p = path.join(dir, name + ext);
+      try { if (dir && fs.statSync(p).isFile()) return p; } catch { /* not here */ }
+    }
+  }
+  return null;
+}
+function recopyLine(checkout) {
+  const v = checkout.version;
+  const tell = ' Tell the owner in one line, in their language.';
+  const claude = findOnPath('claude');
+  const marketplace = String(checkout.marketplace).replace(/[^A-Za-z0-9._-]/g, '');
+  if (!claude || !marketplace) return `[update] Joserah ${v} is pulled but not loaded — run /joserah:update.${tell}`;
+  const key = require('crypto').createHash('sha1').update(`${checkout.path}\n${v}`).digest('hex').slice(0, 12);
+  const stamp = path.join(os.tmpdir(), `joserah-recopy-${key}.stamp`);
+  if (fs.existsSync(stamp)) return `[update] Joserah ${v} is ready — restart Claude Code to run it.${tell}`;
+  fs.writeFileSync(stamp, v, 'utf8');
+  const shell = /\.(cmd|bat)$/i.test(claude);
+  const child = spawn(shell ? `"${claude}"` : claude, ['plugin', 'update', `joserah@${marketplace}`],
+    { detached: true, stdio: 'ignore', windowsHide: true, shell });
+  child.on('error', () => { /* best-effort; the stamp still says it was tried */ });
+  child.unref();
+  return `[update] Joserah ${v} is being loaded into the plugin cache in the background — restart Claude Code once to run it.${tell}`;
+}
+
 function updateLines(cfg, now) {
   let lib;
   try { lib = require('../tools/lib/prompt'); } catch { return []; }
@@ -76,7 +111,7 @@ function updateLines(cfg, now) {
       if (line) lines.push(line);
       const loaded = lib.pluginVersions().installed;
       if (loaded && checkout.version && lib.compareVersions(checkout.version, loaded) > 0) {
-        lines.push(`[update] Joserah ${checkout.version} is pulled but not loaded — run /joserah:update. Tell the owner in one line, in their language.`);
+        lines.push(recopyLine(checkout));
       }
     } else maybeRefreshClone(lib, now);
     const source = lib.resolvePromptSource();

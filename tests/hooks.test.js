@@ -959,8 +959,50 @@ function directoryMarketplace(t, version) {
 }
 const LOADED = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 
-test('a checkout newer than the loaded copy is reported as pulled but not loaded', (t) => {
-  const ctx = brief(hookWs(t), directoryMarketplace(t, '99.0.0'));
+// 0.13.8: the hook re-copies the pulled checkout itself, detached. A fake
+// `claude` on a PATH the test controls records how it was called, so no test
+// can ever run the real `claude plugin update` on the machine running it.
+function fakeClaude(t) {
+  const dir = tmpdir(t);
+  const log = path.join(dir, 'calls.log');
+  if (process.platform === 'win32') {
+    fs.writeFileSync(path.join(dir, 'claude.cmd'), `@echo %*>>"${log}"\r\n`);
+  } else {
+    fs.writeFileSync(path.join(dir, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
+  }
+  return { dir, log };
+}
+function briefWithPath(ws, configDir, pathDir) {
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js')],
+    { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir, PATH: pathDir, Path: pathDir } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+}
+function waitFor(file, ms = 8000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (fs.existsSync(file) && fs.readFileSync(file, 'utf8').trim()) return fs.readFileSync(file, 'utf8');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+  return '';
+}
+
+test('a pulled checkout is re-copied in the background, once per version, then reported ready', (t) => {
+  const ws = hookWs(t);
+  const configDir = directoryMarketplace(t, '99.0.0');
+  const claude = fakeClaude(t);
+  const first = briefWithPath(ws, configDir, claude.dir);
+  assert.match(first, /\[update\] Joserah 99\.0\.0 is being loaded into the plugin cache in the background — restart Claude Code once to run it\./);
+  assert.match(waitFor(claude.log), /^plugin update joserah@joserah\s*$/m, 'the re-copy was started with the marketplace name');
+
+  const second = briefWithPath(ws, configDir, claude.dir);
+  assert.match(second, /\[update\] Joserah 99\.0\.0 is ready — restart Claude Code to run it\./);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  assert.strictEqual(fs.readFileSync(claude.log, 'utf8').trim().split('\n').length, 1, 'at most once per version');
+});
+
+test('with no claude on PATH the brief falls back to the /joserah:update line', (t) => {
+  const ctx = briefWithPath(hookWs(t), directoryMarketplace(t, '99.0.0'), tmpdir(t));
   assert.match(ctx, /\[update\] Joserah 99\.0\.0 is pulled but not loaded — run \/joserah:update/);
   assert.doesNotMatch(ctx, /Updating the plugin is theirs/);
 });
