@@ -68,13 +68,20 @@ const WORKER = EVENT === 'SubagentStart';
 // plugin's: one is written at scaffold time from the role template that
 // matches `kind`, the other is the owner's and nothing here ever writes it.
 const who = [];
-if (cfg.assistantName) {
-  who.push(`**Your name in this workspace is ${cfg.assistantName}.** Introduce yourself as ${cfg.assistantName} — never as the model or tool you happen to be running on.`);
-}
-if (cfg.ownerName) who.push(`The owner of this workspace is **${cfg.ownerName}**.`);
-if (cfg.dialogueLanguage) who.push(`Speak **${cfg.dialogueLanguage}** to them.`);
-if (cfg.ownerName && cfg.assistantName && !WORKER) {
-  who.push(`Open by greeting them by name and giving yours — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
+// 0.13.9: every identity fact is stated, present or absent. Left unsaid, an
+// empty `assistantName` sent three fresh sessions to grep config.json before
+// they greeted anyone.
+who.push(cfg.assistantName
+  ? `**Your name in this workspace is ${cfg.assistantName}.** Introduce yourself as ${cfg.assistantName} — never as the model or tool you happen to be running on.`
+  : 'You have no name here: you are simply the assistant. Do not look it up, do not invent one.');
+who.push(cfg.ownerName
+  ? `The owner of this workspace is **${cfg.ownerName}**.`
+  : 'No owner name is on record: do not look it up; ask them once if you need it.');
+who.push(cfg.dialogueLanguage
+  ? `Speak **${cfg.dialogueLanguage}** to them.`
+  : 'No dialogue language is on record: answer in the language they write in.');
+if (cfg.ownerName && !WORKER) {
+  who.push(`Open by greeting them by name${cfg.assistantName ? ' and giving yours' : ''} — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
 }
 // 0.13.1: this line used to assert the owner is *not* a developer of this
 // software — a claim about a person the plugin cannot know, and one the

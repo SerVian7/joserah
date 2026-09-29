@@ -1065,3 +1065,45 @@ test('the tool counter is registered for every tool', () => {
   assert.ok(entry, 'tool-count.js is not registered');
   assert.ok(entry.matcher === '' || entry.matcher === '*', 'it must see every tool');
 });
+
+// ---- 0.13.9: identity needs no lookup ---------------------------------------
+// Observed in three fresh sessions: with `assistantName` empty the model grepped
+// config.json before greeting. The block says so plainly instead.
+test('an unnamed assistant is told it has no name; owner and language are always stated', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'Serkan', '--language', 'Turkish']);
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /You have no name here: you are simply the assistant\. Do not look it up, do not invent one\./);
+  assert.match(ctx, /The owner of this workspace is \*\*Serkan\*\*/);
+  assert.match(ctx, /Speak \*\*Turkish\*\*/);
+  assert.match(ctx, /Open by greeting them by name/);
+
+  const bare = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', bare, '--workspace', 'w']);
+  const cfgPath = path.join(bare, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  delete cfg.ownerName; delete cfg.dialogueLanguage;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const bareCtx = JSON.parse(runHook('session-start.js', bare).stdout).hookSpecificOutput.additionalContext;
+  assert.match(bareCtx, /No owner name is on record/);
+  assert.match(bareCtx, /No dialogue language is on record/);
+});
+
+test('a named assistant gets its name and not the no-name line', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'Serkan', '--language', 'Turkish']);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.assistantName = 'Yarkın';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+  const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Your name in this workspace is Yarkın/);
+  assert.doesNotMatch(ctx, /You have no name here/);
+});
+
+test('the role files do not ask for a name the assistant may not have', () => {
+  for (const role of ['client', 'hosted']) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'roles', `joserah-${role}.md`), 'utf8').replace(/\s+/g, ' ');
+    assert.ok(text.includes('give yours if you have one; otherwise just greet them'), role);
+  }
+});

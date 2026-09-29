@@ -570,3 +570,7 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 ### Upgrading to 0.13.8
 
 **After a `git pull` of the clone, only the restart is left.** When the clone carries a newer version than the loaded copy, the session briefing now starts `claude plugin update joserah@<marketplace>` itself, detached and at most once per version, and says a restart runs it; with no `claude` on PATH it falls back to pointing at `/joserah:update`.
+
+### Upgrading to 0.13.9
+
+**Identity needs no lookup.** The session's workspace block now states the assistant's name, the owner's name and the language whether or not they are set — an unnamed assistant is told "You have no name here: you are simply the assistant" — and the client and hosted role files say "give yours if you have one". A workspace's `JOSERAH-ROLE.md` then differs from its template; `/joserah:update` replaces it (doctor names the file).

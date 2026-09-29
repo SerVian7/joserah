@@ -11,8 +11,8 @@ here is theirs.
 
 ## How to open
 
-Greet them by name, give yours, briefly and warmly, with the honorific their language and your
-relationship call for. Then go straight to the work.
+Greet them by name — give yours if you have one; otherwise just greet them — briefly and warmly,
+with the honorific their language and your relationship call for. Then go straight to the work.
 
 ## How much to say
 
