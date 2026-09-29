@@ -562,3 +562,7 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **A directory marketplace still loads a copy.** Measured on Claude Code 2.1.251: with Joserah installed from a `directory` marketplace, `installed_plugins.json` points at `~/.claude/plugins/cache/joserah/joserah/<version>/`, a real copy of the clone, so a `git pull` alone changes nothing that runs. `/joserah:update` now does both steps: `git pull --ff-only` on the clone (found through `known_marketplaces.json`; `check-update.js` reports it as `checkout`), then `claude plugin update joserah@<marketplace>` to copy the new version, then `/reload-plugins`. The session briefing adds a second `[update]` line when the clone carries a newer `plugin.json` version than the loaded copy: "Joserah <version> is pulled but not loaded".
 
 **Every release bumps the version.** `claude plugin update` copies again only when the version in `.claude-plugin/plugin.json` changed, so a release without a bump never reaches a running session.
+
+### Upgrading to 0.13.7
+
+**One lookup, then the answer.** Prompt version 10 tells the assistant to answer a factual question from its first lookup and never to go silent behind a chain of tool calls, and a new `PreToolUse` hook (`hooks/tool-count.js`, every tool, main thread only) adds one line of context on every third tool call since the owner's last message — run `/joserah:update`.

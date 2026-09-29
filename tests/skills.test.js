@@ -139,6 +139,17 @@ test('update pulls the plugin checkout and never sends the owner to the plugin m
   assert.doesNotMatch(text, /claude plugin marketplace update/);
 });
 
+// 0.13.7 (owner, 2026-09-30): a factual question got lookup after lookup, in
+// silence, when the first one already held the answer.
+test('AGENTS.md: one lookup, then the answer, and never silent behind tool calls', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  const s2 = text.slice(text.indexOf('## 2.'), text.indexOf('## 3.')).replace(/\s+/g, ' ');
+  assert.ok(s2.includes('A factual question gets one lookup, then the answer.'));
+  assert.ok(s2.includes('no verification pass nobody asked for'));
+  assert.ok(s2.includes('after two calls without a word to the owner'));
+  assert.ok(text.split('\n').length < 160);
+});
+
 // 0.13.4 (owner, 2026-09-30): the §5 routines touch two files by nature
 // (capture + now.md, learned + profile) and were being read into delegation;
 // "loops are bad". They are always inline; the rest backgrounds by default.

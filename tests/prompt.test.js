@@ -115,19 +115,19 @@ test('decidePromptAction', () => {
 
 test('installPrompt writes the file and records version + sha; recordOnly leaves the file alone', (t) => {
   const dir = freshWs(t);
-  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 9) });
+  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 10) });
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 9);
+  assert.strictEqual(cfg.promptVersion, 10);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
-  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 9) });
+  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 10) });
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 9);
+  assert.strictEqual(cfg.promptVersion, 10);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -260,9 +260,9 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v9 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
+test('prompt v10 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 9);
+  assert.strictEqual(prompt.readPromptVersion(text), 10);
   assert.ok(text.includes('goes into the vault at once, without asking'), 'rule 3: the vault');
   assert.ok(text.includes('$(node .joserah/tools/secret.js <name>)'), 'rule 3: embedded use only');
   assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);
@@ -278,7 +278,7 @@ test('prompt v9 carries the claim-line obligations, the role default, the vault,
 // product can keep everywhere, so they stayed out. Each id below is asserted by
 // a phrase distinctive enough that a rewrite dropping the rule fails, and short
 // enough that rewording the sentence around it does not.
-test('prompt v9 carries every behaviour rule the owner put in the native prompt', () => {
+test('prompt v10 carries every behaviour rule the owner put in the native prompt', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
   const rules = {
     // A — character, toward the owner

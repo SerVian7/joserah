@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 const { redact } = require('./lib/redactions');
+const { toolCountFile } = require('./lib/tool-count');
 
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
@@ -122,7 +123,12 @@ function shouldInjectTime(now) {
   let prompt = '';
   try {
     const raw = await readStdin();
-    if (raw) prompt = ownerText(String(JSON.parse(raw).prompt || ''));
+    if (raw) {
+      const input = JSON.parse(raw);
+      prompt = ownerText(String(input.prompt || ''));
+      // 0.13.7: the owner spoke, so tool-count.js starts again from zero.
+      try { fs.rmSync(toolCountFile(input.session_id) || '', { force: true }); } catch { /* nothing to reset */ }
+    }
   } catch { /* ignore malformed input */ }
 
   const now = new Date();

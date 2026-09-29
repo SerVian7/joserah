@@ -969,3 +969,57 @@ test('a checkout at the loaded version, or with no plugin.json, says nothing', (
   assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, LOADED)), /\[update\]/);
   assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, null)), /\[update\]/);
 });
+
+// ---- 0.13.7: a chain of tool calls with no word to the owner ---------------
+// Owner, 2026-09-30: a factual question got lookup after lookup in silence.
+// Every third tool call since the owner's last message, one line of context.
+function toolCall(ws, session, extra) {
+  const r = runHook('tool-count.js', ws, JSON.stringify({ session_id: session, tool_name: 'Read', ...(extra || {}) }));
+  assert.strictEqual(r.status, 0, r.stderr);
+  return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null;
+}
+const session = () => `test-${process.pid}-${Math.random().toString(36).slice(2)}`;
+
+test('every third tool call since the owner spoke carries one line, never a block', (t) => {
+  const ws = hookWs(t);
+  const s = session();
+  assert.strictEqual(toolCall(ws, s), null);
+  assert.strictEqual(toolCall(ws, s), null);
+  const third = toolCall(ws, s);
+  assert.strictEqual(third.hookEventName, 'PreToolUse');
+  assert.match(third.additionalContext, /^3 tool calls since the owner's last message — if the answer is already in hand, answer now/);
+  assert.ok(third.additionalContext.length <= 160, third.additionalContext.length);
+  assert.ok(!('permissionDecision' in third), 'it never decides for the tool');
+  assert.strictEqual(toolCall(ws, s), null);
+  assert.strictEqual(toolCall(ws, s), null);
+  assert.match(toolCall(ws, s).additionalContext, /^6 tool calls/);
+});
+
+test('the owner\'s next message resets the count', (t) => {
+  const ws = hookWs(t);
+  const s = session();
+  toolCall(ws, s); toolCall(ws, s);
+  runHook('user-prompt-submit.js', ws, JSON.stringify({ prompt: 'go on', session_id: s }));
+  assert.strictEqual(toolCall(ws, s), null, 'call 1 of the new turn');
+  assert.strictEqual(toolCall(ws, s), null);
+  assert.ok(toolCall(ws, s), 'call 3 of the new turn');
+});
+
+test('a subagent\'s tool calls are neither counted nor nudged, and outside a workspace nothing runs', (t) => {
+  const ws = hookWs(t);
+  const s = session();
+  for (let i = 0; i < 4; i++) assert.strictEqual(toolCall(ws, s, { agent_id: 'a1', agent_type: 'Explore' }), null);
+  assert.strictEqual(toolCall(ws, s), null, 'the subagent calls did not count for the main thread');
+  const outside = runHook('tool-count.js', tmpdir(t), JSON.stringify({ session_id: s, tool_name: 'Read' }));
+  assert.strictEqual(outside.status, 0);
+  assert.strictEqual(outside.stdout, '');
+  const garbage = runHook('tool-count.js', ws, 'not json');
+  assert.strictEqual(garbage.status, 0);
+});
+
+test('the tool counter is registered for every tool', () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8'));
+  const entry = hooks.hooks.PreToolUse.find((e) => e.hooks.some((h) => /tool-count\.js/.test(h.command)));
+  assert.ok(entry, 'tool-count.js is not registered');
+  assert.ok(entry.matcher === '' || entry.matcher === '*', 'it must see every tool');
+});
