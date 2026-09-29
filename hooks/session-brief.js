@@ -44,12 +44,44 @@ function maybeRefreshClone(lib, now) {
   try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return; }
   spawnSync('git', ['-C', clone, 'pull', '--ff-only', '--quiet'], { stdio: 'ignore', timeout: 8000 });
 }
+// 0.13.5: installed from a `directory` marketplace, the plugin loads in place
+// and its marketplace checkout IS this plugin root. Then an update is commits
+// upstream that HEAD lacks, and bringing them in is /joserah:update's
+// `git pull` — never this hook's, so the daily step is a fetch, not a pull.
+// Anything else (a copy in the plugin cache) keeps the version comparison.
+function inPlaceCheckout(lib) {
+  const clone = lib.marketplaceCloneDir();
+  if (!clone || !fs.existsSync(path.join(clone, '.git'))) return null;
+  try {
+    const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+    return same(fs.realpathSync(clone), fs.realpathSync(path.join(__dirname, '..'))) ? clone : null;
+  } catch { return null; }
+}
+function commitsBehindLine(checkout, now) {
+  const key = require('crypto').createHash('sha1').update(checkout).digest('hex').slice(0, 12);
+  const stamp = path.join(os.tmpdir(), `joserah-fetch-${key}.stamp`);
+  let fresh = false;
+  try { fresh = now.getTime() - fs.statSync(stamp).mtimeMs < CLONE_REFRESH_INTERVAL_MS; } catch { /* no stamp yet */ }
+  if (!fresh) {
+    // Stamped first, for the same reason as the pull above.
+    try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return null; }
+    spawnSync('git', ['-C', checkout, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 8000 });
+  }
+  const r = spawnSync('git', ['-C', checkout, 'rev-list', '--count', 'HEAD..@{u}'], { encoding: 'utf8', timeout: 8000 });
+  const n = parseInt(r.stdout, 10);
+  return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update. Tell the owner in one line, in their language.` : null;
+}
+
 function updateLines(cfg, now) {
   let lib;
   try { lib = require('../tools/lib/prompt'); } catch { return []; }
   const lines = [];
   try {
-    maybeRefreshClone(lib, now);
+    const checkout = inPlaceCheckout(lib);
+    if (checkout) {
+      const line = commitsBehindLine(checkout, now);
+      if (line) lines.push(line);
+    } else maybeRefreshClone(lib, now);
     const source = lib.resolvePromptSource();
     if (source) {
       const st = lib.promptState(ROOT, cfg, source);
@@ -65,7 +97,7 @@ function updateLines(cfg, now) {
         lines.push(`[update] Prompt v${source.version} is available but this workspace's AGENTS.md ${why}, so it was left alone. Tell the owner in one line, in their language, and offer /joserah:update.`);
       }
     }
-    const v = lib.pluginVersions();
+    const v = checkout ? {} : lib.pluginVersions();
     if (v.installed && v.available && lib.compareVersions(v.available, v.installed) > 0) {
       lines.push(`[update] Joserah plugin ${v.available} is available (installed: ${v.installed}). Tell the owner in one line, in their language. Updating the plugin is theirs to do and needs a restart afterwards; do not explain further unless asked.`);
     }

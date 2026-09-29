@@ -16,10 +16,16 @@ tomorrow, you still have every file.
 
 ## Install
 
+Clone the repository, register the clone as a local marketplace, install from it:
+
 ```
-/plugin marketplace add SerVian7/joserah
+git clone https://github.com/SerVian7/joserah.git <path>
+/plugin marketplace add <path>
 /plugin install joserah@joserah
 ```
+
+The plugin then runs in place from `<path>`, not from a copy. `/joserah:update` is how it
+updates: it pulls the clone and brings your workspace along; `/reload-plugins` loads the new code.
 
 Then create your workspace:
 
@@ -543,3 +549,9 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 **Subagents get a worker payload.** At SubagentStart the hook keeps the workspace facts and the language but drops the greeting and the signature, and opens with "You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text."
 
 **Delegation says one thing.** Prompt version 9: the §5 routines (journal, tasks and captures, people, learned) are always inline, however many files they touch; research, planning, multi-file work and sweeps go through `orchestrate`, in the background by default. `orchestrate` no longer says a lead never backgrounds its workers; its brief template carries "a worker does not delegate further" instead. Run `/joserah:update`.
+
+### Upgrading to 0.13.5
+
+**`/joserah:update` is the only way Joserah updates itself.** The plugin is now installed from a local clone registered as a `directory` marketplace, so it loads in place from the clone instead of a copy in the plugin cache (`marketplace.json` already lists it as the relative-path source `./`). `/joserah:update` runs `git pull --ff-only` on that clone, migrates the workspace, and asks for `/reload-plugins`; a restart only when `hooks/hooks.json` or MCP configuration changed. The session briefing's `[update]` line now comes from a daily `git fetch` and says how many commits the clone is behind; an install that is not a checkout keeps the old version comparison.
+
+**Moving an existing install, once:** `/plugin uninstall joserah@joserah`, then `/plugin marketplace remove joserah`, then the three steps under Install (clone, `/plugin marketplace add <path>`, `/plugin install joserah@joserah`). Workspaces are untouched by the move; run `/joserah:update` afterwards.

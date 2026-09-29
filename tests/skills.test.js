@@ -129,6 +129,15 @@ test('setup covers both halves of the journey', () => {
 // 0.13.4 (plugin audit 19): the description fired on "a workspace is empty or
 // half-filled", so a plain greeting in a new workspace loaded a 17 KB skill
 // whose first half creates a workspace that already exists.
+// 0.13.5 (owner, 2026-09-30): /joserah:update is the only way Joserah updates
+// itself — a git pull on the checkout the plugin runs from, then /reload-plugins.
+test('update pulls the plugin checkout and never sends the owner to the plugin manager', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'update', 'SKILL.md'), 'utf8');
+  assert.ok(text.includes('git -C "${CLAUDE_PLUGIN_ROOT}" pull --ff-only'));
+  assert.ok(text.includes('/reload-plugins'));
+  assert.doesNotMatch(text, /claude plugin marketplace update/);
+});
+
 // 0.13.4 (owner, 2026-09-30): the §5 routines touch two files by nature
 // (capture + now.md, learned + profile) and were being read into delegation;
 // "loops are bad". They are always inline; the rest backgrounds by default.

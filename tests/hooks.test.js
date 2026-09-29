@@ -884,3 +884,58 @@ test('the untouched journal stub is neither briefed nor counted as a change', (t
   assert.match(third, /met the counterparty/);
   assert.match(third, /\[backup\] 1 file/, 'a real entry is a change');
 });
+
+// ---- 0.13.5: the plugin runs from its own git checkout ----------------------
+// Installed from a `directory` marketplace, the plugin loads in place and
+// CLAUDE_PLUGIN_ROOT is the checkout itself, so "is there an update" is a git
+// question: commits upstream that HEAD does not have. Local repos only — a
+// bare repo in a temp dir stands in for the remote, nothing reaches a network.
+function git(cwd, ...args) {
+  const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'init.defaultBranch=main', ...args],
+    { cwd, encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
+  return r.stdout;
+}
+function inPlaceCheckout(t, ahead) {
+  const base = tmpdir(t);
+  const upstream = path.join(base, 'upstream.git');
+  const checkout = path.join(base, 'joserah');
+  git(base, 'init', '--bare', '-q', upstream);
+  git(base, 'clone', '-q', upstream, checkout);
+  for (const d of ['hooks', 'tools', 'templates', '.claude-plugin']) {
+    fs.cpSync(path.join(PLUGIN_ROOT, d), path.join(checkout, d), { recursive: true });
+  }
+  git(checkout, 'add', '-A');
+  git(checkout, 'commit', '-q', '-m', 'base');
+  git(checkout, 'push', '-q', '-u', 'origin', 'HEAD');
+  if (ahead) {
+    const other = path.join(base, 'other');
+    git(base, 'clone', '-q', upstream, other);
+    for (let i = 0; i < ahead; i++) git(other, 'commit', '-q', '--allow-empty', '-m', `upstream ${i}`);
+    git(other, 'push', '-q', 'origin', 'HEAD');
+  }
+  const configDir = path.join(base, 'config');
+  fs.mkdirSync(path.join(configDir, 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'plugins', 'known_marketplaces.json'),
+    JSON.stringify({ joserah: { source: { source: 'directory', path: checkout }, installLocation: checkout } }, null, 2));
+  return { checkout, configDir };
+}
+function briefFrom(checkout, ws, configDir) {
+  const r = spawnSync(process.execPath, [path.join(checkout, 'hooks', 'session-brief.js')],
+    { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+}
+
+test('an in-place checkout behind its upstream says how many commits, and names /joserah:update', (t) => {
+  const { checkout, configDir } = inPlaceCheckout(t, 2);
+  const ctx = briefFrom(checkout, hookWs(t), configDir);
+  assert.match(ctx, /\[update\] Joserah has 2 new commits upstream — run \/joserah:update/);
+  assert.doesNotMatch(ctx, /Updating the plugin is theirs/, 'the plugin-manager path is gone for a checkout');
+  assert.strictEqual(git(checkout, 'rev-list', '--count', 'HEAD..@{u}').trim(), '2', 'the hook fetched, it did not pull');
+});
+
+test('an in-place checkout level with its upstream says nothing about updates', (t) => {
+  const { checkout, configDir } = inPlaceCheckout(t, 0);
+  assert.doesNotMatch(briefFrom(checkout, hookWs(t), configDir), /\[update\]/);
+});
