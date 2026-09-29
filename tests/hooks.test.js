@@ -939,3 +939,33 @@ test('an in-place checkout level with its upstream says nothing about updates', 
   const { checkout, configDir } = inPlaceCheckout(t, 0);
   assert.doesNotMatch(briefFrom(checkout, hookWs(t), configDir), /\[update\]/);
 });
+
+// ---- 0.13.6: a directory marketplace still loads a cache copy ---------------
+// Measured on CLI 2.1.251: `installPath` is cache/joserah/joserah/<version>, a
+// real copy, so a pulled checkout is not what runs until the plugin is
+// re-copied. The hook compares the loaded copy's version with the checkout's.
+function directoryMarketplace(t, version) {
+  const base = tmpdir(t);
+  const checkout = path.join(base, 'checkout');
+  fs.mkdirSync(path.join(checkout, '.claude-plugin'), { recursive: true });
+  if (version) {
+    fs.writeFileSync(path.join(checkout, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'joserah', version }));
+  }
+  const configDir = path.join(base, 'config');
+  fs.mkdirSync(path.join(configDir, 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'plugins', 'known_marketplaces.json'),
+    JSON.stringify({ joserah: { source: { source: 'directory', path: checkout }, installLocation: checkout } }));
+  return configDir;
+}
+const LOADED = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
+
+test('a checkout newer than the loaded copy is reported as pulled but not loaded', (t) => {
+  const ctx = brief(hookWs(t), directoryMarketplace(t, '99.0.0'));
+  assert.match(ctx, /\[update\] Joserah 99\.0\.0 is pulled but not loaded — run \/joserah:update/);
+  assert.doesNotMatch(ctx, /Updating the plugin is theirs/);
+});
+
+test('a checkout at the loaded version, or with no plugin.json, says nothing', (t) => {
+  assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, LOADED)), /\[update\]/);
+  assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, null)), /\[update\]/);
+});

@@ -10,43 +10,59 @@ Two things update on different schedules, and the owner should never have to kno
 - **The standing instructions** (`AGENTS.md`, plus `directives.md`, `JOSERAH-ROLE.md`,
   `.joserah/agent.md`, `.joserah/tools/verify-links.js`) travel **without a plugin release** — they
   come from the marketplace clone and take effect in a **new conversation**. No restart.
-- **The plugin's code** (hooks, tools, skills) is the plugin's own git checkout, loaded in place.
-  Step 1 pulls it; `/reload-plugins` loads it. This skill is the only way Joserah updates itself —
-  never send the owner to `/plugin` for it.
+- **The plugin's code** (hooks, tools, skills) comes from a git checkout registered as a
+  `directory` marketplace; Claude Code loads a copy of it from its plugin cache, one per version.
+  Step 1 pulls the checkout and re-copies it; `/reload-plugins` loads the copy. This skill is the
+  only way Joserah updates itself — never send the owner to `/plugin` for it.
 
 > **Running the plugin's tools.** The commands here use
 > `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
 > syntax, not an environment lookup, and expands to nothing — leaving you
 > running `node "/tools/…"`. Verify the path before relying on it:
 > `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
-> If it is empty or missing, use `installLocation` for `joserah` in
-> `~/.claude/plugins/known_marketplaces.json` (Windows: `%USERPROFILE%\.claude\plugins\…`) —
-> the checkout the plugin runs from. A command that failed because the path was empty is a failure: say so
+> If it is empty or missing, use the checkout: `installLocation` of the `directory` marketplace
+> in `~/.claude/plugins/known_marketplaces.json` (Windows: `%USERPROFILE%\.claude\plugins\…`)
+> whose folder holds Joserah. A command that failed because the path was empty is a failure: say so
 > rather than reporting the step as done.
 
 ## 1. Refresh the source
 
-The plugin runs from its own git checkout. Bring it current, then note what changed:
-
-```
-git -C "${CLAUDE_PLUGIN_ROOT}" pull --ff-only
-git -C "${CLAUDE_PLUGIN_ROOT}" diff --name-only ORIG_HEAD HEAD
-```
-
-If the pull fails (offline, local commits), say so in one line and continue on the code as it is.
-If the plugin root is not a git checkout, it was installed the old way, as a copy in the plugin
-cache: tell the owner in one line that it has to move once to the checkout install (README,
-"Upgrading to 0.13.5"), and continue — the steps below still bring the workspace current.
-
-## 2. See what is behind
+Find the checkout and the marketplace it is registered as:
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/check-update.js" <workspace-root>
 ```
 
+`checkout` is `{ marketplace, path, version }`, read from `known_marketplaces.json`. Then pull it,
+note what changed, and have Claude Code re-copy it — `${CLAUDE_PLUGIN_ROOT}` is the plugin cache
+copy the session loaded, not the checkout:
+
+```
+git -C "<checkout.path>" pull --ff-only
+git -C "<checkout.path>" diff --name-only ORIG_HEAD HEAD
+claude plugin update joserah@<checkout.marketplace>
+```
+
+(`claude plugin update --help` on 2.1.251: `Usage: claude plugin update [options] <plugin>`.) It
+re-copies only when the version in `.claude-plugin/plugin.json` changed; "already at the latest
+version" after a pull that brought commits means the release forgot its bump — say so in one line.
+This session still holds the old copy, so from here on run the tools from `<checkout.path>` in
+place of `${CLAUDE_PLUGIN_ROOT}`.
+
+If the pull fails (offline, local commits), say so in one line and continue on the code as it is.
+If `checkout` is `null`, Joserah was installed the old way, from a git marketplace: tell the owner
+in one line that it has to move once to the checkout install (README, "Upgrading to 0.13.5"), and
+continue — the steps below still bring the workspace current.
+
+## 2. See what is behind
+
+```
+node "<checkout.path>/tools/check-update.js" <workspace-root>
+```
+
 - `prompt.behind` true → the standing instructions are behind. Fixed below, no restart.
-- `newer` true → only on an old, copied install (a checkout is current after step 1): the one
-  line from step 1 about moving to the checkout install covers it. Carry on with the rest.
+- `newer` true → only on an old install (`checkout` null): the one line from step 1 covers it.
+  Carry on with the rest.
 - `behind` true → this workspace was built by an older plugin than the one installed: `migrate.js`
   below brings it up.
 - `null` anywhere → could not tell; say nothing about that one and do not retry.
@@ -132,8 +148,9 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <workspace-root>
 Every check `ok` or the update is not done — report what is still red, in the owner's language,
 one line each. When it is clean, tell the owner in one or two lines: what changed, and that a
 **new conversation** picks up the new instructions. If step 1 pulled anything, ask them to run
-`/reload-plugins` to load the new code; a restart is needed only when the changed files include
-`hooks/hooks.json` or MCP configuration (`.mcp.json`, `mcpServers` in `.claude-plugin/plugin.json`).
+`/reload-plugins` to load the new copy. `claude plugin update` prints "restart required to apply",
+but per the plugin loading docs `/reload-plugins` switches hooks and MCP servers to the new copy;
+suggest a restart only if the new version is still not active after it.
 
 **Then say what an update is not.** Nothing here read a single note: this moved the shell, and the
 owner's own pages are untouched by design. If doctor's `knowledge sweep` warned — or the workspace

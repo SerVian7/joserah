@@ -24,8 +24,9 @@ git clone https://github.com/SerVian7/joserah.git <path>
 /plugin install joserah@joserah
 ```
 
-The plugin then runs in place from `<path>`, not from a copy. `/joserah:update` is how it
-updates: it pulls the clone and brings your workspace along; `/reload-plugins` loads the new code.
+Claude Code loads a copy of `<path>` from its plugin cache, one per version. `/joserah:update` is
+how it updates: it pulls the clone, has Claude Code copy the new version, and brings your workspace
+along; `/reload-plugins` loads the new copy.
 
 Then create your workspace:
 
@@ -552,6 +553,12 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 
 ### Upgrading to 0.13.5
 
-**`/joserah:update` is the only way Joserah updates itself.** The plugin is now installed from a local clone registered as a `directory` marketplace, so it loads in place from the clone instead of a copy in the plugin cache (`marketplace.json` already lists it as the relative-path source `./`). `/joserah:update` runs `git pull --ff-only` on that clone, migrates the workspace, and asks for `/reload-plugins`; a restart only when `hooks/hooks.json` or MCP configuration changed. The session briefing's `[update]` line now comes from a daily `git fetch` and says how many commits the clone is behind; an install that is not a checkout keeps the old version comparison.
+**`/joserah:update` is the only way Joserah updates itself.** The plugin is now installed from a local clone registered as a `directory` marketplace, (`marketplace.json` already lists it as the relative-path source `./`). This note first said the plugin then loads in place; it does not — see 0.13.6. `/joserah:update` runs `git pull --ff-only` on that clone, migrates the workspace, and asks for `/reload-plugins`; a restart only when `hooks/hooks.json` or MCP configuration changed. The session briefing's `[update]` line now comes from a daily `git fetch` and says how many commits the clone is behind; an install that is not a checkout keeps the old version comparison.
 
 **Moving an existing install, once:** `/plugin uninstall joserah@joserah`, then `/plugin marketplace remove joserah`, then the three steps under Install (clone, `/plugin marketplace add <path>`, `/plugin install joserah@joserah`). Workspaces are untouched by the move; run `/joserah:update` afterwards.
+
+### Upgrading to 0.13.6
+
+**A directory marketplace still loads a copy.** Measured on Claude Code 2.1.251: with Joserah installed from a `directory` marketplace, `installed_plugins.json` points at `~/.claude/plugins/cache/joserah/joserah/<version>/`, a real copy of the clone, so a `git pull` alone changes nothing that runs. `/joserah:update` now does both steps: `git pull --ff-only` on the clone (found through `known_marketplaces.json`; `check-update.js` reports it as `checkout`), then `claude plugin update joserah@<marketplace>` to copy the new version, then `/reload-plugins`. The session briefing adds a second `[update]` line when the clone carries a newer `plugin.json` version than the loaded copy: "Joserah <version> is pulled but not loaded".
+
+**Every release bumps the version.** `claude plugin update` copies again only when the version in `.claude-plugin/plugin.json` changed, so a release without a bump never reaches a running session.

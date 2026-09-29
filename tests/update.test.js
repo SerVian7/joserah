@@ -123,3 +123,20 @@ test('check-update reports a newer plugin in the marketplace clone as `newer`, s
   assert.strictEqual(none.available, null);
   assert.strictEqual(none.newer, null);
 });
+
+// 0.13.6: the skill pulls the checkout, not ${CLAUDE_PLUGIN_ROOT} — that is
+// the cache copy. check-update names the checkout and its marketplace.
+test('check-update names the directory-marketplace checkout and the marketplace it is registered as', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const base = tmpdir(t);
+  const checkout = path.join(base, 'checkout');
+  fs.mkdirSync(path.join(checkout, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(checkout, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'joserah', version: '9.9.9' }));
+  fs.mkdirSync(path.join(base, 'plugins'));
+  fs.writeFileSync(path.join(base, 'plugins', 'known_marketplaces.json'),
+    JSON.stringify({ mine: { source: { source: 'directory', path: checkout }, installLocation: checkout } }));
+  const out = JSON.parse(runTool('check-update.js', [dir], { env: { CLAUDE_CONFIG_DIR: base } }).stdout);
+  assert.deepStrictEqual(out.checkout, { marketplace: 'mine', path: checkout, version: '9.9.9' });
+  assert.strictEqual(JSON.parse(runTool('check-update.js', [dir]).stdout).checkout, null);
+});

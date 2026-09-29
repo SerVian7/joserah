@@ -87,4 +87,7 @@ if (promptLib) {
   available = promptLib.pluginVersions().available;
   if (installed != null && available != null) newer = promptLib.compareVersions(available, installed) > 0;
 }
-console.log(JSON.stringify({ installed, available, newer, workspace, behind, prompt }));
+// 0.13.6: where /joserah:update pulls, and the marketplace name the plugin
+// update names — null when Joserah is not installed from a directory marketplace.
+const checkout = promptLib ? promptLib.pluginCheckout() : null;
+console.log(JSON.stringify({ installed, available, newer, workspace, behind, prompt, checkout }));

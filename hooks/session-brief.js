@@ -44,19 +44,12 @@ function maybeRefreshClone(lib, now) {
   try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return; }
   spawnSync('git', ['-C', clone, 'pull', '--ff-only', '--quiet'], { stdio: 'ignore', timeout: 8000 });
 }
-// 0.13.5: installed from a `directory` marketplace, the plugin loads in place
-// and its marketplace checkout IS this plugin root. Then an update is commits
-// upstream that HEAD lacks, and bringing them in is /joserah:update's
-// `git pull` — never this hook's, so the daily step is a fetch, not a pull.
-// Anything else (a copy in the plugin cache) keeps the version comparison.
-function inPlaceCheckout(lib) {
-  const clone = lib.marketplaceCloneDir();
-  if (!clone || !fs.existsSync(path.join(clone, '.git'))) return null;
-  try {
-    const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
-    return same(fs.realpathSync(clone), fs.realpathSync(path.join(__dirname, '..'))) ? clone : null;
-  } catch { return null; }
-}
+// 0.13.5: installed from a `directory` marketplace, an update is commits
+// upstream that the checkout's HEAD lacks, and bringing them in is
+// /joserah:update's `git pull` — never this hook's, so the daily step is a
+// fetch, not a pull. 0.13.6: the loaded plugin is still a cache copy of that
+// checkout (measured on 2.1.251), so a checkout newer than this copy is the
+// second half: pulled, not yet loaded. Anything else keeps the old comparison.
 function commitsBehindLine(checkout, now) {
   const key = require('crypto').createHash('sha1').update(checkout).digest('hex').slice(0, 12);
   const stamp = path.join(os.tmpdir(), `joserah-fetch-${key}.stamp`);
@@ -77,10 +70,14 @@ function updateLines(cfg, now) {
   try { lib = require('../tools/lib/prompt'); } catch { return []; }
   const lines = [];
   try {
-    const checkout = inPlaceCheckout(lib);
+    const checkout = lib.pluginCheckout();
     if (checkout) {
-      const line = commitsBehindLine(checkout, now);
+      const line = fs.existsSync(path.join(checkout.path, '.git')) ? commitsBehindLine(checkout.path, now) : null;
       if (line) lines.push(line);
+      const loaded = lib.pluginVersions().installed;
+      if (loaded && checkout.version && lib.compareVersions(checkout.version, loaded) > 0) {
+        lines.push(`[update] Joserah ${checkout.version} is pulled but not loaded — run /joserah:update. Tell the owner in one line, in their language.`);
+      }
     } else maybeRefreshClone(lib, now);
     const source = lib.resolvePromptSource();
     if (source) {

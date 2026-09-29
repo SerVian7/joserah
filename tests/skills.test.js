@@ -133,7 +133,8 @@ test('setup covers both halves of the journey', () => {
 // itself — a git pull on the checkout the plugin runs from, then /reload-plugins.
 test('update pulls the plugin checkout and never sends the owner to the plugin manager', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'update', 'SKILL.md'), 'utf8');
-  assert.ok(text.includes('git -C "${CLAUDE_PLUGIN_ROOT}" pull --ff-only'));
+  assert.ok(text.includes('git -C "<checkout.path>" pull --ff-only'), 'the checkout, not the cache copy');
+  assert.ok(text.includes('claude plugin update joserah@<checkout.marketplace>'), 'the re-copy');
   assert.ok(text.includes('/reload-plugins'));
   assert.doesNotMatch(text, /claude plugin marketplace update/);
 });
