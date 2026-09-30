@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: ac01e29 · 2026-09-30 16:17 +0300 · 0.16.1: a memory's knowledge/sources/ is archived source material, not checked
+Last change: e8e58fd · 2026-09-30 16:33 +0300 · 0.16.2: company pages start from .brand/; refresh merges the memory's .gitignore
 
 - Released: 0.16.2 on main, 629 tests (`node --test tests/*.test.js`), prompt v18.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
