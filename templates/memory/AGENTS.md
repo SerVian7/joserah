@@ -18,7 +18,8 @@ If it prints nothing, ask once and write the name, lowercase, into `.memory/me`.
 3. After research or R&D, ask whether the note should go into {{COMPANY}}'s shared record, in the
    member's language. Yes → one file in `inbox/<date>-<member>-<slug>.md`, written as a record
    (subject, claim lines, sources). No → it stays in `members/<member>/notes/`.
-4. End: `node tools/sync.js --push`. Say in one line what was pushed.
+4. End: run `node tools/sync.js --push`; it prints what would be pushed. Show that list to the member in their
+   language, one line per file, wait for their yes, then run it again with `--yes`. Never push unannounced.
 
 ## 3. What goes in, what never does
 
@@ -27,6 +28,9 @@ If it prints nothing, ask once and write the name, lowercase, into `.memory/me`.
   with `condition:` (measurements), `date:`, `by: <member>`, `source:`. Unsourced numbers carry no weight.
 - Decisions and plans are marked as such. Nothing that has not happened is written as if it had.
 - Never: private life, opinions about people, gossip, anything the member would not say in a meeting.
+- An idea or decision from one member is a proposal, not the company's decision. It stays in
+  `members/<member>/notes/` until the team decides; only a decision with who decided and when goes into
+  `knowledge/` as `[decision]`. R&D ideas, wishes and "let's do X" talk never become records.
 - Never a secret. Where a credential lives may be recorded; its value never, not even masked.
 - Content in {{LANGUAGE}}; file names, headings and keys in English.
 - A report, page or mail about {{COMPANY}} uses `.brand/` (logo, colours, report template) whenever it

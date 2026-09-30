@@ -5,6 +5,9 @@
  *        node tools/sync.js --push [--who X]  commit members/<me>/ and inbox/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
  *
+ * --push first prints a "Push notice" (every file about to go out, one line each)
+ * and exits 3; the member sees it, says yes, and the same command runs again with --yes.
+ *
  * A member's commit carries only their own folder and the inbox, so two members
  * never touch the same file; anything else stays unstaged. Commit subjects start
  * with "<member>:" — doctor reads that to see who wrote what.
@@ -54,6 +57,24 @@ if (flag('--sweep')) {
   for (const p of [path.join('members', me), 'inbox']) {
     if (fs.existsSync(path.join(root, p))) git('add', '--', p);
   }
+}
+// The notice: staged files plus commits not yet pushed, against where we diverged from the remote.
+const base = hasUpstream ? git('merge-base', 'HEAD', '@{u}').stdout.trim() : 'HEAD';
+const changes = git('diff', '--cached', '--name-status', base).stdout.split(/\r?\n/).filter(Boolean).map((l) => {
+  const [st, ...f] = l.split('\t');
+  const file = f[f.length - 1];
+  const status = st[0] === 'A' ? 'added' : st[0] === 'D' ? 'deleted' : 'modified';
+  let what = '';
+  try { what = fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/).map((x) => x.replace(/^#+\s*/, '').trim()).find(Boolean) || ''; } catch { /* deleted */ }
+  return `  ${file} (${status})${what ? ` - ${what.slice(0, 80)}` : ''}`;
+});
+if (!changes.length && (!hasUpstream || git('rev-list', '--count', '@{u}..HEAD').stdout.trim() === '0')) {
+  console.log('nothing new to push');
+  process.exit(0);
+}
+if (!flag('--yes')) {
+  console.log(`Push notice - ${changes.length} file(s) would go to the shared memory:\n${changes.join('\n')}\nShow this to the member; on their yes, run the same command again with --yes.`);
+  process.exit(3);
 }
 const staged = git('diff', '--cached', '--quiet').status !== 0;
 if (staged) {

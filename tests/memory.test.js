@@ -56,6 +56,8 @@ test('A1: templates/memory carries the layout, its placeholders only, and a .bra
   }
   const agents = fs.readFileSync(path.join(tpl, 'AGENTS.md'), 'utf8');
   assert.match(agents, /\.brand\//, 'reports about the company use its .brand');
+  assert.match(agents, /is a proposal, not the company's decision/);
+  assert.match(agents, /Never push unannounced/);
   for (const f of ['AGENTS.md', 'README.md']) assert.match(fs.readFileSync(path.join(tpl, f), 'utf8'), /created with Joserah, but Joserah is not required/, f);
   assert.match(fs.readFileSync(path.join(tpl, '.gitignore'), 'utf8'), /^\.memory\/me$/m);
 });
@@ -134,7 +136,14 @@ test('A3: sync.js --push commits only the member folder and the inbox, and pull 
   fs.writeFileSync(path.join(dir, 'members', 'bora', 'daily', '2026-09-30.md'), '# 2026-09-30\n');
   fs.writeFileSync(path.join(dir, 'inbox', '2026-09-30-bora-x.md'), '# x\n');
   fs.appendFileSync(path.join(dir, 'knowledge', 'index.md'), '\nnot mine to write\n');
-  const r = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push']);
+  const notice = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push']);
+  assert.strictEqual(notice.status, 3, notice.stdout + notice.stderr);
+  assert.match(notice.stdout, /Push notice - 2 file\(s\)/);
+  assert.match(notice.stdout, /inbox\/2026-09-30-bora-x\.md \(added\) - x$/m);
+  assert.match(notice.stdout, /members\/bora\/daily\/2026-09-30\.md \(added\) - 2026-09-30$/m);
+  assert.doesNotMatch(notice.stdout, /knowledge/);
+  assert.strictEqual(git(dir, 'rev-list', '--count', '@{u}..HEAD').trim(), '0', 'notice pushes nothing');
+  const r = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push', '--yes']);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /bora: \d{4}-\d{2}-\d{2}/);
   const files = git(dir, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n').sort();
