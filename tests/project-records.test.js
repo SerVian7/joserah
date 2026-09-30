@@ -155,3 +155,18 @@ test('hook: silent outside projects/ and for a non-git command; no memory part w
   assert.match(line, /^\[project\] two — HEAD/);
   assert.doesNotMatch(line, /shared memory/);
 });
+
+test('hook: a commit that only touches the record files is silent; with src alongside it speaks', (t) => {
+  const ws = workspace(t);
+  const proj = path.join(ws, 'projects', 'Acme', 'three');
+  repo(proj, 'https://github.com/acme/three');
+  write(path.join(proj, 'docs', 'status.md'), 'x');
+  git(proj, 'add', '-A');
+  git(proj, 'commit', '-qm', 'record only');
+  assert.strictEqual(hook(ws, `cd "${proj}" && git commit -m "record only"`).stdout, '', 'the record does not ask to record itself');
+  write(path.join(proj, 'docs', 'status.md'), 'y');
+  write(path.join(proj, 'src', 'a.js'), 'z');
+  git(proj, 'add', '-A');
+  git(proj, 'commit', '-qm', 'code and record');
+  assert.match(ctx(hook(ws, `cd "${proj}" && git commit -m "code and record"`)), /^\[project\] three — HEAD/);
+});

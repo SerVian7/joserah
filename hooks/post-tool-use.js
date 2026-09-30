@@ -59,6 +59,9 @@ function projectLine(command, input) {
   const [full, h, date, ...subj] = git(top, 'log', '-1', '--format=%H%x09%h%x09%ad%x09%s', '--date=format:%Y-%m-%d %H:%M %z').split('\t');
   if (!full) return null;
   const subject = subj.join('\t');
+  // A commit that only updates the record itself has nothing new to record (0.15.9).
+  const files = git(top, 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').split('\n').filter(Boolean);
+  if (files.length && files.every((f) => /^(docs\/status\.md|docs\/learnings\.md|CHANGELOG\.md)$/.test(f))) return null;
   // Once per session per repo HEAD, stamped in the OS temp dir like session-brief's once-a-day lines.
   const key = require('crypto').createHash('sha1').update(`${input.session_id || ''}|${real(top)}|${full}`).digest('hex').slice(0, 16);
   const stamp = path.join(os.tmpdir(), `joserah-project-${key}.stamp`);
