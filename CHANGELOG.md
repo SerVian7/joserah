@@ -3,6 +3,12 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.0
+
+**One vault format, imported in one pass.** `keys/secrets.json` in the standard shape, filled and read only through `secret.js`, is the vault in every workspace. `secret.js --import <file> [--prefix <scope>] [--delete]` brings in any old vault — JSON of any nesting (`corlu → cam1 → user` becomes `corlu.cam1.user`) or a `.env` — listing names, never values, and never overwriting: a name that exists with a different value is a listed conflict, exit 1. `/joserah:update` runs it once per workspace (`migratedTo` below 0.15.0) on every JSON or `.env` file in `keys/`, and on a `secrets.json` in a foreign shape (moved to `secrets.json.imported-<date>`, then imported into a fresh store; `secret.js` now refuses to work on such a store rather than listing nothing). A clean source is renamed `<name>.imported-<date>`, never deleted; the migrate report carries counts only. A module's own `.env` is never imported. `docs/migrations/0.15.0.md`.
+
+**Names without values.** `secret.js --index` writes `.joserah/vault-index.md`, the names grouped by scope; every change to the store rewrites it, and it is the one vault file the assistant reads. `secret.js --rename <old> <new>` corrects an imported name without anyone seeing the value.
+
 ## 0.14.0
 
 **No marketplace, no cache, no `claude plugin update`.** Joserah is a git clone linked as `~/.claude/skills/joserah` and loaded in place as `joserah@skills-dir` (README, "Where Joserah runs"). `/joserah:update` is a `git pull` on the clone, the workspace migration, then `/reload-plugins`. The re-copy of 0.13.8–0.13.10, its diagnostics file and stamps, and `tools/install-dev-hook.js` are gone; the briefing keeps the daily "N new commits upstream" line. Doctor's new `plugin loaded from the skills dir` check warns on a copy in the plugin cache.

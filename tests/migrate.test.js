@@ -734,3 +734,78 @@ test('migrate --dry-run decides the same way but writes no tool copy', (t) => {
   runTool('migrate.js', [dir, '--dry-run']);
   assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'tools', 'secret.js')));
 });
+
+// 0.15.0: an old vault under keys/ is imported once, by name, and renamed —
+// never deleted, and no value reaches migrate's report.
+function oldVaultWs(t) {
+  const dir = ws(t);
+  const p = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+  cfg.migratedTo = '0.14.0';
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+  return dir;
+}
+const keysDir = (dir) => path.join(dir, 'keys');
+const secretHas = (dir, name) => runTool('secret.js', ['--has', name], { cwd: dir }).status === 0;
+
+test('migrate imports an old vault under keys/ once, renames it, reports counts only', (t) => {
+  const dir = oldVaultWs(t);
+  write(dir, 'keys/vault.json', JSON.stringify({ corlu: { cam1: { user: 'fake-admin', password: 'fake-pw-9' } } }));
+  write(dir, 'keys/id_ed25519', '-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n');
+  write(dir, 'docker-stack/app/.env', 'DB_PASS=fake-module\n');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.vault.imported, 2);
+  assert.strictEqual(out.vault.skipped, 0);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+  assert.ok(secretHas(dir, 'corlu.cam1.user'));
+  const left = fs.readdirSync(keysDir(dir));
+  assert.ok(!left.includes('vault.json'));
+  assert.ok(left.some((f) => /^vault\.json\.imported-\d{4}-\d{2}-\d{2}$/.test(f)), left.join(','));
+  assert.ok(left.includes('id_ed25519'), 'a key file is not a vault and is left alone');
+  assert.ok(fs.existsSync(path.join(dir, 'docker-stack', 'app', '.env')), "a module's own .env is never imported");
+  assert.ok(!secretHas(dir, 'env.db-pass'));
+  assert.match(fs.readFileSync(path.join(dir, '.joserah', 'vault-index.md'), 'utf8'), /- corlu\.cam1\.user/);
+
+  const again = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.strictEqual(again.vault.imported, 0, 'a second run imports nothing');
+});
+
+test('migrate turns a foreign-shaped secrets.json into the standard store and keeps the original', (t) => {
+  const dir = oldVaultWs(t);
+  write(dir, 'keys/secrets.json', JSON.stringify({ servers: { ctrl: { root: 'fake-r00t' } }, 'API Keys': { github: 'fake-gh' } }));
+  assert.strictEqual(runTool('secret.js', ['--list'], { cwd: dir }).status, 3, 'secret.js refuses a foreign store instead of listing nothing');
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(JSON.parse(r.stdout).vault.imported, 2);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+  const store = JSON.parse(fs.readFileSync(path.join(keysDir(dir), 'secrets.json'), 'utf8'));
+  assert.ok(store._readme && store.secrets, 'standard shape');
+  assert.strictEqual(runTool('secret.js', ['servers.ctrl.root'], { cwd: dir }).stdout, 'fake-r00t');
+  assert.ok(secretHas(dir, 'api-keys.github'));
+  assert.ok(fs.readdirSync(keysDir(dir)).some((f) => /^secrets\.json\.imported-/.test(f)));
+});
+
+test('migrate leaves a vault with a conflict in place and says so', (t) => {
+  const dir = oldVaultWs(t);
+  runTool('secret.js', ['--set', 'corlu.cam1.user'], { cwd: dir, input: 'fake-old' });
+  write(dir, 'keys/passwords.json', JSON.stringify({ corlu: { cam1: { user: 'fake-new' } } }));
+  const out = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.strictEqual(out.vault.skipped, 1);
+  assert.deepStrictEqual(out.vault.kept, ['keys/passwords.json']);
+  assert.ok(fs.existsSync(path.join(keysDir(dir), 'passwords.json')));
+  assert.strictEqual(runTool('secret.js', ['corlu.cam1.user'], { cwd: dir }).stdout, 'fake-old');
+});
+
+test('migrate does not import on a workspace already migrated to 0.15.0', (t) => {
+  const dir = ws(t);
+  const p = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+  cfg.migratedTo = '0.15.0';
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+  write(dir, 'keys/vault.json', JSON.stringify({ a: { b: 'fake-1' } }));
+  const out = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.strictEqual(out.vault, null);
+  assert.ok(fs.existsSync(path.join(keysDir(dir), 'vault.json')));
+});

@@ -68,6 +68,11 @@ if (fs.existsSync(STORE)) {
 } else if (!NO_STORE_OK.includes(args[0])) {
   die(3, 'secret: no store yet — keys/secrets.json is created by the first --set');
 }
+const standard = (d) => d && typeof d === 'object' && d.secrets && typeof d.secrets === 'object' && !Array.isArray(d.secrets);
+// A store in some other shape would list nothing and a --set would mix into it.
+if (fs.existsSync(STORE) && !standard(doc)) {
+  die(3, 'secret: keys/secrets.json is not in the standard shape — the update migration imports it (/joserah:update)');
+}
 const secrets = (doc && doc.secrets) || {};
 const has = (k) => Object.prototype.hasOwnProperty.call(secrets, k);
 
@@ -122,9 +127,10 @@ function entriesOf(file, prefix) {
   const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
   const pre = prefix ? parts(prefix) : [];
   const out = [];
-  if (/\.json$/i.test(file)) {
+  // By extension, or by content: a renamed store (secrets.json.imported-<date>) is still JSON.
+  if (/\.json$/i.test(file) || /^\s*[{[]/.test(text)) {
     let data = JSON.parse(text);
-    if (data && typeof data.secrets === 'object' && data.secrets && !Array.isArray(data.secrets)) data = data.secrets;
+    if (standard(data)) data = data.secrets;
     (function walk(node, trail) {
       if (node !== null && typeof node === 'object') {
         for (const [k, v] of Object.entries(node)) if (!(trail.length === 0 && k === '_readme')) walk(v, trail.concat(parts(k)));
