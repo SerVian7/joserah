@@ -258,10 +258,14 @@ const LOCAL_TOOLS = [
   ['verify-links.js'],
   ['lib', 'untouchable.js'],
   ['secret.js'],
+  // 0.16.0: the Joserah Vault window; its one source is the memory template's.
+  ['lib', 'vault-dialog.js'],
 ];
 const refreshed = [];
 for (const rel of LOCAL_TOOLS) {
-  const src = path.join(PLUGIN_ROOT, 'tools', ...rel);
+  const src = rel[1] === 'vault-dialog.js'
+    ? path.join(PLUGIN_ROOT, 'templates', 'memory', 'tools', ...rel)
+    : path.join(PLUGIN_ROOT, 'tools', ...rel);
   const dst = path.join(root, '.joserah', 'tools', ...rel);
   let same = false;
   try {

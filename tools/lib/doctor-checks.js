@@ -624,7 +624,13 @@ const CHECKS = [
       const local = path.join(root, '.joserah', 'tools', 'secret.js');
       if (!fs.existsSync(local)) return check('local secret.js current', false, 'missing — copy tools/secret.js from the plugin');
       const same = normalizeEol(fs.readFileSync(local, 'utf8')) === normalizeEol(fs.readFileSync(path.join(pluginDir, 'secret.js'), 'utf8'));
-      return check('local secret.js current', same, same ? 'matches the plugin copy' : 'stale — re-copy tools/secret.js from the plugin');
+      if (!same) return check('local secret.js current', false, 'stale — re-copy tools/secret.js from the plugin');
+      // 0.16.0: the Joserah Vault window it opens travels beside it (source: the memory template).
+      const dialog = path.join(root, '.joserah', 'tools', 'lib', 'vault-dialog.js');
+      const current = fs.existsSync(dialog) && normalizeEol(fs.readFileSync(dialog, 'utf8'))
+        === normalizeEol(fs.readFileSync(path.join(pluginDir, '..', 'templates', 'memory', 'tools', 'lib', 'vault-dialog.js'), 'utf8'));
+      return check('local secret.js current', current, current ? 'matches the plugin copy'
+        : 'lib/vault-dialog.js missing or stale — copy templates/memory/tools/lib/vault-dialog.js to .joserah/tools/lib/');
     },
   },
 

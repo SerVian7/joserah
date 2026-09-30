@@ -11,7 +11,9 @@
  *   node .joserah/tools/secret.js --list                  names only, never a value
  *   node .joserah/tools/secret.js --has <name>            present/absent, no value
  *   node .joserah/tools/secret.js <name>                  prints the value — only ever inside $(...)
- *   node .joserah/tools/secret.js --set <name> [--force]   in a terminal: asks for the value, echo off
+ *   node .joserah/tools/secret.js --set <name> [--force]   no value on stdin: on this machine a Joserah Vault
+ *                                                         window asks for it; over SSH/remote/headless the
+ *                                                         terminal asks, echo off (--tty / --dialog force either)
  *   <value> | node .joserah/tools/secret.js --set <name> [--force]
  *                                                         value from stdin, never echoed
  *   node .joserah/tools/secret.js --index                 writes .joserah/vault-index.md, names only
@@ -40,6 +42,14 @@ const path = require('path');
 const MARKER = path.join('.joserah', 'config.json');
 const README = 'Vault. Values are read only through .joserah/tools/secret.js and only ever embedded in a command as $(...). Never print, copy or cite a value; notes carry the name.';
 const NAME = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+// The Joserah Vault window: beside this file in a workspace, from the memory template in the plugin.
+function vaultDialog() {
+  for (const p of [path.join(__dirname, 'lib', 'vault-dialog.js'), path.join(__dirname, '..', 'templates', 'memory', 'tools', 'lib', 'vault-dialog.js')]) {
+    if (fs.existsSync(p)) return require(p);
+  }
+  return null;
+}
 
 function die(code, msg) { process.stderr.write(msg + '\n'); process.exit(code); }
 
@@ -284,7 +294,24 @@ if (args[0] === '--set') {
     console.log('saved: ' + name);
     process.exit(0);
   };
-  if (process.stdin.isTTY) {
+  // A value piped on stdin is stored as before. No value (a terminal, or an
+  // empty stdin as when the assistant runs this line): 0.16.0 (owner,
+  // 2026-09-30) — on this machine a Joserah Vault window asks for it; over SSH,
+  // remote or headless, the hidden terminal prompt. --tty / --dialog force either.
+  let piped = '';
+  if (!process.stdin.isTTY) { try { piped = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, ''); } catch { /* no stdin */ } }
+  const dialog = piped ? null : vaultDialog();
+  const local = !!dialog && dialog.canShowDialog();
+  if (piped) store(piped);
+  else if (args.includes('--dialog') && !local) die(1, 'secret: the Joserah Vault window cannot open here (SSH, remote session, headless or no browser) — drop --dialog');
+  else if (local && !args.includes('--tty')) {
+    let lang = 'en';
+    try { if (/^(tr|turk|türk)/i.test(JSON.parse(fs.readFileSync(path.join(ROOT, MARKER), 'utf8')).dialogueLanguage || '')) lang = 'tr'; } catch { /* en */ }
+    dialog.askSecret({ name, lang, brand: { kind: 'joserah' } }).then((value) => {
+      if (!value) { console.log('cancelled'); process.exit(1); }
+      store(value);
+    });
+  } else if (process.stdin.isTTY) {
     // 0.15.1 (owner, 2026-09-30): the owner runs this line in their own
     // terminal, so the value never passes through the assistant. The prompt
     // goes to stderr; what is typed is not echoed.
@@ -297,11 +324,7 @@ if (args[0] === '--set') {
       if (!typed) die(1, 'secret: nothing typed, nothing saved');
       store(typed);
     });
-  } else {
-    const value = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, '');
-    if (!value) die(1, 'secret: stdin is empty');
-    store(value);
-  }
+  } else die(1, 'secret: stdin is empty');
 }
 
 const key = args[0];

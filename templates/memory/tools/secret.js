@@ -3,7 +3,8 @@
  * secret.js — this memory's own vault: one secret, called by name. No Joserah needed.
  * Store: keys/secrets.json, flat name -> value; keys/ is gitignored and never leaves the machine.
  *   node tools/secret.js <name>          prints the value — only ever inside $(...)
- *   node tools/secret.js --set <name>    in a terminal asks for the value, echo off; or the value on stdin
+ *   node tools/secret.js --set <name>    no value on stdin: a Joserah Vault window on this machine, the terminal
+ *                                        (echo off) over SSH/remote/headless; --tty / --dialog force either
  *   node tools/secret.js --list | --has <name> | --remove <name>
  *   node tools/secret.js --index         writes .memory/vault-index.md, names only
  * Names: lowercase, dot-separated, at least two parts — <company>.<system>.<field>.
@@ -49,16 +50,28 @@ else if (cmd === '--set') {
   if (!name || !NAME.test(name)) die(1, 'secret: name must be <company>.<system>.<field> (lowercase letters, digits, hyphens)');
   if (has(name) && !args.includes('--force')) die(1, `secret: "${name}" already exists; --force to overwrite`);
   const store = (value) => { secrets[name] = value; save(); console.log('saved: ' + name); };
-  if (process.stdin.isTTY) {
+  // No value on stdin (a terminal, or an empty stdin as when the assistant runs this): on this machine a
+  // Joserah Vault window asks for it; over SSH, remote or headless, the terminal. --tty / --dialog force either.
+  let piped = '';
+  if (!process.stdin.isTTY) { try { piped = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, ''); } catch { /* no stdin */ } }
+  const dialog = require(path.join(__dirname, 'lib', 'vault-dialog.js'));
+  const local = !piped && dialog.canShowDialog();
+  if (piped) store(piped);
+  else if (args.includes('--dialog') && !local) die(1, 'secret: the Joserah Vault window cannot open here (SSH, remote session, headless or no browser) — drop --dialog');
+  else if (local && !args.includes('--tty')) {
+    let cfg = {};
+    try { cfg = JSON.parse(fs.readFileSync(path.join(ROOT, '.memory', 'config.json'), 'utf8')); } catch { /* defaults */ }
+    const lang = /^(tr|turk|türk)/i.test(cfg.language || '') ? 'tr' : 'en';
+    dialog.askSecret({ name, lang, brand: { kind: 'company', dir: path.join(ROOT, '.brand'), name: cfg.company } }).then((value) => {
+      if (!value) { console.log('cancelled'); process.exit(1); }
+      store(value);
+    });
+  } else if (process.stdin.isTTY) {
     const rl = require('readline').createInterface({ input: process.stdin, output: process.stderr, terminal: true });
     const q = `Value for ${name}: `;
     rl._writeToOutput = (s) => { if (s.includes(q)) process.stderr.write(q); };
     rl.question(q, (typed) => { rl.close(); process.stderr.write('\n'); if (!typed) die(1, 'secret: nothing typed, nothing saved'); store(typed); });
-  } else {
-    const value = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, '');
-    if (!value) die(1, 'secret: stdin is empty');
-    store(value);
-  }
+  } else die(1, 'secret: stdin is empty');
 } else {
   if (!has(cmd)) die(2, `secret: "${cmd}" not found`);
   process.stdout.write(String(secrets[cmd]));

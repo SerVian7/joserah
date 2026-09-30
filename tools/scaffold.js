@@ -398,6 +398,7 @@ const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
   path.join(root, '.joserah', 'tools', 'verify-links.js'),
   path.join(root, '.joserah', 'tools', 'lib', 'untouchable.js'),
   path.join(root, '.joserah', 'tools', 'secret.js'),
+  path.join(root, '.joserah', 'tools', 'lib', 'vault-dialog.js'),
   path.join(root, 'JOSERAH-ROLE.md'),
 ]);
 
@@ -534,6 +535,9 @@ fs.copyFileSync(path.join(PLUGIN_ROOT, 'tools', 'lib', 'untouchable.js'),
 // an empty store beside keys/AGENTS.md. An existing store is never touched.
 fs.copyFileSync(path.join(PLUGIN_ROOT, 'tools', 'secret.js'),
   path.join(root, '.joserah', 'tools', 'secret.js'));
+// 0.16.0: the Joserah Vault window secret.js --set opens; one source, the memory template's.
+fs.copyFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'tools', 'lib', 'vault-dialog.js'),
+  path.join(root, '.joserah', 'tools', 'lib', 'vault-dialog.js'));
 const store = path.join(root, 'keys', 'secrets.json');
 if (!fs.existsSync(store)) {
   fs.mkdirSync(path.dirname(store), { recursive: true });

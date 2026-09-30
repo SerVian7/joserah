@@ -42,7 +42,7 @@ test('memory AGENTS.md and README: own vault and sweep check', () => {
     'node tools/sweep.js --before',
     'node tools/sweep.js --after',
     'A sweep with missing lines is not finished',
-    '5. `keys/` is never opened by an assistant; what exists is in `.memory/vault-index.md`; a secret is saved by the member with `node tools/secret.js --set <name>` in their own terminal, or lives in their Joserah vault.',
+    '5. `keys/` is never opened by an assistant; what exists is in `.memory/vault-index.md`; a secret is saved with `node tools/secret.js --set <name>` — run by the assistant on this machine, where a Joserah Vault window takes the value from the member unseen; over SSH or remote, by the member in their own terminal — or lives in their Joserah vault.',
   ]) assert.ok(a.includes(s), `missing: ${s}`);
   assert.ok(read('README.md').includes('The memory carries its own vault (names only ever leave the machine) and its own sweep check, so no plugin is needed for either:'));
 });

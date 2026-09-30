@@ -62,8 +62,8 @@ Reminders to back up or sweep come at most once a day, and only once something h
 **A vault.** Passwords and tokens are kept in `keys/secrets.json` and read only through
 `.joserah/tools/secret.js`. Notes carry a secret's name (`acme.router.password`), never its value. The
 assistant uses a value inside a command, `$(node .joserah/tools/secret.js <name>)`, and never prints
-it. To save one yourself, run `secret.js --set <name>` in your terminal. It asks for the value and
-shows nothing as you type. `--index` writes `.joserah/vault-index.md`, the list of names that is the
+it. To save one, `secret.js --set <name>` opens a small Joserah Vault window on your screen where you type
+the value and the assistant never sees it; over SSH or a remote session it asks in your terminal instead, showing nothing as you type. `--index` writes `.joserah/vault-index.md`, the list of names that is the
 only vault file the assistant reads. `--import` brings in an old vault (JSON, a collector's record list
 or a `.env` file), lists names only and never overwrites a value. `--remove <name>` deletes a name
 from the vault. `secret-scan.js --extract` moves a

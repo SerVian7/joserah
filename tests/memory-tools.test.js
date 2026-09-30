@@ -22,9 +22,9 @@ const CLAIM = '- [decision] Bought a switch -> 24 ports\n  date: 2026-09-30 · b
 
 test('tools: a fresh memory carries only its own tools/lib and its tools require nothing outside tools/', (t) => {
   const dir = memory(t);
-  assert.deepStrictEqual(fs.readdirSync(path.join(dir, 'tools', 'lib')), ['secret.js']);
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, 'tools', 'lib')), ['secret.js', 'vault-dialog.js']);
   assert.ok(!/tools.lib/.test(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8')));
-  for (const f of ['claims.js', 'detect-member.js', 'sweep-due.js', 'sync.js', 'verify-links.js', 'lib/secret.js']) {
+  for (const f of ['claims.js', 'detect-member.js', 'sweep-due.js', 'sync.js', 'verify-links.js', 'lib/secret.js', 'lib/vault-dialog.js']) {
     const reqs = [...fs.readFileSync(path.join(dir, 'tools', f), 'utf8').replace(/^\s*\*.*$/gm, '').matchAll(/require\('([^']+)'\)/g)].map((m) => m[1]);
     for (const r of reqs) assert.ok(!r.startsWith('.') || /^\.\/[\w-]+$/.test(r), `${f} requires ${r}`);
   }

@@ -6,6 +6,10 @@ const { spawnSync } = require('child_process');
 
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 
+// 0.16.0: secret.js --set with no value opens a Joserah Vault window on this
+// machine. No test child may ever put one on the screen; the dialog tests opt back in.
+process.env.JOSERAH_VAULT_DIALOG = 'off';
+
 function tmpdir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'joserah-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

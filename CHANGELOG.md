@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.0
+
+**A Joserah Vault window for secrets.** Owner, 2026-09-30. On this machine `secret.js --set <name>` with no value on stdin now opens a small Joserah Vault window (a one-shot page on 127.0.0.1 behind a random token, in an Edge or Chrome app window, strict CSP, no external requests): the name, a masked field, Save and Cancel, and the line "The AI never sees it." The browser is never offered the value to remember. The assistant runs `--set` itself and the owner types into the window; the value goes into the vault and the tool prints only `saved: <name>`. The memory's `secret.js` opens the same window in the company's look (`.brand/`). Over SSH, a VS Code Remote session or a headless machine it falls back to the hidden terminal prompt; `--tty` and `--dialog` force either, `JOSERAH_VAULT_DIALOG=off` turns the window off. A piped value works as before. Prompt v18. Run `/joserah:update` to pick up the window, and `--refresh-memory` for a shared memory.
+
 ## 0.15.9
 
 A commit that only updates the record itself no longer asks to record itself (the `[project]` line skips commits touching only docs/status.md, docs/learnings.md, CHANGELOG.md).

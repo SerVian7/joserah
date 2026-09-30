@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 17);
+  assert.strictEqual(cfg.promptVersion, 18);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 17);
+  assert.strictEqual(cfg.promptVersion, 18);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -260,9 +260,9 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v17 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
+test('prompt v18 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 17);
+  assert.strictEqual(prompt.readPromptVersion(text), 18);
   assert.ok(text.includes('**Do the right thing; do not ask for it.**'), '§2 (v15): act, then report (owner, 2026-09-30)');
   assert.ok(text.includes('A question the owner has to answer for routine work is a cost, not a courtesy.'), '§2 (v15)');
   assert.ok(text.includes('`workspace backup`, `shared memory <name>` or `project <name>` — and the remote it went to.'), '§2 (v15): the push names its target');
@@ -277,6 +277,8 @@ test('prompt v17 carries the claim-line obligations, the role default, the vault
   assert.ok(text.includes('--extract` moves it — you never copy it by hand'), 'rule 3: extract, not hand-copying');
   assert.ok(text.includes('goes into the vault at once, without asking'), 'rule 3: the vault');
   assert.ok(text.includes('say it asks for the value and echoes nothing'), 'rule 3 (v13): the owner types a secret in their own terminal');
+  assert.ok(text.includes('a Joserah Vault window opens on their screen, they type the value there, you never see it'), 'rule 3 (v18): the assistant runs --set when local (owner, 2026-09-30)');
+  assert.ok(text.includes('Over SSH or a remote session the window cannot open'), 'rule 3 (v18): remote falls back to the terminal');
   assert.ok(text.includes('asked about progress, ask the worker'), '§5 (v13): progress is asked, not guessed');
   assert.ok(text.includes('$(node .joserah/tools/secret.js <name>)'), 'rule 3: embedded use only');
   assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);
