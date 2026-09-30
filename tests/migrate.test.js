@@ -809,3 +809,30 @@ test('migrate does not import on a workspace already migrated to 0.15.0', (t) =>
   assert.strictEqual(out.vault, null);
   assert.ok(fs.existsSync(path.join(keysDir(dir), 'vault.json')));
 });
+
+// 0.15.0 (owner, 2026-09-30): ownerIsDeveloper is gone from the plugin; migrate
+// removes a leftover key by a text edit, keeping every other byte of the file.
+test('migrate removes a leftover ownerIsDeveloper key and counts it', (t) => {
+  const dir = ws(t);
+  const p = path.join(dir, '.joserah', 'config.json');
+  const before = fs.readFileSync(p, 'utf8');
+  const withKey = before.replace('{', '{\n  "ownerIsDeveloper": true,');
+  fs.writeFileSync(p, withKey);
+  const out = JSON.parse(runTool('migrate.js', [dir]).stdout);
+  assert.strictEqual(out.configKeysRemoved, 1);
+  const after = fs.readFileSync(p, 'utf8');
+  assert.ok(!after.includes('ownerIsDeveloper'));
+  assert.doesNotThrow(() => JSON.parse(after));
+  assert.strictEqual(JSON.parse(runTool('migrate.js', [dir]).stdout).configKeysRemoved, 0, 'second run: nothing to remove');
+});
+
+test('removeKey drops a first, middle or last key and leaves the rest byte for byte', () => {
+  const { removeKey } = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'config-stamp'));
+  const k = 'ownerIsDeveloper';
+  assert.strictEqual(removeKey('{\r\n  "ownerIsDeveloper": true,\r\n  "a": [1, 2]\r\n}\r\n', k).text, '{\r\n  "a": [1, 2]\r\n}\r\n');
+  assert.strictEqual(removeKey('{\n  "a": 1,\n  "ownerIsDeveloper": false,\n  "b": 2\n}\n', k).text, '{\n  "a": 1,\n  "b": 2\n}\n');
+  assert.strictEqual(removeKey('{\n  "a": 1,\n  "ownerIsDeveloper": true\n}\n', k).text, '{\n  "a": 1\n}\n');
+  assert.strictEqual(removeKey('{"ownerIsDeveloper": true}', k).text, '{}');
+  assert.strictEqual(removeKey('{"a": 1}', k).changed, false);
+  assert.strictEqual(removeKey('{not json', k).changed, false);
+});

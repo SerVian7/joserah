@@ -52,4 +52,30 @@ function stampKey(text, key, value) {
   return { text: text.slice(0, braceIdx + 1) + insertion + text.slice(braceIdx + 1), changed: true };
 }
 
-module.exports = { stampKey };
+/**
+ * The opposite edit: drop one top-level key (scalar value) and one adjoining
+ * comma, nothing else. The result must parse and lack the key, or the text is
+ * returned unchanged — same refusal as stampKey for anything it cannot account for.
+ */
+function removeKey(text, key) {
+  let cfg;
+  try { cfg = JSON.parse(text.replace(/^﻿/, '')); } catch { return { text, changed: false }; }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg) || !(key in cfg)) return { text, changed: false };
+  const k = JSON.stringify(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const val = `${k}\\s*:\\s*[^,{}\\[\\]\\r\\n]*?`;
+  for (const re of [
+    new RegExp(`\\r?\\n[ \\t]*${val}\\s*,(?=\\s*\\r?\\n)`),   // own line, a key follows
+    new RegExp(`${val}\\s*,\\s*`),                          // inline, a key follows
+    new RegExp(`\\s*,\\s*${val}(?=\\s*\\})`),                // last key
+    new RegExp(`${val}(?=\\s*\\})`),                         // the only key
+  ]) {
+    const out = text.replace(re, '');
+    try {
+      const c = JSON.parse(out.replace(/^﻿/, ''));
+      if (out !== text && !(key in c)) return { text: out, changed: true };
+    } catch { /* try the next shape */ }
+  }
+  return { text, changed: false };
+}
+
+module.exports = { stampKey, removeKey };

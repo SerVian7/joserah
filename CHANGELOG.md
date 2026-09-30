@@ -13,6 +13,8 @@ any of them.
 
 **The words.** Prompt version 12: rule 3 says to name the secret and never the value, that what exists is in `.joserah/vault-index.md`, and that `--extract` moves a stray secret — never a hand copy. Doctor adds `vault index current` (counts only). Run `/joserah:update`.
 
+**`ownerIsDeveloper` is removed.** No config key decides how technical the talk is: the briefing always says to match the owner and volunteer no internals they did not ask for. A developer who wants them named plainly writes one line in their own `.joserah/directives.md`. `migrate.js` deletes a leftover key (`configKeysRemoved`).
+
 ## 0.14.0
 
 **No marketplace, no cache, no `claude plugin update`.** Joserah is a git clone linked as `~/.claude/skills/joserah` and loaded in place as `joserah@skills-dir` (README, "Where Joserah runs"). `/joserah:update` is a `git pull` on the clone, the workspace migration, then `/reload-plugins`. The re-copy of 0.13.8–0.13.10, its diagnostics file and stamps, and `tools/install-dev-hook.js` are gone; the briefing keeps the daily "N new commits upstream" line. Doctor's new `plugin loaded from the skills dir` check warns on a copy in the plugin cache.

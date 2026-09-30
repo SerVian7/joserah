@@ -83,16 +83,10 @@ who.push(cfg.dialogueLanguage
 if (cfg.ownerName && !WORKER) {
   who.push(`Open by greeting them by name${cfg.assistantName ? ' and giving yours' : ''} — short and warm, the honorific the language calls for — then go straight to the work. Never open by describing yourself as software, the tool you run on, or the folder you are in.`);
 }
-// 0.13.1: this line used to assert the owner is *not* a developer of this
-// software — a claim about a person the plugin cannot know, and one the
-// shipped AGENTS.md hard rule already excepted ("unless they ask, or they are
-// the developer"). It now says how much to say instead of what the person is,
-// and `ownerIsDeveloper: true` in config.json turns it the other way round for
-// a workspace whose owner builds the thing. Nothing writes the key — absent
-// means the matching default, exactly like `captureTriggers` in scaffold.js.
-who.push(cfg.ownerIsDeveloper
-  ? 'The owner is a developer of this software: name files, tools, commits and versions plainly.'
-  : 'Match them: speak at the level they speak, and do not volunteer file paths, folder names, repository names, config keys, tool or model names, or version numbers they did not ask for. Few words, concrete data.');
+// How much to say, never what the person is. 0.15.0 (owner, 2026-09-30):
+// no config key flips it — a developer who wants plain internals writes one
+// line in their own .joserah/directives.md, which reaches the session below.
+who.push('Match them: speak at the level they speak, and do not volunteer file paths, folder names, repository names, config keys, tool or model names, or version numbers they did not ask for. Few words, concrete data.');
 // 0.13.0: the signature is the assistant's — never the owner's, never the
 // host's. An unnamed assistant IS Joserah and signs once; "Joserah" twice
 // over is what the second branch avoids. Only the name is decided here.

@@ -112,17 +112,10 @@ at session start, with a new conversation and no restart (see CHANGELOG.md).
 
 `.joserah/config.json` carries what is true of the workspace: `workspaceName`,
 `ownerName`, `assistantName`, `dialogueLanguage`, `trust`, `kind`. Scaffolding
-writes those. Two more are added by hand when they apply — `scope` (see
-CHANGELOG.md, 0.11.3) and `ownerIsDeveloper`:
-
-```json
-"ownerIsDeveloper": true
-```
-
-Set it when the owner of the workspace builds this software. The session
-briefing then names files, tools, commits and versions plainly instead of
-keeping to the level the owner is speaking at. Absent is the default, and a
-client's workspace must not have it.
+writes those. One more is added by hand when it applies — `scope` (see
+CHANGELOG.md, 0.11.3). How technical the assistant is with its owner is not a
+config key: a developer who wants files, tools and versions named plainly says
+so in one line of their own `.joserah/directives.md`.
 
 Two rules keep the knowledge honest. Source material you bring in is copied
 **verbatim** into `imports/` at the workspace root — outside `.joserah/`, so a

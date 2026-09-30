@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanWorkspace } = require('./lib/workspace-scan');
 const { ensureFrontmatter, extractWikilinks, renderRelations, stripCode, detectEol, FORMAT_VERSION, roleFor } = require('./lib/note-format');
-const { stampKey } = require('./lib/config-stamp');
+const { stampKey, removeKey } = require('./lib/config-stamp');
 const { spawnSync } = require('child_process');
 const { resolvePromptSource, promptState, decidePromptAction, installPrompt, compareVersions } = require('./lib/prompt');
 const { installClaudeMd, CLAUDE_MD_IMPORTS } = require('../hooks/lib/standing-context');
@@ -183,6 +183,18 @@ for (const rel of migratable) {
 // them.
 const cfgStamp = stampKey(fs.readFileSync(cfgPath, 'utf8'), 'formatVersion', FORMAT_VERSION);
 if (cfgStamp.changed && !dryRun) fs.writeFileSync(cfgPath, cfgStamp.text, 'utf8');
+
+// 0.15.0 (owner, 2026-09-30): keys the plugin no longer reads are removed,
+// by the same narrow text edit. ownerIsDeveloper: how technical the talk is
+// belongs in the workspace's own directives.md, not in a switch.
+const RETIRED_KEYS = ['ownerIsDeveloper'];
+let configKeysRemoved = 0;
+for (const key of RETIRED_KEYS) {
+  const r = removeKey(dryRun && cfgStamp.changed ? cfgStamp.text : fs.readFileSync(cfgPath, 'utf8'), key);
+  if (!r.changed) continue;
+  configKeysRemoved++;
+  if (!dryRun) fs.writeFileSync(cfgPath, r.text, 'utf8');
+}
 
 // R17: JOSERAH-ROLE.md and .joserah/agent.md are written only at scaffold
 // time — a workspace that predates this plan never got either, and scaffold
@@ -355,4 +367,4 @@ if (!dryRun && (promptAction === 'install' || promptAction === 'record')) {
 // `skipped` sits beside changed/created so a --dry-run tells the
 // owner what this tool refused to touch and why, rather than leaving the
 // refusal silent and indistinguishable from "nothing needed doing".
-console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, created, refreshed, skipped, prompt, vault }));
+console.log(JSON.stringify({ root, scanned: files.length, changed, boundaries, created, refreshed, skipped, prompt, vault, configKeysRemoved }));

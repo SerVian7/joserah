@@ -157,13 +157,11 @@ test('session-start injects the assistant name, owner and language', (t) => {
   assert.doesNotMatch(ctx, /mail\.html/, 'where the templates live is the correspondence skill\'s business');
 });
 
-// 2026-09-19, the owner: "who decided reports may not name files and tools?
-// This is our trade. If you are talking to a developer, of course they appear."
-// The briefing asserted the owner is *not* a developer of this software, which
-// the shipped AGENTS.md hard rule already excepts ("unless they ask, or they
-// are the developer"). `ownerIsDeveloper: true` in config.json flips the line;
-// nothing writes the key, so a client workspace never has it.
-test('session-start names internals plainly when ownerIsDeveloper is set', (t) => {
+// 0.15.0 (owner, 2026-09-30): no config key decides how technical the talk is.
+// The default line holds for everyone; a developer who wants plain internals
+// says so in their own .joserah/directives.md, which reaches the session as
+// the workspace's standing rules. A leftover key changes nothing.
+test('session-start ignores a leftover ownerIsDeveloper key', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'Serkan']);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
@@ -172,8 +170,8 @@ test('session-start names internals plainly when ownerIsDeveloper is set', (t) =
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
 
   const ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  assert.match(ctx, /The owner is a developer of this software: name files, tools, commits and versions plainly\./);
-  assert.doesNotMatch(ctx, /version numbers they did not ask for\. Few words, concrete data\./);
+  assert.doesNotMatch(ctx, /The owner is a developer of this software/);
+  assert.match(ctx, /version numbers they did not ask for\. Few words, concrete data\./);
 });
 
 // An unnamed assistant IS Joserah and is the sole author: it signs once.
