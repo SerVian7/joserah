@@ -605,5 +605,9 @@ explicit yes, since every old version disappears from the backup:
 - Never invent a project description or remote in the manifest — absence is
   reported, not papered over.
 - Report in the owner's dialogue language, from `.joserah/config.json`.
-- When a session opens with a "[backup] N file(s) changed" line, offering a
-  backup is the correct reflex — that line exists to be acted on.
+- When a session opens with a `[backup]` line, offering a backup is the
+  correct reflex — that line exists to be acted on. It appears only when a
+  day or more has passed since `lastBackup` AND at least one file changed
+  (an untouched journal stub never counts), at most once a day per workspace,
+  as one sentence in the owner's language: "Yedek 3 gündür alınmadı, 12 dosya
+  değişti — istersen alayım." Say it once; do not run the backup unasked.

@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.1
+
+**Reminders once a day, and only when something piled up.** The briefing's `[backup]` line appears only when a day or more has passed since `lastBackup` and at least one file changed (an untouched journal stub still never counts); the new `[sweep]` line when a week has passed since `lastSweep` or five days of journal have piled up since it. Each is one sentence in the owner's language ("Yedek 3 gündür alınmadı, 12 dosya değişti — istersen alayım.") and is said at most once per calendar day per workspace (a stamp in the OS temp dir). Doctor's `knowledge sweep` warning uses the same rule; it was 14 days.
+
 ## 0.15.0
 
 **One vault format, imported in one pass.** `keys/secrets.json` in the standard shape, filled and read only through `secret.js`, is the vault in every workspace. `secret.js --import <file> [--prefix <scope>] [--delete]` brings in any old vault — JSON of any nesting (`corlu → cam1 → user` becomes `corlu.cam1.user`) or a `.env` — listing names, never values, and never overwriting: a name that exists with a different value is a listed conflict, exit 1. `/joserah:update` runs it once per workspace (`migratedTo` below 0.15.0) on every JSON or `.env` file in `keys/`, and on a `secrets.json` in a foreign shape (moved to `secrets.json.imported-<date>`, then imported into a fresh store; `secret.js` now refuses to work on such a store rather than listing nothing). A clean source is renamed `<name>.imported-<date>`, never deleted; the migrate report carries counts only. A module's own `.env` is never imported. `docs/migrations/0.15.0.md`.

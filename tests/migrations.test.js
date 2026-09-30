@@ -83,3 +83,17 @@ test('doctor asks for a sweep only once there are notes old enough to have gone 
   const stale = runTool('doctor.js', [dir]);
   assert.match(stale.stdout, /warn\s+knowledge sweep.*days since the last one/);
 });
+
+// 0.15.1 (owner, 2026-09-30): a week, or five journal days, whichever comes first.
+test('doctor asks for a sweep after a week, or after five journal days', (t) => {
+  const dir = freshWs(t);
+  const day = (i) => { const d = new Date(Date.now() - i * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const note = (i) => { const p = path.join(dir, '.joserah', 'desk', 'daily', day(i).slice(0, 4), `${day(i)}.md`); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, '# x\n\n## Notes\n- real\n'); };
+  editConfig(dir, (c) => { c.lastSweep = new Date(Date.now() - 8 * 864e5).toISOString(); });
+  assert.match(runTool('doctor.js', [dir]).stdout, /warn\s+knowledge sweep.*8 days since the last one/);
+  editConfig(dir, (c) => { c.lastSweep = new Date(Date.now() - 6 * 864e5).toISOString(); });
+  [1, 2, 3, 4].forEach(note);
+  assert.doesNotMatch(runTool('doctor.js', [dir]).stdout, /knowledge sweep/);
+  note(5);
+  assert.match(runTool('doctor.js', [dir]).stdout, /warn\s+knowledge sweep.*5 journal days/);
+});

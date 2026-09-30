@@ -787,21 +787,16 @@ const CHECKS = [
     // The one check whose subject is the notes themselves rather than the
     // scaffolding around them. Measured from the last sweep, or — when there
     // has never been one — from the day the workspace was created, so a
-    // workspace made this morning is not nagged and one made in spring is.
+    // workspace made this morning is not nagged. 0.15.1: due after a week or
+    // five journal days (hooks/lib/workspace.js, shared with the briefing).
     run({ root, cfg }) {
-      const SWEEP_STALE_DAYS = 14;
-      if (!fs.existsSync(path.join(root, '.joserah', 'knowledge'))) return null;
-      const last = cfg && cfg.lastSweep;
-      const since = last || (cfg && cfg.created);
-      if (!since) return null;
-      const days = Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
-      if (!Number.isFinite(days)) {
-        return warn('knowledge sweep', `config.json records "${since}", which is not a date`);
-      }
-      if (days <= SWEEP_STALE_DAYS) return null;
-      return warn('knowledge sweep', last
-        ? `${days} days since the last one`
-        : `never swept — ${days} days of notes have never been read for claims`);
+      const s = require('../../hooks/lib/workspace').sweepDue(root, cfg);
+      if (!s) return null;
+      if (s.invalid) return warn('knowledge sweep', `config.json records "${s.invalid}", which is not a date`);
+      if (!s.due) return null;
+      return warn('knowledge sweep', s.never
+        ? `never swept — ${s.days} days and ${s.journalDays} journal days of notes have never been read for claims`
+        : `${s.days} days since the last one, ${s.journalDays} journal days since it`);
     },
   },
 

@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Use when the owner asks to tidy, consolidate or re-check their notes, a burst of imports has landed, or doctor reports the sweep overdue. Not for updating Joserah itself, which is `update`.
+description: Use when the owner asks to tidy, consolidate or re-check their notes, a burst of imports has landed, or the briefing carries a `[sweep]` line or doctor reports the sweep overdue. Not for updating Joserah itself, which is `update`.
 ---
 
 # Sweep the knowledge base
@@ -13,6 +13,12 @@ money, which is why it is never folded into `update`.
 
 Two passes over the same pages, in one reading — tidying them and harvesting their claims open
 the same files, and opening them twice is paying twice.
+
+**When it is offered.** A sweep is due a week after the last one, or once five days of journal have
+piled up since it, whichever comes first (never swept: counted from the day the workspace was
+created). Doctor then warns `knowledge sweep`, and the session briefing carries one `[sweep]`
+line, in the owner's language, at most once a day: "Süpürme vakti: 9 gün, 6 günlük not birikti —
+istersen başlatayım." Say it once, offer the sweep, and do not start it unasked.
 
 ## 1. Decide the scope before anything else
 

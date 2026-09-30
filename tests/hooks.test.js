@@ -857,6 +857,10 @@ test('the cut notice names what was cut, never directives.md by default', (t) =>
 
 test('the untouched journal stub is neither briefed nor counted as a change', (t) => {
   const dir = hookWs(t);
+  // 0.15.1: the line needs a day since the last backup, so the scaffold is two days old.
+  const old = new Date(Date.now() - 2 * 864e5);
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const q = path.join(d, e.name); if (e.isDirectory()) walk(q); else fs.utimesSync(q, old, old); } };
+  walk(path.join(dir, '.joserah'));
   const first = brief(dir);
   assert.ok(fs.existsSync(todayPath(dir)), 'the stub is written');
   assert.doesNotMatch(first, /### Today's journal/, 'an empty stub is not a briefing');
@@ -868,7 +872,7 @@ test('the untouched journal stub is neither briefed nor counted as a change', (t
   const third = brief(dir);
   assert.match(third, /### Today's journal/);
   assert.match(third, /met the counterparty/);
-  assert.match(third, /\[backup\] 1 file/, 'a real entry is a change');
+  assert.match(third, /\[backup\] No backup taken yet, 1 file changed/, 'a real entry is a change');
 });
 
 // ---- 0.14.0: the plugin is a git checkout linked into ~/.claude/skills -------
@@ -1029,4 +1033,77 @@ test('the role files do not ask for a name the assistant may not have', () => {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'roles', `joserah-${role}.md`), 'utf8').replace(/\s+/g, ' ');
     assert.ok(text.includes('give yours if you have one; otherwise just greet them'), role);
   }
+});
+
+// ---- 0.15.1: backup and sweep reminders have thresholds ----------------------
+// Owner, 2026-09-30: "veriler biraz birikince, mesela 1 gün; arada bir, sürekli
+// değil". The [backup] line needs a day AND a changed file; the [sweep] line a
+// week OR five journal days; each at most once per calendar day per workspace.
+function setCfg(dir, mutate) {
+  const p = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+  mutate(cfg);
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+}
+function localIso(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function journalDays(dir, n) {
+  for (let i = 1; i <= n; i++) {
+    const day = localIso(Date.now() - i * 864e5);
+    const p = path.join(dir, '.joserah', 'desk', 'daily', day.slice(0, 4), `${day}.md`);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, `# ${day}\n\n## Done today\n- something real\n`);
+  }
+}
+
+test('backup: under a day since the last one, no line even with changes', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.lastBackup = new Date(Date.now() - 12 * 36e5).toISOString(); });
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'fresh.md'), '# new\n');
+  assert.doesNotMatch(brief(dir), /\[backup\]/);
+});
+
+test('backup: over a day and changed files give one line, once a day', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.lastBackup = new Date(Date.now() - 3 * 864e5).toISOString(); });
+  assert.match(brief(dir), /\[backup\] No backup for 3 days, \d+ files? changed — I can take one if you like\./);
+  assert.doesNotMatch(brief(dir), /\[backup\]/, 'the second session of the day is not told again');
+});
+
+test('backup: a day old but nothing changed gives no line', (t) => {
+  const dir = hookWs(t);
+  const old = new Date(Date.now() - 5 * 864e5);
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else fs.utimesSync(p, old, old); } };
+  for (const sub of ['desk', 'knowledge', 'personal']) walk(path.join(dir, '.joserah', sub));
+  setCfg(dir, (c) => { c.lastBackup = new Date(Date.now() - 3 * 864e5).toISOString(); });
+  assert.doesNotMatch(brief(dir), /\[backup\]/);
+});
+
+test('backup: the line is in the owner\'s language', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.dialogueLanguage = 'Turkish'; c.lastBackup = new Date(Date.now() - 3 * 864e5).toISOString(); });
+  assert.match(brief(dir), /\[backup\] Yedek 3 gündür alınmadı, \d+ dosya değişti — istersen alayım\./);
+});
+
+test('sweep: two days and four journal days since the last one, no line', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.lastSweep = new Date(Date.now() - 6 * 864e5).toISOString(); });
+  journalDays(dir, 4);
+  assert.doesNotMatch(brief(dir), /\[sweep\]/);
+});
+
+test('sweep: five journal days give one line, once a day', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.lastSweep = new Date(Date.now() - 6 * 864e5).toISOString(); });
+  journalDays(dir, 5);
+  assert.match(brief(dir), /\[sweep\] Time for a sweep: 6 days, 5 days of notes piled up — I can start it if you like\./);
+  assert.doesNotMatch(brief(dir), /\[sweep\]/, 'the second session of the day is not told again');
+});
+
+test('sweep: a week without one gives the line, in the owner\'s language', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.dialogueLanguage = 'tr'; c.lastSweep = new Date(Date.now() - 9 * 864e5).toISOString(); });
+  assert.match(brief(dir), /\[sweep\] Süpürme vakti: 9 gün, 0 günlük not birikti — istersen başlatayım\./);
 });

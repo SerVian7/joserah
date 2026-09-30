@@ -2,8 +2,8 @@
 /**
  * SessionStart hook, second command: what is true RIGHT NOW. Silent unless the
  * working directory is inside a Joserah workspace. Injects the date, open
- * tasks, today's journal, recent learnings, a backup-staleness line and the
- * update lines, and creates today's journal stub if missing.
+ * tasks, today's journal, recent learnings, the backup and sweep reminders
+ * (each at most once a day) and the update lines, and creates today's journal stub if missing.
  *
  * It is a separate command from session-start.js on purpose. Claude Code
  * replaces any SINGLE hook command's output over 10,000 characters with a stub
@@ -16,7 +16,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { findWorkspace, readConfig } = require('./lib/workspace');
+const { findWorkspace, readConfig, stubText, isStub, sweepDue } = require('./lib/workspace');
 const { withinBudget } = require('./lib/standing-context');
 
 const ROOT = findWorkspace(process.cwd());
@@ -80,8 +80,9 @@ function ago(ms, tr) {
   if (n === 0 && unit === 0) return 'just now';
   return `${n} ${['minute', 'hour', 'day'][unit]}${n === 1 ? '' : 's'} ago`;
 }
+const isTurkish = (language) => /^(tr|turk|türk)/i.test(String(language || ''));
 function syncSentences(repo, company, language, now) {
-  const tr = /^(tr|turk|türk)/i.test(String(language || ''));
+  const tr = isTurkish(language);
   const behind = countCommits(repo, 'HEAD..@{u}');
   const ahead = countCommits(repo, '@{u}..HEAD');
   const out = [];
@@ -168,10 +169,8 @@ function weekday(d) {
   return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
 }
 
-function stubText(day) { return `# ${day}\n\n## Top of mind\n-\n\n## Done today\n-\n\n## Notes\n`; }
-// 0.13.4: the stub this hook writes, still untouched — whitespace aside, so an
-// editor that re-saves it with CRLF or a trailing newline does not make it news.
-function isStub(text, day) { return text.replace(/\s/g, '') === stubText(day).replace(/\s/g, ''); }
+// stubText and isStub live in lib/workspace.js: the sweep check counts journal
+// days by the same rule.
 
 function ensureDailyStub(today) {
   const p = path.join(ROOT, '.joserah', 'desk', 'daily', today.slice(0, 4), `${today}.md`);
@@ -310,14 +309,17 @@ function allFileMtimes(dirs) {
   return out;
 }
 
-function formatAgo(ms) {
-  const minutes = Math.max(1, Math.round(ms / 60000));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.round(hours / 24);
-  return `${days}d`;
+// 0.15.1 (owner, 2026-09-30: "arada bir, sürekli değil"): a reminder is said
+// at most once per calendar day per workspace. The stamp holds the day it was
+// last said, in the OS temp dir like the fetch stamps.
+function firstTodayFor(kind, day) {
+  const key = require('crypto').createHash('sha1').update(ROOT).digest('hex').slice(0, 12);
+  const stamp = path.join(os.tmpdir(), `joserah-${kind}-${key}.stamp`);
+  try { if (fs.readFileSync(stamp, 'utf8').trim() === day) return false; } catch { /* no stamp yet */ }
+  try { fs.writeFileSync(stamp, day, 'utf8'); } catch { /* then it is said again, no harm */ }
+  return true;
 }
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function backupStalenessLine(root, cfg, now) {
   const configPath = path.join(root, '.joserah', 'config.json');
@@ -347,9 +349,25 @@ function backupStalenessLine(root, cfg, now) {
   // one on it read as "1 file(s) changed" in a workspace holding nothing.
   const changed = allFileMtimes(dirs).filter(({ p, m }) => m > sinceMs &&
     !(/^\d{4}-\d{2}-\d{2}\.md$/.test(path.basename(p)) && isStub(readText(p), path.basename(p, '.md'))));
-  if (!changed.length) return null;
-  const agoLabel = neverBackedUp ? 'no backup taken yet' : `${formatAgo(now.getTime() - sinceMs)} ago`;
-  return `[backup] ${changed.length} file(s) changed since last backup (${agoLabel}).`;
+  // 0.15.1: a day since the last backup AND something changed, never either alone.
+  const days = Math.floor((now.getTime() - sinceMs) / 86400000);
+  if (!changed.length || days < 1) return null;
+  if (!firstTodayFor('backup', isoDate(now))) return null;
+  const n = changed.length;
+  if (isTurkish(cfg.dialogueLanguage)) {
+    return `[backup] ${neverBackedUp ? 'Henüz yedek alınmadı' : `Yedek ${days} gündür alınmadı`}, ${n} dosya değişti — istersen alayım.`;
+  }
+  return `[backup] ${neverBackedUp ? 'No backup taken yet' : `No backup for ${plural(days, 'day')}`}, ${plural(n, 'file')} changed — I can take one if you like.`;
+}
+
+// 0.15.1: a week, or five journal days, since the last sweep (lib/workspace.js,
+// the same rule doctor's `knowledge sweep` warning uses); once a day.
+function sweepLine(root, cfg, now) {
+  const s = sweepDue(root, cfg, now);
+  if (!s || !s.due || !firstTodayFor('sweep', isoDate(now))) return null;
+  return isTurkish(cfg.dialogueLanguage)
+    ? `[sweep] Süpürme vakti: ${s.days} gün, ${s.journalDays} günlük not birikti — istersen başlatayım.`
+    : `[sweep] Time for a sweep: ${plural(s.days, 'day')}, ${plural(s.journalDays, 'day')} of notes piled up — I can start it if you like.`;
 }
 
 const now = new Date();
@@ -358,6 +376,7 @@ const cfg = readConfig(ROOT) || {};
 // Staleness is computed BEFORE the daily stub is written, so the file this
 // hook itself creates never counts as "changed since last backup".
 const staleness = backupStalenessLine(ROOT, cfg, now);
+const sweep = sweepLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
 // This is layer 6 — what happens to be true of this moment and of no other. It
@@ -382,6 +401,7 @@ if (dailyText.trim() && !isStub(dailyText, today)) {
 // 0.13.4: ahead of the learnings. The budget cut takes the end, and these are
 // the lines that exist to be acted on; the learnings are always on file.
 if (staleness) parts.push('\n' + staleness);
+if (sweep) parts.push('\n' + sweep);
 
 for (const line of updateLines(cfg, now)) parts.push('\n' + line);
 
