@@ -317,3 +317,40 @@ test('the workspace tools never walk into a shared memory', () => {
     assert.ok(u[set].includes('.joserah/shared'), set);
   }
 });
+
+// ---- questions between members --------------------------------------------------
+
+test('questions: sync lists open and answered counts, the push notice carries them, doctor warns on a foreign edit', (t) => {
+  const base = tmpdir(t);
+  const bare = path.join(base, 'acme-memory.git');
+  const dir = memory(t, path.join(base, 'acme-memory'));
+  git(base, 'init', '--bare', '-q', bare);
+  git(dir, 'remote', 'add', 'origin', bare);
+  git(dir, 'push', '-q', '-u', 'origin', 'main');
+  assert.ok(fs.existsSync(path.join(dir, 'questions', '.gitkeep')));
+  const q = (name, from, to, status) => fs.writeFileSync(path.join(dir, 'questions', name),
+    `---\nfrom: ${from}\nto: ${to}\ndate: 2026-09-30\nstatus: ${status}\n---\n## Question\nWhich port does the encoder use?\n`);
+  q('2026-09-30-ada-bora-port.md', 'ada', 'bora', 'open');
+  q('2026-09-30-bora-ada-key.md', 'bora', 'ada', 'answered');
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'ada: 2026-09-30'); git(dir, 'push', '-q');
+  fs.writeFileSync(path.join(dir, '.memory', 'me'), 'bora\n');
+  const s = node(dir, path.join(dir, 'tools', 'sync.js'));
+  assert.match(s.stdout, /Questions for bora: 1 open\n  questions\/2026-09-30-ada-bora-port\.md - Which port/);
+  assert.match(s.stdout, /Answers to your questions: 1\n  questions\/2026-09-30-bora-ada-key\.md/);
+  q('2026-09-30-ada-bora-port.md', 'ada', 'bora', 'answered');
+  fs.appendFileSync(path.join(dir, 'questions', '2026-09-30-ada-bora-port.md'), '## Answer\n9000\n');
+  const n = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push']);
+  assert.strictEqual(n.status, 3, n.stdout + n.stderr);
+  assert.match(n.stdout, /questions\/2026-09-30-ada-bora-port\.md \(modified\)/);
+  // doctor: the addressee (bora) editing is fine; the asker editing it after the fact is not
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'bora: 2026-09-30');
+  assert.doesNotMatch(runTool('doctor.js', [dir]).stdout, /edited a question/);
+  fs.appendFileSync(path.join(dir, 'questions', '2026-09-30-bora-ada-key.md'), 'tampered\n');
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'bora: again');
+  assert.match(runTool('doctor.js', [dir]).stdout, /warn\s+members write only.*bora edited a question for ada: questions\/2026-09-30-bora-ada-key\.md/);
+});
+
+test('questions: the member AGENTS.md tells the assistant to write an answer only after approval', () => {
+  const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8');
+  assert.match(agents, /Write the answer only after the member approves its wording/);
+});

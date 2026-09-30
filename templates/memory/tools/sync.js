@@ -2,7 +2,7 @@
 /**
  * sync.js — the start and the end of every session in this memory.
  * Usage: node tools/sync.js                   pull (rebase), then say the sweep-due line if due
- *        node tools/sync.js --push [--who X]  commit members/<me>/ and inbox/, then push
+ *        node tools/sync.js --push [--who X]  commit members/<me>/, inbox/ and questions/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
  *
  * --push first prints a "Push notice" (every file about to go out, one line each)
@@ -36,10 +36,27 @@ function pull() {
   return n === '0' ? 'up to date' : `pulled ${n} commit(s)`;
 }
 
+// questions/<date>-<from>-<to>-<slug>.md: frontmatter from, to, status open|answered, then "## Question".
+function questions(me) {
+  const dir = path.join(root, 'questions');
+  const open = [], answered = [];
+  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.md')) : []) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\r/g, '');
+    const head = (/^---\n([\s\S]*?)\n---/.exec(text) || [])[1] || '';
+    const fm = (k) => ((new RegExp('^' + k + ':\s*(.+)$', 'm').exec(head) || [])[1] || '').trim();
+    const line = `  questions/${f} - ${((/## Question\s+([^\n]+)/.exec(text) || [])[1] || f).slice(0, 80)}`;
+    if (fm('to') === me && fm('status') === 'open') open.push(line);
+    if (fm('from') === me && fm('status') === 'answered') answered.push(line);
+  }
+  return [`Questions for ${me}: ${open.length} open`, ...open, `Answers to your questions: ${answered.length}`, ...answered];
+}
+
 if (!flag('--push')) {
   console.log(pull());
   const line = sweepLine(sweepState(root));
   if (line) console.log(line);
+  const who = detectMember(root);
+  if (who) console.log(questions(who).join('\n'));
   process.exit(0);
 }
 
@@ -54,7 +71,7 @@ if (flag('--sweep')) {
   git('add', '-A');
   subject = `${me}: sweep ${today}`;
 } else {
-  for (const p of [path.join('members', me), 'inbox']) {
+  for (const p of [path.join('members', me), 'inbox', 'questions']) {
     if (fs.existsSync(path.join(root, p))) git('add', '--', p);
   }
 }

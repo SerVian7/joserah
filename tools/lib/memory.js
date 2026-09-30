@@ -165,15 +165,21 @@ function memoryChecks(root) {
   }
   // Who wrote outside their own folder: a commit's subject names its member
   // ("<member>: ..."); only the sweeper's may touch anything else.
-  const log = git(root, 'log', '-n', '500', '--format=%x00%s', '--name-only');
+  const log = git(root, 'log', '-n', '500', '--format=%x00%s', '--name-status');
   const stray = [];
   if (log.status === 0) {
     for (const entry of log.stdout.split('\0').slice(1)) {
       const [subject, ...names] = entry.split('\n');
       const member = (/^([a-z0-9-]+):/.exec(subject) || [])[1];
       if (member === cfg.sweeper) continue;
-      for (const f of names.filter(Boolean)) {
-        if (!(member && f.startsWith(`members/${member}/`)) && !f.startsWith('inbox/')) stray.push(`${member || '?'}: ${f}`);
+      for (const line of names.filter(Boolean)) {
+        const [st, f] = line.split('\t');
+        // questions/<date>-<from>-<to>-<slug>.md: the asker adds or deletes, only the addressee modifies.
+        const qm = /^questions\/\d{4}-\d{2}-\d{2}-(.+)\.md$/.exec(f);
+        const pair = qm && cfg.members.flatMap((a) => cfg.members.map((b) => [a, b])).find(([a, b]) => qm[1].startsWith(`${a}-${b}-`));
+        if (pair && (member === pair[1] || (member === pair[0] && st !== 'M'))) continue;
+        if (pair) { stray.push(`${member || '?'} edited a question for ${pair[1]}: ${f}`); continue; }
+        if (!(member && f.startsWith(`members/${member}/`)) && !f.startsWith('inbox/') && f !== 'questions/.gitkeep') stray.push(`${member || '?'}: ${f}`);
       }
     }
   }

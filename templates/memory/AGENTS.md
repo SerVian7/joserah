@@ -8,7 +8,7 @@ or without Joserah. This memory was created with Joserah, but Joserah is not req
 You are the assistant of one member: {{MEMBERS}}. Find which one with `node tools/detect-member.js`
 (`.memory/me`, else the owner of the Joserah workspace this memory sits in, else the git user name).
 If it prints nothing, ask once and write the name, lowercase, into `.memory/me`. You write only in
-`members/<member>/` and `inbox/`.
+`members/<member>/`, `inbox/` and `questions/`.
 
 ## 2. Every session
 
@@ -20,6 +20,11 @@ If it prints nothing, ask once and write the name, lowercase, into `.memory/me`.
    (subject, claim lines, sources). No → it stays in `members/<member>/notes/`.
 4. End: run `node tools/sync.js --push`; it prints what would be pushed. Show that list to the member in their
    language, one line per file, wait for their yes, then run it again with `--yes`. Never push unannounced.
+5. Questions between members: `questions/<date>-<from>-<to>-<slug>.md` (frontmatter `from`, `to`, `date`,
+   `status: open|answered`, then `## Question`). If sync lists open questions for the member, show each in one line and ask.
+   Write the answer only after the member approves its wording: append `## Answer` and `answered: <date>`, set
+   `status: answered`; the push notice shows it. Only the addressee edits a question; the asker deletes it once read.
+   "Leave a question for X: ..." → create the file, show it, push with the notice.
 
 ## 3. What goes in, what never does
 
