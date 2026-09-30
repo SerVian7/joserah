@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.2
+
+**Install from the repository URL.** The install prompt is "Install Joserah from https://github.com/SerVian7/joserah and set it up for me"; setup clones a URL to `~/joserah` first and skips the clone only for a local path.
+
 ## 0.15.1
 
 **Reminders once a day, and only when something piled up.** The briefing's `[backup]` line appears only when a day or more has passed since `lastBackup` and at least one file changed (an untouched journal stub still never counts); the new `[sweep]` line when a week has passed since `lastSweep` or five days of journal have piled up since it. Each is one sentence in the owner's language ("Yedek 3 gündür alınmadı, 12 dosya değişti — istersen alayım.") and is said at most once per calendar day per workspace (a stamp in the OS temp dir). Doctor's `knowledge sweep` warning uses the same rule; it was 14 days.

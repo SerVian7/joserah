@@ -12,11 +12,15 @@ in AGENTS.md-only mode: the same files and the same standing instructions, witho
 
 ## Install
 
-Clone this repository, open your assistant in the folder where you want your memory, and paste:
+Open your assistant in the folder where you want your memory, and paste one of these:
 
 ```
-Install Joserah from <path-to-clone> and set it up for me.
+Install Joserah from https://github.com/SerVian7/joserah and set it up for me.
+Joserah'ı şuradan kur: https://github.com/SerVian7/joserah
 ```
+
+Setup clones the repository for you (to `~/joserah`, on Windows `%USERPROFILE%\joserah`). A private
+fork's URL works the same way.
 
 Setup works out which assistant it is running in (`tools/detect-harness.js` prints what it found and
 why) and sets Joserah up the right way for it. Then it asks up to four short questions: where the

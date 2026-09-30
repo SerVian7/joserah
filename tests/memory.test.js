@@ -401,3 +401,12 @@ test('the memory AGENTS.md states the questions rule once', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8');
   assert.strictEqual(text.split('Questions between members').length - 1, 1);
 });
+
+test('A8: setup takes a git URL; README install prompt uses the real URL', () => {
+  const setup = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'setup', 'SKILL.md'), 'utf8');
+  assert.match(/^description:(.*)$/m.exec(setup)[1], /git url/);
+  assert.ok(setup.includes('git clone <url>'));
+  const readme = fs.readFileSync(path.join(PLUGIN_ROOT, 'README.md'), 'utf8');
+  assert.ok(readme.includes('Install Joserah from https://github.com/SerVian7/joserah'));
+  assert.ok(!readme.includes('<path-to-clone>'));
+});

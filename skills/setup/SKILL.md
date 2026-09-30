@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when someone asks to install Joserah or set it up — "Install Joserah from <path> and set it up for me", "Joserah'ı kur", "set me up" — to create a new workspace, or to continue, resume or finish getting set up; or to join or create a shared memory — "this repo is our shared memory: <git url>", "ortak hafızamız şu repo", "set up a shared memory for <company>". Only on that request, never because of what a workspace holds or lacks.
+description: Use when someone asks to install Joserah or set it up — "Install Joserah from <git url or path> and set it up for me", "Joserah'ı şuradan kur: <url>", "Joserah'ı kur", "set me up" — to create a new workspace, or to continue, resume or finish getting set up; or to join or create a shared memory — "this repo is our shared memory: <git url>", "ortak hafızamız şu repo", "set up a shared memory for <company>". Only on that request, never because of what a workspace holds or lacks.
 ---
 
 # Install and set up Joserah
@@ -9,8 +9,10 @@ One journey: notice which assistant this is, make Joserah load in it, create the
 fill it by a short interview, a few questions at a time, across as many sessions as the owner
 likes. Ask only what a newcomer can answer; everything else has a default.
 
-`<clone>` below is the Joserah checkout: the path the owner gave ("Install Joserah from <path>"),
-or, when the plugin is already loaded, `${CLAUDE_PLUGIN_ROOT}` with the link resolved. In bash
+`<clone>` below is the Joserah checkout. When the sentence carries a git URL, clone it first:
+`git clone <url> ~/joserah` (Windows `%USERPROFILE%\joserah`; if that folder exists, say so and ask).
+Only when the owner gave a local path is there no clone to make. Otherwise it is
+`${CLAUDE_PLUGIN_ROOT}` when the plugin is already loaded, with the link resolved. In bash
 `${CLAUDE_PLUGIN_ROOT}` expands; in PowerShell it expands to nothing — verify a path before relying
 on it: `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`. A command
 that failed because a path was empty is a failure: say so rather than reporting the step as done.
@@ -25,7 +27,7 @@ It prints `{ harness, evidence }` from documented markers only; you know which t
 confirm it against that. Then take one path:
 
 - **`claude-code`** — link the checkout so Claude Code loads it in every session, in place, as
-  `joserah@skills-dir`:
+  `joserah@skills-dir` (after the clone, when there was a URL):
 
   ```
   node -e "const fs=require('fs'),p=require('path'),l=p.join(require('os').homedir(),'.claude','skills','joserah');fs.mkdirSync(p.dirname(l),{recursive:true});fs.symlinkSync(p.resolve(process.argv[1]),l,'junction')" "<clone>"
@@ -36,7 +38,7 @@ confirm it against that. Then take one path:
   touching it. If Joserah was installed from a marketplace before, it is uninstalled first
   (CHANGELOG.md, 0.14.0). The hooks start with the next session: the owner restarts
   Claude Code once, at the end of this skill.
-- **`antigravity`** or **`unknown`** — **AGENTS.md-only mode**. Nothing is linked. Antigravity
+- **`antigravity`** or **`unknown`** — **AGENTS.md-only mode**. A URL is cloned first, as above; nothing is linked. Antigravity
   reads the workspace-root `AGENTS.md` as an always-on rule; after step 3, also write
   `<workspace>/.agents/rules/joserah.md` so the role and the owner's rules reach it too:
 
