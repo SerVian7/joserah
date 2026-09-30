@@ -109,3 +109,76 @@ test('secret: --set keeps the index current; --index on no store writes an empty
   run(dir, ['--set', 'x.y.pin'], 'fake-1');
   assert.match(index(dir), /- x\.y\.pin/);
 });
+
+test('secret: --import flattens nested JSON into dotted names, never prints a value', (t) => {
+  const dir = ws(t);
+  const src = path.join(dir, 'old.json');
+  fs.writeFileSync(src, JSON.stringify({ Corlu: { cam1: { user: 'fake-admin', password: 'fake p w' } }, 'Main Router': { api_key: 'fake-rk' } }));
+  const r = run(dir, ['--import', src]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(run(dir, ['corlu.cam1.password']).stdout, 'fake p w');
+  assert.strictEqual(run(dir, ['corlu.cam1.user']).stdout, 'fake-admin');
+  assert.strictEqual(run(dir, ['main-router.api-key']).stdout, 'fake-rk');
+  assert.match(r.stdout, /imported corlu\.cam1\.user/);
+  assert.match(r.stdout, /3 imported, 0 unchanged, 0 skipped/);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+  assert.match(index(dir), /- corlu\.cam1\.password/);
+  assert.ok(fs.existsSync(src), 'source kept without --delete');
+});
+
+test('secret: --import reads .env exactly — export, quotes, spaces; an empty value is listed, not stored', (t) => {
+  const dir = ws(t);
+  const src = path.join(dir, 'app.env');
+  fs.writeFileSync(src, '# comment\r\nexport DB_PASS="fake va lue"\r\nAPI_TOKEN=fake-tok # note\r\nEMPTY=\r\nQUOTED=\'fake #kept\'\r\n');
+  const r = run(dir, ['--import', src, '--prefix', 'acme']);
+  assert.strictEqual(r.status, 1);
+  assert.strictEqual(run(dir, ['acme.env.db-pass']).stdout, 'fake va lue');
+  assert.strictEqual(run(dir, ['acme.env.api-token']).stdout, 'fake-tok');
+  assert.strictEqual(run(dir, ['acme.env.quoted']).stdout, 'fake #kept');
+  assert.match(r.stdout, /skipped acme\.env\.empty: empty/);
+  assert.strictEqual(run(dir, ['--has', 'acme.env.empty']).status, 2);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+});
+
+test('secret: --import never overwrites — a different value is a listed conflict, exit 1, --delete refused', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'corlu.cam1.user'], 'fake-old');
+  run(dir, ['--set', 'corlu.cam1.pin'], 'fake-same');
+  const src = path.join(dir, 'old.json');
+  fs.writeFileSync(src, JSON.stringify({ corlu: { cam1: { user: 'fake-new', pin: 'fake-same', host: 'fake-h' } } }));
+  const r = run(dir, ['--import', src, '--delete']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /skipped corlu\.cam1\.user: exists with a different value/);
+  assert.match(r.stdout, /1 imported, 1 unchanged, 1 skipped/);
+  assert.strictEqual(run(dir, ['corlu.cam1.user']).stdout, 'fake-old');
+  assert.ok(fs.existsSync(src), 'a partial import keeps its source');
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+  // Fully successful now that the conflict is resolved: --delete removes the source.
+  run(dir, ['--set', 'corlu.cam1.user', '--force'], 'fake-new');
+  assert.strictEqual(run(dir, ['--import', src, '--delete']).status, 0);
+  assert.ok(!fs.existsSync(src));
+});
+
+test('secret: --import refuses the store itself', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'a.b.pin'], 'fake-1');
+  assert.strictEqual(run(dir, ['--import', store(dir), '--delete']).status, 1);
+  assert.ok(fs.existsSync(store(dir)));
+});
+
+test('secret: --rename moves a name without showing the value; refuses a taken or bad name', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'env.db-pass'], 'fake-1');
+  run(dir, ['--set', 'acme.db.user'], 'fake-2');
+  const r = run(dir, ['--rename', 'env.db-pass', 'acme.db.password']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+  assert.strictEqual(run(dir, ['acme.db.password']).stdout, 'fake-1');
+  assert.strictEqual(run(dir, ['--has', 'env.db-pass']).status, 2);
+  assert.match(index(dir), /- acme\.db\.password/);
+  assert.doesNotMatch(index(dir), /env\.db-pass/);
+  assert.strictEqual(run(dir, ['--rename', 'acme.db.password', 'acme.db.user']).status, 1, 'taken');
+  assert.strictEqual(run(dir, ['--rename', 'acme.db.password', 'Bad Name']).status, 1, 'invalid');
+  assert.strictEqual(run(dir, ['--rename', 'nope.x', 'acme.db.other']).status, 2, 'missing');
+  assert.strictEqual(run(dir, ['acme.db.user']).stdout, 'fake-2');
+});

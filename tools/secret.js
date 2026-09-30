@@ -14,6 +14,11 @@
  *   <value> | node .joserah/tools/secret.js --set <name> [--force]
  *                                                         value from stdin, never echoed
  *   node .joserah/tools/secret.js --index                 writes .joserah/vault-index.md, names only
+ *   node .joserah/tools/secret.js --import <file> [--prefix <scope>] [--delete]
+ *                                                         a foreign vault (.json, any nesting) or .env
+ *                                                         into names; lists names, never values; never
+ *                                                         overwrites (conflict = skipped, exit 1)
+ *   node .joserah/tools/secret.js --rename <old> <new>    correct a name without seeing the value
  *
  * Embed, never print:
  *   curl -H "Authorization: Bearer $(node .joserah/tools/secret.js acme.api.api-token)" ...
@@ -48,7 +53,7 @@ if (!ROOT) die(3, 'secret: not inside a Joserah workspace (no .joserah/config.js
 const STORE = path.join(ROOT, 'keys', 'secrets.json');
 const INDEX = path.join(ROOT, '.joserah', 'vault-index.md');
 // Commands that may run before the first secret exists.
-const NO_STORE_OK = ['--set', '--index'];
+const NO_STORE_OK = ['--set', '--index', '--import'];
 
 const args = process.argv.slice(2);
 if (!args.length) die(1, 'secret: give a name, or --list');
@@ -105,6 +110,73 @@ if (args[0] === '--has') {
   if (!args[1]) die(1, 'secret: --has needs a name');
   console.log(has(args[1]) ? 'present' : 'absent');
   process.exit(has(args[1]) ? 0 : 2);
+}
+
+// A foreign key -> name part: dots split parts, anything outside [a-z0-9-] becomes '-'.
+const parts = (key) => String(key).toLowerCase().split('.')
+  .map((p) => p.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')).filter(Boolean);
+
+// Foreign vault -> [name, value] pairs. JSON: any nesting, keys become parts
+// (a standard store is read through its `secrets`). Anything else: .env lines.
+function entriesOf(file, prefix) {
+  const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
+  const pre = prefix ? parts(prefix) : [];
+  const out = [];
+  if (/\.json$/i.test(file)) {
+    let data = JSON.parse(text);
+    if (data && typeof data.secrets === 'object' && data.secrets && !Array.isArray(data.secrets)) data = data.secrets;
+    (function walk(node, trail) {
+      if (node !== null && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node)) if (!(trail.length === 0 && k === '_readme')) walk(v, trail.concat(parts(k)));
+      } else out.push([pre.concat(trail).join('.'), node === null ? '' : String(node)]);
+    })(data, []);
+    return out;
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!m) continue;
+    let v = m[2];
+    const q = /^(["'])(.*)\1$/.exec(v);
+    v = q ? q[2] : v.replace(/\s+#.*$/, '');
+    out.push([pre.concat('env', parts(m[1].replace(/_/g, '-'))).join('.'), v]);
+  }
+  return out;
+}
+
+if (args[0] === '--import') {
+  const file = args[1] && path.resolve(args[1]);
+  if (!file || !fs.existsSync(file)) die(1, 'secret: --import needs an existing file');
+  if (file === path.resolve(STORE)) die(1, 'secret: that is the store itself');
+  const pi = args.indexOf('--prefix');
+  let entries;
+  try { entries = entriesOf(file, pi > 0 ? args[pi + 1] : ''); }
+  catch (err) { die(1, 'secret: cannot read ' + path.basename(file) + ' (' + err.name + ')'); }
+  const n = { imported: 0, unchanged: 0, skipped: 0 };
+  for (const [name, value] of entries) {
+    // Lines carry names only; a value never reaches stdout or stderr.
+    if (!NAME.test(name)) { n.skipped++; console.log(`skipped ${name || '(no name)'}: not a valid name — use --prefix`); }
+    else if (!value) { n.skipped++; console.log(`skipped ${name}: empty`); }
+    else if (has(name) && secrets[name] === value) { n.unchanged++; console.log(`unchanged ${name}`); }
+    else if (has(name)) { n.skipped++; console.log(`skipped ${name}: exists with a different value`); }
+    else { secrets[name] = value; n.imported++; console.log(`imported ${name}`); }
+  }
+  if (n.imported) save(); else writeIndex();
+  console.log(`import: ${n.imported} imported, ${n.unchanged} unchanged, ${n.skipped} skipped`);
+  if (n.skipped) process.exit(1);
+  if (args.includes('--delete')) fs.rmSync(file);
+  process.exit(0);
+}
+
+if (args[0] === '--rename') {
+  const [from, to] = args.slice(1, 3);
+  if (!has(from)) die(2, `secret: "${from}" not found`);
+  if (!to || !NAME.test(to)) die(1, 'secret: name must be <scope>.<system>.<field> (lowercase letters, digits, hyphens)');
+  if (has(to)) die(1, `secret: "${to}" already exists`);
+  secrets[to] = secrets[from];
+  delete secrets[from];
+  save();
+  console.log(`renamed: ${from} -> ${to}`);
+  process.exit(0);
 }
 
 if (args[0] === '--set') {
