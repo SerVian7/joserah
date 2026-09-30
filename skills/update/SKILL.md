@@ -1,27 +1,21 @@
 ---
 name: update
-description: Use when a Joserah workspace should be brought current — the owner asks to update, the session briefing carries an `[update]` line, or doctor reports the prompt behind or hand-edited.
+description: Use when Joserah or its standing instructions should be brought current: the owner asks to update Joserah, the briefing carries an `[update]` line, or doctor reports the prompt behind or hand-edited. Not for tidying notes, which is `sweep`.
 ---
 
 # Update a workspace
 
 Two things update on different schedules, and the owner should never have to know which is which:
 
-- **The standing instructions** (`AGENTS.md`, plus `directives.md`, `JOSERAH-ROLE.md`,
-  `.joserah/agent.md`, `.joserah/tools/verify-links.js`) come from the plugin's templates and take
-  effect in a **new conversation**. No restart.
+- **The standing instructions** (`AGENTS.md`, `JOSERAH-ROLE.md` and the workspace's copies of the
+  plugin tools) come from the plugin's checkout and take effect in a **new conversation**. No
+  restart. `directives.md` and `.joserah/agent.md` are the owner's: created once if missing, never
+  rewritten.
 - **The plugin's code** (hooks, tools, skills) is a git checkout linked into `~/.claude/skills/`
   and loaded in place. Step 1 pulls it; `/reload-plugins` loads it. This skill is the only way
   Joserah updates itself.
 
-> **Running the plugin's tools.** The commands here use
-> `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
-> syntax, not an environment lookup, and expands to nothing — leaving you
-> running `node "/tools/…"`. Verify the path before relying on it:
-> `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
-> If it is empty or missing, use `~/.claude/skills/joserah` (Windows:
-> `%USERPROFILE%\.claude\skills\joserah`). A command that failed because the path was empty is a
-> failure: say so rather than reporting the step as done.
+> Plugin tools: if `${CLAUDE_PLUGIN_ROOT}` is empty (PowerShell), resolve it as in `/joserah:doctor`, "Running the plugin's tools".
 
 ## 1. Pull the checkout
 
@@ -130,8 +124,7 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <workspace-root>
 Every check `ok` or the update is not done — report what is still red, in the owner's language,
 one line each. When it is clean, tell the owner in one or two lines: what changed, and that a
 **new conversation** picks up the new instructions. If step 1 pulled anything, ask them to run
-`/reload-plugins` to load the new code — a skills-dir plugin loads in place, so the pulled files are
-what it loads; suggest a restart only if the new version is still not active after it.
+`/reload-plugins`; suggest a restart only if the new version is still not active after it.
 
 **Then say what an update is not.** Nothing here read a single note: this moved the shell, and the
 owner's own pages are untouched by design. If doctor's `knowledge sweep` warned — or the workspace

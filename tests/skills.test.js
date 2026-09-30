@@ -48,8 +48,7 @@ test('orchestrate carries the one-report-per-wave and one-voice rules', () => {
     'One report per wave',
     'conclusion first',
     '.brand/report.html',
-    'notumu aldım',
-    'several models work behind it',
+    'other agents may work behind it',
     // Two decisions that must not be droppable in a later edit: the weight of
     // a handed-off task is visible in its title, and a question is routed by
     // whose subject it is rather than by who is nearest.
@@ -70,19 +69,20 @@ test('orchestrate backgrounds by default and has no never-background rule', () =
   assert.match(text.replace(/\s+/g, ' '), /in the background by default/);
 });
 
-// 0.13.2, reworded 0.13.4: a worker that never loaded this skill knows the
-// rules only from its brief, so the no-further-delegation rule is stated once
-// in the rules and once in the template a brief is written from.
+// 0.13.2, reworded 0.13.4 and in review 21: a worker that never loaded this
+// skill knows the rules only from its brief, so the brief template carries the
+// no-further-delegation line itself, and the skill says that it does — without
+// telling each worker to copy the rule into briefs of its own.
 test('orchestrate makes the no-further-delegation rule travel in every brief', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
-  const rule = 'a worker does not delegate further, and this rule is copied verbatim into every brief';
   const briefing = text.slice(text.indexOf('## Briefing'), text.indexOf('## Checking what comes back'));
   const template = /```[^\n]*\n([\s\S]*?)```/.exec(briefing);
   assert.ok(template, 'the Briefing section has no brief template');
   const flat = (s) => s.replace(/\s+/g, ' ').toLowerCase();
   const outside = flat(briefing.replace(template[0], ''));
-  assert.ok(outside.includes(rule), 'the rule is not stated in the skill');
-  assert.ok(flat(template[1]).includes(rule), 'the brief template does not carry the rule');
+  assert.ok(outside.includes('the template carries the no-further-delegation line'), 'the rule is not stated in the skill');
+  assert.ok(flat(template[1]).includes('you are a worker: do not delegate further.'), 'the brief template does not carry the rule');
+  assert.doesNotMatch(flat(template[1]), /into every brief/, 'the template recurses');
 });
 
 test('the merged skills are gone, not left behind as duplicates', () => {
@@ -202,7 +202,7 @@ test('the four claim types are the only ones, and a measurement needs its condit
   for (const rel of [['templates', 'AGENTS.md'], ['skills', 'sweep', 'SKILL.md']]) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, ...rel), 'utf8').replace(/\s+/g, ' ');
     assert.ok(text.includes('[measurement|calculation|decision|estimate]'), `${rel.join('/')}: the four types`);
-    assert.ok(text.includes('these four are the only types'), `${rel.join('/')}: not stated as the only ones`);
+    assert.ok(text.includes('never `[fact]`'), `${rel.join('/')}: not stated as the only ones`);
     assert.ok(text.includes('`condition:` (mandatory for a measurement)'), `${rel.join('/')}: condition not mandatory`);
   }
 });

@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, carrying out a written plan, or reporting a finished round of work to the owner.
+description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, or carrying out a written plan.
 ---
 
 # Orchestrating the work
@@ -50,20 +50,20 @@ any of the four returns something that has to be redone.
 - Name the files it may write and the folders it may not touch. A worker that edits outside
   its brief has done damage, not work.
 - Workers run in the background by default, so the owner can keep talking; check each result
-  when it returns. A worker does not delegate further, and this rule is copied verbatim into every
-  brief. A worker that never loaded this skill knows the rule only from its brief.
+  when it returns. The template carries the no-further-delegation line, so a worker that never
+  loaded this skill still knows it.
+- Resume a worker that has already finished rather than briefing a fresh one from scratch:
+  it still holds the context you would have to re-explain.
 
 The template a brief is written from:
 
 ```
 Job: <the one deliverable>
 Rules: <what it must not break; the files it may write, the folders it may not touch>
-  A worker does not delegate further, and this rule is copied verbatim into every brief.
+  You are a worker: do not delegate further.
 Verified by: <the command or check that proves it>
 Report: <the exact shape of what comes back>
 ```
-- Resume a worker that has already finished rather than briefing a fresh one from scratch:
-  it still holds the context you would have to re-explain.
 
 ## Checking what comes back
 
@@ -76,9 +76,9 @@ text.
 
 ## One report per wave
 
-Findings scattered through a conversation cannot be followed by anyone. Each round of work
-ends in **one document that can be read top to bottom**, and the conversation gets a short
-pointer to it — a new one each time, not an old one edited underneath the reader.
+Findings scattered through a conversation cannot be followed by anyone. Each round of work ends
+in **one document that can be read top to bottom**, a new one each time. The conversation carries
+its conclusion in two or three lines plus the link, never the link alone.
 
 - **An artifact where the runtime can publish one. Otherwise a PDF. Otherwise a plain,
   self-contained HTML file.** The template and the rule it carries: `.brand/report.html`.
@@ -91,26 +91,23 @@ pointer to it — a new one each time, not an old one edited underneath the read
 
 ## One voice
 
-Joserah speaks to its user as one voice. How the work gets done is not something the user is
-asked to follow.
+The assistant speaks to the owner as one voice. How the work gets done is not something the owner
+is asked to follow.
 
-- The assistant says **"notumu aldım"** — not "I am passing this to the coder". It does not
+- The assistant says "noted", in the owner's language, not "I am passing this to the coder". It does not
   narrate handoffs, name what is running behind it, or report that something has been queued.
   It says what will happen and when, in the first person, and owns the result.
-- **Honesty is preserved.** Asked how it works, it answers plainly: several models work behind it,
-  run like a small agency. It never denies that and never pretends to be a single model.
-- **Strict on a platform or a paid product**: stay on the surface. The method is what the
-  customer bought rather than read.
+- **Honesty is preserved.** Asked how it works, it answers plainly:
+  other agents may work behind it, like a small agency. It never denies that.
+- **On a platform or a paid product**, keep to the surface: the customer bought the result, not the
+  method.
 - **Not a rule about the owner.** An owner watching their own agents in their own interface
   is watching their own work, and keeps doing so.
 
 ## A question goes to the person it belongs to
 
-A worker or an agent that hits a question does not queue it for whoever is nearest, nor push
-it up the chain by reflex — it goes to the person whose subject it is. The owner's work,
-correspondence and priorities are theirs and stop with them; the machine, the accounts and
-the scope belong to whoever maintains the workspace. Asking the wrong one produces an answer
-nobody had the standing to give.
+A worker's question goes to the person whose subject it is (the owner's work to the owner, the
+machine and accounts to whoever maintains the workspace), never to whoever is nearest.
 
 ## Carrying out a plan
 

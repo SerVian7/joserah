@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Use when the knowledge base itself should be brought current — the owner asks to tidy or consolidate it, a burst of imports has landed, doctor reports the sweep overdue, or a schedule fires. Reads the notes and rewrites their structure; `update` never does.
+description: Use when the owner asks to tidy, consolidate or re-check their notes, a burst of imports has landed, or doctor reports the sweep overdue. Not for updating Joserah itself, which is `update`.
 ---
 
 # Sweep the knowledge base
@@ -34,13 +34,7 @@ Read `lastSweep` from `.joserah/config.json`.
   workspace is hours of delegated work; a delta is minutes. Nothing but this step separates them,
   and getting it wrong spends the owner's money re-deriving what is already written down.
 
-> **Running the plugin's tools.** The commands below use `${CLAUDE_PLUGIN_ROOT}`. That expands in
-> bash; in PowerShell it is variable syntax, not an environment lookup, and expands to nothing —
-> leaving you running `node "/tools/…"`. Verify before relying on it:
-> `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`. If it is empty
-> or missing, use `~/.claude/skills/joserah` (Windows `%USERPROFILE%\.claude\skills\joserah`), the
-> linked checkout. A command that failed because the path was empty is a failure: say so rather
-> than reporting the step as done.
+> Plugin tools: if `${CLAUDE_PLUGIN_ROOT}` is empty (PowerShell), resolve it as in `/joserah:doctor`, "Running the plugin's tools".
 
 The changed set comes from the tool the backup skill already uses for the same question:
 
@@ -97,9 +91,8 @@ owner is told it will take longer.
 
 ## 4. Checking what comes back — deleted lines first
 
-**Read the removed lines in the diff before the added ones.** An agent told to add a claim block
-overwrites the end of the page while adding it, and the loss is invisible in the added text: this
-has happened on every delivery so far, in both directions, to two different agents.
+**Read the removed lines in the diff before the added ones** (see orchestrate, "Checking what
+comes back").
 
 ```
 git -C <workspace-root> diff --stat
@@ -115,7 +108,7 @@ inside it. A claim citing a file that merely exists is worse than no claim, beca
 
 ## 5. Finish
 
-In this order, and the sweep is not done until all four pass:
+In this order, and the sweep is not done until all three pass:
 
 ```
 node .joserah/tools/verify-links.js
@@ -134,7 +127,7 @@ next one to a window that never covered the damage.
 
 ## 6. What the owner is told
 
-Four numbers and one list, in their language, in a few lines:
+Three numbers, the cost and one list, in their language, in a few lines:
 
 - pages read, and over what window;
 - claims added, and how many were spot-checked against their sources;

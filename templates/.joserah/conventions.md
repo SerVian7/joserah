@@ -14,7 +14,7 @@ The detail behind [../AGENTS.md](../AGENTS.md). Read on demand.
 ## File naming
 
 - ISO dates: `YYYY-MM-DD`. Journal entries live under `.joserah/desk/daily/<year>/`.
-- Per-project status: `status.md`. Per-project tasks: `docs/tasks.md`.
+- Per-project status: `docs/status.md`. Per-project tasks: `docs/tasks.md`.
 - Decisions: `docs/decisions/NNNN-short-title.md`.
 
 ## Markdown rules

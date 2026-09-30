@@ -34,7 +34,8 @@ Read `feedback.mode` from `config.json`:
   link. Do not ask first.
 - **manual** — mention it once, in one sentence, at a natural pause. If they decline, drop that
   subject for the session and do not raise it again. `/joserah:feedback` always works.
-- **off**, or the block absent — do nothing, ever. Do not mention feedback at all.
+- **off**, or the block absent: never raise feedback yourself. An explicit `/joserah:feedback` from
+  the owner still works.
 
 ## Writing a note
 

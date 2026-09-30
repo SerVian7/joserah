@@ -56,7 +56,7 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
 text **must** bump the `<!-- joserah:prompt-version N -->` line on line 1 —
 that number is the only thing a workspace compares against, so a change
 without a bump reaches no existing workspace (doctor reports it as
-`prompt source drift`). The plugin's own version bumps only when code changes:
+`prompt source drift`). Keep it under 160 lines (`tests/prompt.test.js` holds it there). The plugin's own version bumps only when code changes:
 hooks, tools, skills, other templates. Run `node --test tests/*.test.js`
 before every release.
 
@@ -72,7 +72,7 @@ Every release bumps the number, however small: workspaces record the version
 that built them, and `/joserah:update` migrates by comparing against it.
 
 To cut a release: change all three to the new number, add a
-`### Upgrading to <version>` section to `README.md` saying what changed for
+`## <version>` section at the top of `CHANGELOG.md` saying what changed for
 someone who already has a workspace, then run `node --test tests/*.test.js`.
 `tests/version.test.js` fails if the three disagree, and fails if the release
 note for the current number is missing — three numbers that were all forgotten

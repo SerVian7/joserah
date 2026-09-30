@@ -34,7 +34,7 @@ confirm it against that. Then take one path:
   (a directory junction on Windows, a symlink elsewhere; the README has the `mklink /J` and `ln -s`
   forms). If `~/.claude/skills/joserah` already exists, say what it points at and ask before
   touching it. If Joserah was installed from a marketplace before, it is uninstalled first
-  (README, "Upgrading from 0.13.x"). The hooks start with the next session: the owner restarts
+  (CHANGELOG.md, 0.14.0). The hooks start with the next session: the owner restarts
   Claude Code once, at the end of this skill.
 - **`antigravity`** or **`unknown`** — **AGENTS.md-only mode**. Nothing is linked. Antigravity
   reads the workspace-root `AGENTS.md` as an always-on rule; after step 3, also write
@@ -110,25 +110,24 @@ Tell the owner, in their language:
   tasks arrive by themselves and words like "remind me" file themselves; if they do not,
   `/joserah:doctor` says why (on Windows, usually a missing Git Bash). In AGENTS.md-only mode: the
   short list from step 0.
-- The drop folder's **absolute path**, `<path>/.joserah/user/` — anything dropped there (a CV, a
-  project brief) is picked up with `/joserah:import` and can be deleted once absorbed.
+- The drop folder's **absolute path**, `<path>/imports/` — anything dropped there (a CV, a
+  project brief) is read from there and never edited; `/joserah:import` takes a larger pile.
 - Next: the short interview below, now or in any later session.
 
 ## Rules
 
-- Never create content the user did not give you. Empty values are correct until the owner
+- Never create content the owner did not give you. Empty values are correct until the owner
   supplies something.
 - Never write into `keys/` except through `node .joserah/tools/secret.js --set`, which is how a
   credential the owner hands over is saved.
-- Do not configure MCP servers — that is the user's own later step, proposed by `/joserah:project`
-  and recorded in AGENTS.md §7.
+- Do not configure MCP servers — that is the owner's own later step, proposed by `/joserah:project`
+  and recorded in .joserah/directives.md.
 
 ---
 
 # Filling it in — the interview
 
-Fill an empty workspace by interviewing its owner. This is a conversation held
-across as many sessions as it takes, not a form to complete in one sitting.
+A conversation, not a form to complete in one sitting.
 
 ## State
 
@@ -157,19 +156,17 @@ be interrupted.
    `.joserah/personal/profile.md`
 2. **Current work** — what is actually on their plate right now. → `.joserah/desk/tasks/now.md`, `projects/`
 3. **People** — who they work with and who matters. One file each. → `.joserah/knowledge/people/`
-4. **Routines** — how their week runs, recurring commitments. → `.joserah/conventions.md`, `.joserah/desk/tasks/next.md`
-5. **Preferences** — how they want you to behave: tone, when to ask, what to
-   never do. → `.joserah/learned.md`
-6. **Integrations** — what tools they want connected later. → AGENTS.md §7
+4. **Routines** — how their week runs, recurring commitments. → `.joserah/personal/profile.md` (Context worth knowing), `.joserah/desk/tasks/next.md`
+5. **Preferences** — tone and habits → `.joserah/agent.md` (below the marker); rules with a reason → `.joserah/learned.md`
+6. **Integrations** — what tools they want connected later. → .joserah/directives.md (Scope)
 
 ## How to ask
 
 - **Offer the drop folder as an alternative to answering.** Give its absolute
-  path — `<workspace>/.joserah/user/` — since a hidden folder is awkward to
-  drag files onto. A CV, a project brief, an org chart, a "who's who" export
+  path — `<workspace>/imports/`. A CV, a project brief, an org chart, a "who's who" export
   can stand in for a whole topic of questions; if something is sitting there
   already, read it before asking the topic's questions at all, and only ask
-  what it left out. Say the file can be deleted once it has been absorbed.
+  what it left out.
 - **Two or three questions at a time, never a wall.** Wait for the answer.
 - Ask in the language already agreed for this dialogue, from `.joserah/config.json`.
 - **Write as you go.** When an answer produces a fact, put it in its file in
@@ -182,9 +179,6 @@ be interrupted.
   abandoned; short ones get finished.
 
 ## Finishing
-
-> The command below uses `${CLAUDE_PLUGIN_ROOT}`; the note at the top of this skill says how to
-> verify it, and where the checkout is when it is empty.
 
 When topics 1-6 are Covered or Declined, set `Status: complete`, run
 `node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <path>` (pass the workspace

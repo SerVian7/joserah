@@ -7,7 +7,7 @@ description: Use when a Joserah workspace misbehaves — hooks not firing, journ
 
 Diagnose, report, then offer to fix. Never repair silently.
 
-> **Running the plugin's tools.** The commands here use
+> **Running the plugin's tools.** The commands in the Joserah skills use
 > `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
 > syntax, not an environment lookup, and expands to nothing — leaving you
 > running `node "/tools/…"`. Verify the path before relying on it:
@@ -31,8 +31,8 @@ prompt — neither behind the newest available copy nor hand-edited.
 Look at the current session's context for a `## Joserah session context`
 block. If it is absent in a workspace that doctor says is healthy:
 
-- Ask the user to run `/plugin` and read you the result — slash commands
-  are theirs to run, not yours.
+- Ask the owner to run `/plugin` and read you the result (to read the
+  plugin list only, never to update) — slash commands are theirs to run, not yours.
 - Confirm Node is on PATH *for the hook*, not just the shell: `node --version`
 - Windows only: hooks are run through **bash**, which on Windows comes from Git
   for Windows. If `bash --version` fails, that is the cause — install Git for
@@ -40,14 +40,8 @@ block. If it is absent in a workspace that doctor says is healthy:
 
 ## 3. Report
 
-One line per failed check, in the owner's language, saying what is broken and
-what fixes it. Report every `warn` line the same way, not just every FAIL —
-`warn` only means the check does not fail doctor's exit code, never that the
-finding is optional to say out loud. The legacy-raw and unbacked-project
-warns below are exactly the case this matters for: doctor's summary line
-names how many warnings exist so this step is never reached with warnings
-present and nothing to say. Only once every FAIL and every `warn` has been
-reported, if there were none of either, say so in one sentence and stop.
+One line per FAIL and per warn, in the owner's language: what is broken and what fixes it. A warn
+does not fail the exit code but is still said. If there are neither, say so in one sentence and stop.
 
 ## 4. Fix, with permission
 
@@ -60,7 +54,7 @@ Propose the specific repair for each failure and wait for a yes:
 | `exists: keys/AGENTS.md` FAIL | **Do not read-then-write this one.** The workspace's `Read(./keys/**)` deny rule matches a `keys/` directory at any depth — including the plugin's own `templates/keys/`, per the README's Security section — so a normal read of the template fails with a confusing denial. Copy the file instead, without ever reading its content into the conversation: `cp "${CLAUDE_PLUGIN_ROOT}/templates/keys/AGENTS.md" <workspace>/keys/AGENTS.md` (PowerShell: `Copy-Item "${CLAUDE_PLUGIN_ROOT}/templates/keys/AGENTS.md" "<workspace>/keys/AGENTS.md"`). |
 | `exists: .joserah/directives.md` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it creates the file from the template with the workspace name filled in and never touches an existing one. |
 | `no legacy .joserah/keys directory` FAIL | Run the Migrate section below. |
-| `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. Doctor's own `run:` text for this warn is plugin-relative (`node tools/relocate.js ...`) and only resolves from inside the plugin's own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead. |
+| `legacy .joserah/knowledge/raw present` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. |
 | `legacy raw/ at the workspace root` warn | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — the same one command: from a root `raw/` it moves the source material to `imports/`, flattening `raw/imports/`, and rewrites citations. |
 | `CLAUDE.md imports the standing layers` FAIL | Run `node "${CLAUDE_PLUGIN_ROOT}/tools/migrate.js" <workspace>` — it writes the plugin's CLAUDE.md, or refreshes it, and never touches one the owner wrote. Until then the session-start hook still carries the layers, cut to its budget. |
 | `CLAUDE.md imports the standing layers` warn | The workspace's CLAUDE.md is the owner's own, so nothing rewrites it. Tell the owner in one line and offer to add the `@` lines doctor names to it, on their yes. Nothing is lost meanwhile: the session-start hook carries every layer the file does not import, cut to its budget. |
@@ -77,7 +71,7 @@ Propose the specific repair for each failure and wait for a yes:
 | `structure migrations applied` warn | The plugin ships one note per release that changes what a workspace should look like, in its own `docs/migrations/`. Read every note newer than `migratedTo` in config.json, oldest first, and do what each one says — some steps are a tool, some are the owner's decision — then stamp `migratedTo` at the installed version. `/joserah:update` step 3b walks this. |
 | `knowledge sweep` warn | Run `/joserah:sweep`. Nothing is broken — the content is behind the format: `update` deliberately never reads prose, so numbers stay as sentences until a sweep turns them into claims. A regular sweep reads only what changed since the last one and is small; a long-deferred first one is not. |
 | `projects/<Owner>/<Project>` warn (no repository of its own / no remote / N commit(s) not pushed) | Not something doctor can fix by itself — it means no copy of that work exists anywhere else, or its history is incomplete everywhere but this machine. Say so plainly and ask the owner whether to `git init`, add a remote, or push, from inside that project's own directory — never proceed as if the workspace were fully backed up while one of these is open. |
-| `marketplace clone diverged from its remote` warn | The plugin's own repository had its history rewritten and force-pushed, so this machine's marketplace clone can no longer fast-forward: the `git pull --ff-only` that refreshes it fails every time and the owner silently stops receiving updates. Say so plainly, then offer either `git -C <clone> fetch origin` followed by `git -C <clone> reset --hard origin/main` — which discards any local change in the clone, so say that too — or removing and re-adding the marketplace in Claude Code. |
+| `marketplace clone diverged from its remote` warn | The plugin's own repository had its history rewritten and force-pushed, so this machine's marketplace clone can no longer fast-forward: the `git pull --ff-only` that refreshes it fails every time and the owner silently stops receiving updates. Say so plainly, then offer to repair the clone (it discards any local change there, so say that too), or removing and re-adding the marketplace in Claude Code. |
 <!-- joserah:remedy-table-end -->
 
 Re-run doctor after any repair. Do not claim it is fixed until it exits 0.
@@ -89,18 +83,15 @@ behind, and they are fixed differently. Say nothing about any whose value is `nu
 could not tell; carry on and do not retry.
 
 **`prompt.behind` is `true` — the standing instructions are behind.** Tell the owner in **one
-line**, in their language — "Joserah'ın talimat metni yenilenmiş, alayım mı?" — and nothing more.
-On yes, follow `/joserah:update`: it refreshes the marketplace clone, runs `migrate.js` and
-`refresh-prompt.js`, and ends with a **new conversation** — no plugin update, no restart. (The
+line**, in their language (e.g., in Turkish: "Joserah'ın talimat metni yenilenmiş, alayım mı?") and
+nothing more. On yes, follow `/joserah:update`: it pulls the checkout, runs `migrate.js` and
+`refresh-prompt.js`, and ends with a **new conversation** — no restart. (The
 session-start hook already does the safe part of this by itself; you usually land here only when
 the file was hand-edited.)
 
-**`newer` is `true` — the plugin's code is behind.** Tell the owner in **one line** — "Joserah'ın
-yeni sürümü var; güncellemeyi siz yapmanız gerekiyor, sonra bir kez yeniden başlatmalı." — and
-nothing more. Do not explain plugins, marketplaces or versions unless asked. The update is theirs
-to run; once it is done, run `migrate.js` so the workspace matches the new version. Never require
-`npx`; if the only available path needs it, say plainly that the update has to wait and report it
-to the developer instead.
+**`newer` is `true`: the plugin's code is behind.** Tell the owner in one line, in their language,
+that a new version is ready, and offer to install it. On yes, follow `/joserah:update`. Do not
+explain plugins or versions unless asked.
 
 **`behind` is `true` — this workspace was built by an older plugin than the one installed.** Run
 `migrate.js` (dry-run first, see "Format version" below).
@@ -121,27 +112,5 @@ frontmatter and a `## Relations` block, and never edits prose.
 
 ## Migrate a pre-0.3.0 workspace
 
-Doctor's `no legacy .joserah/keys directory` check fails on workspaces
-created before 0.3.0. The move, in order, with the owner watching:
-
-1. `mkdir <workspace>/keys` (skip if it exists).
-2. Move the contents without reading them:
-   `git -C <workspace> mv .joserah/keys/AGENTS.md keys/AGENTS.md` if that
-   file is tracked, then move the rest with a plain rename (`mv`/`Move-Item`)
-   and remove the empty `.joserah/keys/`.
-3. Update `.gitignore`: replace `.joserah/keys/*` and `!.joserah/keys/AGENTS.md`
-   with `keys/*` and `!keys/AGENTS.md`; make sure the env family
-   (`.env`, `.env.*`, `*.env`, `*.env.*`, `.envrc`, `*.envrc`) is present.
-4. Re-write the deny rules: `node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js"
-   --settings-only --target <workspace> --force` — with `--force` because a
-   settings.json with the OLD paths exists; show the owner the diff first.
-5. Refresh the local link checker: copy the plugin's `tools/verify-links.js`
-   over `.joserah/tools/verify-links.js`, and the plugin's
-   `tools/lib/untouchable.js` over `.joserah/tools/lib/untouchable.js` — the
-   checker requires that library, so both files have to be current.
-6. Anything else in the workspace that names `.joserah/keys` (its AGENTS.md,
-   an `.mcp.json` mount, notes) — find with a grep scoped to markdown/config
-   files, never `keys/` or an env file, so it can never surface a credential's
-   contents — and update each with the owner, since some of those files are
-   theirs, not the plugin's.
-7. Re-run doctor with the path; every check `ok` or the migration is not done.
+Follow `docs/migrations/0.3.0.md` in the plugin, with the owner watching; re-run doctor until every
+check is ok.

@@ -10,14 +10,7 @@ file, or to a second machine — has to be reliable. This is one skill with two
 destinations: a ZIP any tool can open, or a private git repository. Pick one
 before doing anything else.
 
-> **Running the plugin's tools.** The commands here use
-> `${CLAUDE_PLUGIN_ROOT}`. That expands in bash; in PowerShell it is variable
-> syntax, not an environment lookup, and expands to nothing — leaving you
-> running `node "/tools/…"`. Verify the path before relying on it:
-> `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
-> If it is empty or missing, use `~/.claude/skills/joserah` (Windows
-> `%USERPROFILE%\.claude\skills\joserah`), the linked checkout. A command that failed because the
-> path was empty is a failure: say so rather than reporting the step as done.
+> Plugin tools: if `${CLAUDE_PLUGIN_ROOT}` is empty (PowerShell), resolve it as in `/joserah:doctor`, "Running the plugin's tools".
 
 ## 1. Ask first, always
 
@@ -180,9 +173,7 @@ one:
      statement about *content* only — whether anything still needs
      **pushing** is a separate question, and it is answered by reading
      git's actual state, never by inferring it from the commits just now
-     being empty (verified: an empty commit here is fully consistent with
-     an earlier commit — from a backup whose push was declined, or one
-     never attempted — still sitting unpushed):
+     being empty:
      `git -C <workspace> log --oneline @{u}..HEAD`.
      - If this fails with `fatal: no upstream configured for branch
        '<name>'`, that failure **is** the answer: no upstream means this
@@ -234,28 +225,8 @@ one:
 
 ### The safety gate
 
-Runs in full **before every repository backup, not only the first** —
-`git init` is a no-op on a repo that already exists, and the content checks
-in steps 2 and 4 must never be skipped just because an earlier backup
-already passed them: new content goes in on every backup, so it needs
-checking on every backup. Nothing here relies on anything being *remembered*
-from an earlier session — every check either reads git's actual current
-state (which naturally degrades to a no-op when there's nothing to do, the
-same way `git init` does) or asks the owner fresh. Step 2.4 is the **only**
-place a remote gets added, and it only has anything to ask or add when no
-remote is configured yet; step 6 never adds one — it only confirms the
-actual remote, fresh, every single time regardless. There is no branch rename
-anywhere in this flow — see the command block below for why, and for what
-replaced it. "Later use" below layers `pull --rebase` and conflict handling
-around this same gate — it does not replace it.
-
-Order matters: the repository must exist before git can be asked about it.
-And a check that inspects *content* — the one thing `.gitignore` can never
-cover — only means something once the content it is checking is actually
-staged. A freshly staged tree (first backup or the fifth) proves nothing
-until it's actually checked: running the content-sensitive checks before
-staging only tests the previous backup's leftovers, so the flow below runs
-them twice — once cheaply before staging, and once for real, after.
+Run the whole gate before every repository backup. Every check reads git's current state; nothing
+is remembered between runs.
 
 1. `git -C <workspace> init` — a no-op if it is already a repository.
 2. Run the checks below that do not need anything staged. If any fails, stop
@@ -305,8 +276,7 @@ them twice — once cheaply before staging, and once for real, after.
 
 2.5. **Measure what staging would take — before `git add` writes a single
    object.** `git add` copies file contents into the repository's object
-   store immediately, commit or no commit; a workspace once carried 3.5 GB
-   of orphaned blobs from exactly this. So measure from the working tree:
+   store immediately, commit or no commit. So measure from the working tree:
 
    `node "${CLAUDE_PLUGIN_ROOT}/tools/measure-stage.js" <workspace>`
 
@@ -353,9 +323,7 @@ them twice — once cheaply before staging, and once for real, after.
    path. `add -f keys/` has no filename filter, unlike the zip route's
    `--include-keys`, so it stages whatever is actually in `keys/`.
    **Read what got staged instead of guessing at it with a filename
-   pattern** — a hand-written pathspec missed a plain `keys/.envrc` in
-   testing, and the fix is to stop predicting and just ask git:
-   `git -C <workspace> diff --cached --name-only -- keys/`. This lists
+   pattern:** `git -C <workspace> diff --cached --name-only -- keys/`. This lists
    every path under `keys/` now staged, whatever it's named, so no pattern
    anyone forgot to write can let something through silently. Name the
    whole list to the owner. `keys/AGENTS.md` is the one entry that's always
@@ -399,7 +367,7 @@ them twice — once cheaply before staging, and once for real, after.
    confirms, it never adds. Show the URL to the owner and get a fresh yes,
    right now, that it is their private remote — never rely on what was
    said earlier in this session or a previous one. A value they don't
-   recognize, or any hesitation, means stop, never push there silently.
+   recognise, or any hesitation, means stop, never push there silently.
 7. Say once more, plainly, and get an explicit yes right before the push:
    this puts the owner's journal, their notes about the people around them,
    and everything in `.joserah/personal/` on that remote, for good. Question
@@ -414,28 +382,11 @@ them twice — once cheaply before staging, and once for real, after.
    ```
    (PowerShell: `$branch = git -C <workspace> rev-parse --abbrev-ref HEAD; git -C <workspace> push -u origin $branch`)
 
-   **This flow does not rename branches, and never runs
-   `git branch -M main`.** A rename-then-push can silently push the wrong
-   content: verified — on a repo where `master` holds a brand-new snapshot
-   commit and an older, unrelated `main` branch already exists, a guard
-   that only renames "if `main` doesn't already exist" correctly declines
-   to rename, but the *next* line still pushes `origin main` — which is
-   the stale branch, not the one just committed to. The owner is told the
-   backup succeeded while the actual snapshot never left the machine.
-   Determining and pushing the current branch by name has no such failure
-   mode: whatever `git init` produced — `main` on current git, `master` on
-   older git, or a name from `init.defaultBranch` — is what holds the
-   commit, so it's what gets pushed, every time, first backup or
-   thousandth. The **scope reset** (last section of this skill) is the one
-   documented exception: it renames deliberately, onto the *recorded
-   original* branch name rather than a guessed or hardcoded one, only with
-   the owner's fresh consent for that specific push — the failure mode
-   above is a rename that guesses wrong or only sometimes fires; the scope
-   reset's rename always fires and always targets the name read from git
-   a moment before, so it does not reintroduce it.
+   This flow never renames branches: push the current branch by name. The scope reset is the one
+   exception.
 
-**Pushing is the owner's decision every time.** Show the command and let them
-run it, or ask before running it yourself. Never push unprompted.
+**Pushing is the owner's decision every time.** Ask in plain words before running it; never push
+unprompted.
 
 ### Second machine
 
@@ -443,16 +394,9 @@ run it, or ask before running it yourself. Never push unprompted.
 git clone <private-remote> <target>
 ```
 
-Verify this actually checked out files before trusting it. Step 8's push
-sets up local tracking only — it never changes which branch a bare remote
-treats as its default, and that default keeps pointing at whatever `git
-init` picked on the remote side until something explicitly changes it. When
-that default names a branch the backup never pushed, a plain clone prints
-`warning: remote HEAD refers to nonexistent ref, unable to checkout` and
-leaves `<target>` holding only a `.git` directory, no files (verified
-against a real bare remote). Do not read an empty `<target>` as an empty
-workspace. Fix it by reading which branch the remote actually holds, never
-by guessing a name:
+Verify the clone checked out files; if not, see below. A clone that leaves `<target>` holding only
+`.git` means the remote's default branch is one the backup never pushed. Read which branch it
+holds, never guess:
 
 ```
 git ls-remote --heads <private-remote>

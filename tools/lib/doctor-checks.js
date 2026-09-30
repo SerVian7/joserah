@@ -69,6 +69,8 @@ function versionAtLeast(version, min) {
 // check below) and must never hang there, so that one call carries its own
 // short deadline.
 const FETCH_TIMEOUT_MS = 10000;
+// The relocate warns print a command that runs from anywhere: the plugin's own copy, by absolute path.
+const RELOCATE = path.join(__dirname, '..', 'relocate.js');
 
 function gitIn(dir, argv) {
   const r = spawnSync('git', ['-C', dir, ...argv], { encoding: 'utf8' });
@@ -249,7 +251,7 @@ const CHECKS = [
     remedies: [
       {
         key: '`legacy .joserah/knowledge/raw present` warn',
-        text: 'Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations. Doctor\'s own `run:` text for this warn is plugin-relative (`node tools/relocate.js ...`) and only resolves from inside the plugin\'s own directory; use the `${CLAUDE_PLUGIN_ROOT}` form above instead.',
+        text: 'Run `node "${CLAUDE_PLUGIN_ROOT}/tools/relocate.js" <workspace>` — one command carries the source material from whichever historical location the workspace is frozen at all the way to `imports/` at the workspace root, rewriting the links that cited the old locations.',
       },
     ],
     // Source material used to live under .joserah/knowledge/raw, and later at
@@ -262,7 +264,7 @@ const CHECKS = [
       const legacyRaw = path.join(root, '.joserah', 'knowledge', 'raw');
       if (fs.existsSync(legacyRaw) && fs.readdirSync(legacyRaw).length) {
         return warn('legacy .joserah/knowledge/raw present',
-          `source material now lives in imports/ at the workspace root — run: node tools/relocate.js ${root}`);
+          `source material now lives in imports/ at the workspace root — run: node "${RELOCATE}" ${root}`);
       }
       return null;
     },
@@ -283,7 +285,7 @@ const CHECKS = [
       const legacyRootRaw = path.join(root, 'raw');
       if (fs.existsSync(legacyRootRaw) && fs.readdirSync(legacyRootRaw).some((e) => e !== 'README.md')) {
         return warn('legacy raw/ at the workspace root',
-          `source material now lives in imports/ — run: node tools/relocate.js ${root}`);
+          `source material now lives in imports/ — run: node "${RELOCATE}" ${root}`);
       }
       return null;
     },
@@ -464,7 +466,7 @@ const CHECKS = [
       const root = path.resolve(pluginDir, '..');
       const skills = path.join(os.homedir(), '.claude', 'skills');
       const link = path.join(skills, 'joserah');
-      const move = `link a git checkout of Joserah as ${link} (README, "Upgrading from 0.13.x"), then restart Claude Code`;
+      const move = `link a git checkout of Joserah as ${link} (CHANGELOG.md, 0.14.0), then restart Claude Code`;
       if (root.startsWith(path.join(os.homedir(), '.claude', 'plugins') + path.sep)) {
         return warn('plugin loaded from the skills dir', `loaded from a copy in the plugin cache (${root}) — uninstall it, ${move}`);
       }
@@ -850,7 +852,7 @@ const CHECKS = [
     remedies: [
       {
         key: '`marketplace clone diverged from its remote` warn',
-        text: "The plugin's own repository had its history rewritten and force-pushed, so this machine's marketplace clone can no longer fast-forward: the `git pull --ff-only` that refreshes it fails every time and the owner silently stops receiving updates. Say so plainly, then offer either `git -C <clone> fetch origin` followed by `git -C <clone> reset --hard origin/main` — which discards any local change in the clone, so say that too — or removing and re-adding the marketplace in Claude Code.",
+        text: "The plugin's own repository had its history rewritten and force-pushed, so this machine's marketplace clone can no longer fast-forward: the `git pull --ff-only` that refreshes it fails every time and the owner silently stops receiving updates. Say so plainly, then offer to repair the clone (it discards any local change there, so say that too), or removing and re-adding the marketplace in Claude Code.",
       },
     ],
     // A force-push upstream leaves `pull --ff-only` refusing forever, and

@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Use only inside a Joserah workspace — a folder with a `.joserah/config.json` marker at or above the working directory — when a user correction or confirmation reveals a non-obvious preference or rule worth remembering across sessions. Captures the rule + reason + edge cases into that workspace's `.joserah/learned.md` and (if it is about the user themselves) `.joserah/personal/profile.md`. Not for ordinary code repositories: outside a Joserah workspace there is nowhere for it to write, and it stops.
+description: Use only inside a Joserah workspace, when the main session hands over a batch of corrections or preferences to write into `.joserah/learned.md` and, for facts about the owner, `.joserah/personal/profile.md`. Outside a Joserah workspace it writes nothing and stops.
 tools: Read, Edit, Write, Glob, Grep
 ---
 
@@ -11,12 +11,9 @@ directory or any directory above it. If there is none, this is not a Joserah
 workspace: stop, write nothing, and say so in one line. Every path below is
 relative to the workspace root you found.
 
-## Triggers (when the orchestrator should spawn you)
+## When you are used (only when the main session hands you a batch)
 
-- User corrects the approach ("no", "don't", "stop doing X")
-- User confirms a non-obvious choice ("yes exactly", "that's right", "perfect")
-- User states a preference ("I always do X", "I always prefer Y")
-- User reveals a personal fact about themselves (work, family, health, schedule, hobby, gear)
+A single correction or preference is written inline by the main session (AGENTS.md §5). You are used only when several learnings have piled up, for example at a handoff, and the main session passes them to you as a list.
 
 ## What you do
 

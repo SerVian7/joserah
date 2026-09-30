@@ -1,6 +1,6 @@
 ---
 name: import
-description: Use when someone has existing notes, exports, documents or a large pasted dump they want brought into their Joserah workspace, or asks to import, migrate, or ingest their old data.
+description: Use when the owner wants existing notes, exports or documents brought into the workspace, or asks to import, migrate or ingest old data. Not for a pasted mail or log that is to be read or answered.
 ---
 
 # Import existing material
@@ -12,9 +12,8 @@ without inventing anything.
 
 **Sources are copied verbatim into `imports/` at the workspace root. Nothing else is.**
 
-`imports/` is normally off-limits to the AI, because a knowledge base
-that cites its own generated content rots. Import is the one sanctioned
-writer, and only for the owner's own source material, byte-for-byte. Anything
+`imports/` holds the owner's source material verbatim. The assistant reads it freely and never
+edits it. Import is the one skill that writes there, and only byte-for-byte copies. Anything
 you *derive* — summaries, extracted tasks, people pages — goes to its proper
 home and cites the raw copy by relative path.
 
@@ -66,19 +65,8 @@ is the referee.
 
 ### Anything under `projects/` is outside backup
 
-`projects/` is excluded from the backup archive and gitignored in the
-workspace repo. That is right for a real code checkout, which carries its own
-git history — and wrong for a `docs/status.md` that Joserah itself just wrote
-there, which then exists on exactly one disk, covered by neither safety
-mechanism.
-
-So, before writing anything into `projects/`: **say that plainly and ask.**
-Offer the two honest alternatives — put the material in `.joserah/knowledge/` instead,
-where backup covers it, or keep it in `projects/` and give that
-project folder its own git repo. Do not decide for them, and never present the
-exclusion as harmless. The raw copy in `imports/` at the workspace root is never
-backed up either way — that folder sits outside `.joserah/` by design; the
-derived status note's backup coverage is what actually depends on this choice.
+Before writing into `projects/`, say plainly that it is outside every backup, and offer
+`.joserah/knowledge/` instead or a git repository for that project. The owner decides.
 
 Merge rather than overwrite. If `.joserah/knowledge/people/ali-veli.md` already exists, add to it
 and keep the existing content — never replace a file you did not create in
@@ -86,16 +74,8 @@ this run.
 
 ## 4. Write the report
 
-`imports/<date>-<label>/REPORT.md` at the workspace root. **Write the report in the
-owner's dialogue language** (`dialogueLanguage` in `.joserah/config.json`) —
-it is written for them to read, not for the repository. This is a deliberate
-choice, not an oversight: `imports/` sits outside the repository backup, so this
-report — the only durable record of what an import took and skipped — is not
-carried by the repository route either. It stays here anyway, next to the
-sources it describes, rather than being split into `.joserah/` where the
-backup would reach it; splitting one import bundle across two trees costs
-more than it buys. Keep the headings in English so the shape stays consistent
-across workspaces:
+`imports/<date>-<label>/REPORT.md`, in the owner's `dialogueLanguage` with English headings. It
+stays beside its sources, although `imports/` is outside the repository backup:
 
 ```markdown
 # Import — <date> — <label>
@@ -118,14 +98,9 @@ Files copied: N (M MB)
 
 ## 5. Verify
 
-Run `node .joserah/tools/verify-links.js` from the workspace root — the workspace's own
-copy. (`doctor.js` runs the plugin's own copy of this script, not the
-workspace's, precisely so a stale or missing workspace copy can never blind
-that check — see its `local verify-links.js current` check.) Every citation
-you just wrote must resolve. `verify-links` deliberately does not scan `imports/`
-— imported snapshots keep their broken internal links as historical fact.
-Only links **you wrote** in derived files count. Then show the owner the
-report's summary and ask them to check the unclassified pile.
+Run `node .joserah/tools/verify-links.js` from the workspace root. Every citation you wrote must
+resolve; links inside `imports/` are not checked. Then show the owner the report's summary and
+ask them to check the unclassified pile.
 
 ## Rules
 
