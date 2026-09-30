@@ -39,7 +39,7 @@ If it prints nothing, ask once and write the name, lowercase, into `.memory/me`.
   decision: a dated purchase or operating decision inside that member's own responsibility, with who decided
   and when — that goes into `knowledge/` as `[decision]`. An idea, a wish, a plan not yet acted on, 'let's do
   X' talk stays in `members/<member>/notes/` until the team decides, and never becomes a record.
-- A procedure that was run against a system and worked goes in as a script under `tools/<system>/` (Node by default, PowerShell only where the host is Windows-only; no secret inside; a header says what it does, which secret names it needs — `getSecret('PEPLINK_PASSWORD', '<company>.peplink.password')` from `tools/lib/secret.js` — who verified it and when). Every member uses the same secret names in their own vault; `tools/<system>/README.md` lists them.
+- Record first, script later. What was verified against a system — endpoints, the login flow, parameters, traps, what the API cannot do, the date and condition — goes in as a record, never as a script written by an assistant. A script enters `tools/<system>/` only when a sweep decides it (§5), built from a recorded, verified procedure; it holds no secret — `getSecret(envName, vaultName)` from `tools/lib/secret.js` takes the value from an environment variable, the member's Joserah vault, or a hidden prompt — and its header says what it does, which secret names it needs and who verified the procedure, when. Every member uses the same secret names; `tools/<system>/README.md` lists them. Node by default, PowerShell only where the host is Windows-only.
 - Never a secret. Where a credential lives may be recorded; its value never, not even masked.
 - Content records in {{LANGUAGE}}; file names, headings and keys in English. READMEs are English.
 - A report, page or mail about {{COMPANY}} uses `.brand/` (logo, colours, report template) whenever it
@@ -57,6 +57,8 @@ Merge `inbox/` into `knowledge/` (each note into the record of what it is about)
 strike superseded claims, update `desk/tasks/now.md`, delete merged inbox files, run
 `node tools/verify-links.js` and `node tools/claims.js`, then `node tools/sweep-due.js --stamp` and
 `node tools/sync.js --push --sweep`.
+
+From the R&D records merged in this sweep, list tool proposals — a procedure recorded and verified more than once, or run by hand repeatedly, is a candidate — in `desk/tools-proposed.md` (one line each: system, what it would do, which records back it). A proposal becomes a script only when the sweeper and the member who verified it agree; the sweep that does it notes the decision in the record.
 
 Before merging, count the claim lines in the inbox notes; after merging every one of them stands in
 `knowledge/` verbatim — a claim line travels as it is, never rewritten, summarised or dropped;

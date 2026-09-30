@@ -3,6 +3,12 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.4
+
+**Record first, script later.** What was verified against a system (endpoints, login flow, parameters, traps, what the API cannot do, date and condition) enters the shared memory as a record, never as a script an assistant wrote. At every sweep the sweeper lists tool proposals from the accumulated R&D records in `desk/tools-proposed.md`; a final sweep compiles the agreed ones into `tools/<system>/`, built from a recorded, verified procedure and holding no secret. Node by default, PowerShell only where the host is Windows-only.
+
+**A member's push carries a refreshed memory.** `sync.js --push` now also commits and pushes `AGENTS.md`, `README.md` and `tools/**` after `--refresh-memory`, so a non-sweeper member can land them; the push notice lists them marked `(refresh)`.
+
 ## 0.15.3
 
 **A commit signs itself.** A commit message ends with one signature line, `<model> <effort> — Joserah <role>` — the main session signs Orchestrator, a subagent Worker (for example `Claude Fable 5.1 High — Joserah Orchestrator`); never a `Co-Authored-By` trailer. Prompt v14.

@@ -146,3 +146,13 @@ Three numbers, the cost and one list, in their language, in a few lines:
 
 That last list is the point of the whole exercise. A sweep that reports only "clean" and leaves
 its questions in a file has not reported anything.
+
+## 7. Shared memory sweep
+
+When the sweep is a shared memory's (the sweeper merging `inbox/` into `knowledge/`), one more thing
+is derived at every sweep: **tool proposals**. From the R&D records merged in the run, list the
+procedures recorded and verified more than once, or run by hand repeatedly, in `desk/tools-proposed.md`
+— one line each: system, what it would do, which records back it. **Record first, script later**:
+assistants never write a script on their own; verified findings enter as records, and a final sweep
+compiles the accepted proposals into `tools/<system>/`, only where the sweeper and the member who
+verified the procedure agree. The sweep that does it notes the decision in the record.

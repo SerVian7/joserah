@@ -134,3 +134,27 @@ test('getSecret: env first, then the workspace vault, else an error without a te
   fs.cpSync(dir, shared, { recursive: true });
   assert.strictEqual(getSecretIn(shared, {}).stdout, 'got:vault:acme.t.pw');
 });
+
+test('sync --push: a non-sweeper push also carries a refreshed AGENTS.md, README.md and tools/**', (t) => {
+  const dir = memory(t);
+  const bare = path.join(tmpdir(t), 'up.git');
+  const g = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_ENV } });
+  g(dir, 'init', '-q', '-b', 'main'); g(dir, 'add', '-A'); g(dir, 'commit', '-qm', 'init');
+  assert.strictEqual(g(tmpdir(t), 'init', '-q', '--bare', bare).status, 0);
+  g(dir, 'remote', 'add', 'origin', bare); g(dir, 'push', '-q', '-u', 'origin', 'main');
+  fs.mkdirSync(path.join(dir, '.memory'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.memory', 'me'), 'bora\n');
+  fs.appendFileSync(path.join(dir, 'tools', 'sync.js'), '\n// refreshed\n');
+  fs.appendFileSync(path.join(dir, 'AGENTS.md'), '\nrefreshed\n');
+  fs.mkdirSync(path.join(dir, 'members', 'bora'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'members', 'bora', 'note.md'), '# Note\n');
+  const n = node(dir, tool(dir, 'sync.js'), ['--push']);
+  assert.strictEqual(n.status, 3, n.stderr + n.stdout);
+  assert.match(n.stdout, /tools\/sync\.js \(modified\)[^\n]*\(refresh\)/);
+  assert.match(n.stdout, /AGENTS\.md \(modified\)[^\n]*\(refresh\)/);
+  assert.match(n.stdout, /members\/bora\/note\.md/);
+  const y = node(dir, tool(dir, 'sync.js'), ['--push', '--yes']);
+  assert.strictEqual(y.status, 0, y.stderr + y.stdout);
+  const up = g(bare, 'show', '--stat', '--format=', 'main').stdout;
+  assert.match(up, /tools\/sync\.js/); assert.match(up, /AGENTS\.md/); assert.match(up, /members\/bora\/note\.md/);
+});

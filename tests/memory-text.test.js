@@ -27,7 +27,11 @@ test('memory README: works without Joserah, with git and Node', () => {
 
 test('memory AGENTS.md: verified procedures live as scripts that hold no secret', () => {
   const text = read('AGENTS.md');
-  assert.ok(text.includes("A procedure that was run against a system and worked goes in as a script under `tools/<system>/` (Node by default, PowerShell only where the host is Windows-only; no secret inside;"));
-  assert.ok(text.includes("Every member uses the same secret names in their own vault; `tools/<system>/README.md` lists them."));
+  assert.ok(text.includes("Record first, script later. What was verified against a system"));
+  assert.ok(text.includes("A script enters `tools/<system>/` only when a sweep decides it (§5), built from a recorded, verified procedure; it holds no secret"));
+  assert.ok(text.includes("Node by default, PowerShell only where the host is Windows-only."));
+  assert.ok(text.includes("From the R&D records merged in this sweep, list tool proposals"));
+  assert.ok(text.includes("`desk/tools-proposed.md`"));
+  assert.ok(text.includes("Every member uses the same secret names; `tools/<system>/README.md` lists them."));
   assert.ok(read('README.md').includes('they never contain a secret, they ask for it or take it from your vault.'));
 });

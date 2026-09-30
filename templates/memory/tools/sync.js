@@ -84,7 +84,8 @@ if (flag('--sweep')) {
   git('add', '-A');
   subject = `${me}: sweep ${today}`;
 } else {
-  for (const p of [path.join('members', me), 'inbox', 'questions']) {
+  // AGENTS.md, README.md and tools/ arrive from --refresh-memory; a member's push carries them too.
+for (const p of [path.join('members', me), 'inbox', 'questions', 'AGENTS.md', 'README.md', 'tools']) {
     if (fs.existsSync(path.join(root, p))) git('add', '--', p);
   }
 }
@@ -96,7 +97,8 @@ const changes = git('diff', '--cached', '--name-status', base).stdout.split(/\r?
   const status = st[0] === 'A' ? 'added' : st[0] === 'D' ? 'deleted' : 'modified';
   let what = '';
   try { what = fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/).map((x) => x.replace(/^#+\s*/, '').trim()).find(Boolean) || ''; } catch { /* deleted */ }
-  return `  ${file} (${status})${what ? ` - ${what.slice(0, 80)}` : ''}`;
+  const refresh = /^(AGENTS\.md|README\.md|tools\/)/.test(file) ? ' (refresh)' : '';
+  return `  ${file} (${status})${what ? ` - ${what.slice(0, 80)}` : ''}${refresh}`;
 });
 if (!changes.length && (!hasUpstream || git('rev-list', '--count', '@{u}..HEAD').stdout.trim() === '0')) {
   console.log('nothing new to push');

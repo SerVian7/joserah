@@ -91,7 +91,7 @@ machine and pushes only after you say yes. One person, the sweeper, merges the i
 `knowledge/`, so commits never collide. Nothing personal and no password goes in. The briefing shows,
 for each memory, whether it is up to date, whether a sweep is due, and your open items there.
 The memory works without Joserah: anyone with git and Node can use it, and every pull runs its own
-link and claim-line checks. When a member who has Joserah updates it, their update refreshes the
+link and claim-line checks. Verified procedures go in as records; tools are proposed at sweeps and written only from records (Node by default, PowerShell only where the host is Windows-only). When a member who has Joserah updates it, their update refreshes the
 memory's tools and rules and pushes them after the usual notice.
 
 ## Skills
