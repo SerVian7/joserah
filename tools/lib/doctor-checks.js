@@ -26,6 +26,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { spawnSync } = require('child_process');
 const { denyFor, hostPathsFor, defaultTrustFor } = require('./permission-deny');
 const { HIDDEN_KEEP_NAMES, ALWAYS_IN_SCOPE, scopeFrom } = require('./untouchable');
@@ -446,6 +447,36 @@ const CHECKS = [
           .replace(/^﻿/, '')).version;
       return check('workspace/plugin version', true,
         `workspace created by ${cfg && cfg.createdByPluginVersion || 'unknown'}, plugin is ${pluginVersion}`);
+    },
+  },
+
+  {
+    id: 'plugin-location',
+    remedies: [],
+    // 0.14.0: Claude Code loads the plugin from a git checkout linked into
+    // ~/.claude/skills/ (joserah@skills-dir). Node resolves our own path
+    // through that link, so the question asked is the other way round: does
+    // any entry in the skills dir resolve to the checkout doctor runs from?
+    // A warn, never a FAIL: AGENTS.md-only mode (Antigravity, other tools)
+    // has no link on purpose.
+    run({ pluginDir }) {
+      const real = (p) => { try { return fs.realpathSync.native(p); } catch { return null; } };
+      const root = path.resolve(pluginDir, '..');
+      const skills = path.join(os.homedir(), '.claude', 'skills');
+      const link = path.join(skills, 'joserah');
+      const move = `link a git checkout of Joserah as ${link} (README, "Upgrading from 0.13.x"), then restart Claude Code`;
+      if (root.startsWith(path.join(os.homedir(), '.claude', 'plugins') + path.sep)) {
+        return warn('plugin loaded from the skills dir', `loaded from a copy in the plugin cache (${root}) — uninstall it, ${move}`);
+      }
+      const target = real(root);
+      let entries = [];
+      try { entries = fs.readdirSync(skills); } catch { /* no skills dir */ }
+      const via = entries.find((e) => real(path.join(skills, e)) === target);
+      if (via && fs.existsSync(path.join(target, '.git'))) {
+        return check('plugin loaded from the skills dir', true, `${path.join(skills, via)} → ${target}`);
+      }
+      return warn('plugin loaded from the skills dir',
+        `${target} is not linked from ${skills} — fine in AGENTS.md-only mode; for Claude Code, ${move}`);
     },
   },
 

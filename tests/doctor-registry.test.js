@@ -29,6 +29,7 @@ const FRESH_ORDER = [
   'CLAUDE.md imports the standing layers',
   'standing context size',
   'workspace/plugin version',
+  'plugin loaded from the skills dir',
   'format version',
   'prompt (AGENTS.md) current',
   'local verify-links.js current',

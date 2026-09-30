@@ -68,9 +68,8 @@ The plugin's version lives in three hand-written places and they must agree:
 - `.claude-plugin/marketplace.json` → `metadata.version`
 - `.claude-plugin/marketplace.json` → `plugins[0].version`
 
-Every release bumps the number, however small: `claude plugin update` copies the
-plugin into its cache again only when `plugin.json`'s version changed, so an
-unbumped release never reaches a running session.
+Every release bumps the number, however small: workspaces record the version
+that built them, and `/joserah:update` migrates by comparing against it.
 
 To cut a release: change all three to the new number, add a
 `### Upgrading to <version>` section to `README.md` saying what changed for

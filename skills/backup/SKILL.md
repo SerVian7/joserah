@@ -15,11 +15,9 @@ before doing anything else.
 > syntax, not an environment lookup, and expands to nothing — leaving you
 > running `node "/tools/…"`. Verify the path before relying on it:
 > `node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "<path>"`.
-> If it is empty or missing, locate the plugin under the user's Claude plugin
-> cache — `~/.claude/plugins/cache/<marketplace>/joserah/<version>/`, on
-> Windows `%USERPROFILE%\.claude\plugins\cache\…` — and use that absolute
-> path. A command that failed because the path was empty is a failure: say so
-> rather than reporting the step as done.
+> If it is empty or missing, use `~/.claude/skills/joserah` (Windows
+> `%USERPROFILE%\.claude\skills\joserah`), the linked checkout. A command that failed because the
+> path was empty is a failure: say so rather than reporting the step as done.
 
 ## 1. Ask first, always
 

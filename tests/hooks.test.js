@@ -19,7 +19,7 @@ function hookWs(t) {
 // from CLAUDE_CONFIG_DIR, and must never see the developer's real clone here.
 function runHook(name, cwd, stdin, configDir, args) {
   return spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', name), ...(args || [])],
-    { cwd, input: stdin, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir || HERMETIC_CONFIG_DIR } });
+    { cwd, input: stdin, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir || HERMETIC_CONFIG_DIR, CLAUDE_PLUGIN_ROOT: '' } });
 }
 
 test('M1: session-brief on a fresh workspace reports no changed files', (t) => {
@@ -329,17 +329,6 @@ test('session-brief leaves a hand-edited AGENTS.md alone and only reports the ne
   assert.match(r.stdout, /\[update\] Prompt v42 is available but this workspace's AGENTS\.md was hand-edited/);
   assert.match(r.stdout, /joserah:update/);
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /my own rule/);
-});
-
-test('session-brief reports a newer plugin in the marketplace clone without touching anything', (t) => {
-  const dir = hookWs(t);
-  const installed = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
-  const promptV = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).promptVersion;
-  const r = runHook('session-brief.js', dir, undefined, fakeMarketplace(t, promptV, null, { pluginVersion: '99.0.0' }));
-  assert.strictEqual(r.status, 0, r.stderr);
-  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-  assert.ok(ctx.includes(`[update] Joserah plugin 99.0.0 is available (installed: ${installed})`), ctx);
-  assert.doesNotMatch(ctx, /refreshed to prompt/);
 });
 
 // ---- the two standing layers are injected, not pointed at (0.7.0) ------------
@@ -844,9 +833,8 @@ test('today\'s journal is capped: its head and its tail arrive, the middle is an
 test('the [update] and [backup] lines come before the learnings, so a cut drops learnings first', (t) => {
   const dir = hookWs(t);
   overlongBrief(dir);
-  const promptV = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).promptVersion;
-  const ctx = brief(dir, fakeMarketplace(t, promptV, null, { pluginVersion: '99.0.0' }));
-  assert.match(ctx, /\[update\] Joserah plugin 99\.0\.0/, 'the update line survived the cut');
+  const ctx = brief(dir, fakeMarketplace(t, 999));
+  assert.match(ctx, /\[update\] The standing instructions were refreshed to prompt v999/, 'the update line survived the cut');
   assert.match(ctx, /\[backup\]/, 'the backup line survived the cut');
   assert.ok(ctx.indexOf('[backup]') < ctx.indexOf('### Recent learnings'));
   assert.ok(ctx.indexOf('[update]') < ctx.indexOf('### Recent learnings'));
@@ -885,28 +873,24 @@ test('the untouched journal stub is neither briefed nor counted as a change', (t
   assert.match(third, /\[backup\] 1 file/, 'a real entry is a change');
 });
 
-// ---- 0.13.5: the plugin runs from its own git checkout ----------------------
-// Installed from a `directory` marketplace, the plugin loads in place and
-// CLAUDE_PLUGIN_ROOT is the checkout itself, so "is there an update" is a git
-// question: commits upstream that HEAD does not have. Local repos only — a
-// bare repo in a temp dir stands in for the remote, nothing reaches a network.
+// ---- 0.14.0: the plugin is a git checkout linked into ~/.claude/skills -------
+// Loaded in place as joserah@skills-dir, CLAUDE_PLUGIN_ROOT is the link, and an
+// update is commits upstream that the checkout's HEAD lacks. The hook fetches
+// once a day and never pulls; /joserah:update pulls. Local repos only — a bare
+// repo in a temp dir stands in for the remote, nothing reaches a network.
 function git(cwd, ...args) {
   const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'init.defaultBranch=main', ...args],
     { cwd, encoding: 'utf8' });
   assert.strictEqual(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout;
 }
-function inPlaceCheckout(t, ahead) {
+function checkoutBehind(t, ahead) {
   const base = tmpdir(t);
   const upstream = path.join(base, 'upstream.git');
   const checkout = path.join(base, 'joserah');
   git(base, 'init', '--bare', '-q', upstream);
   git(base, 'clone', '-q', upstream, checkout);
-  for (const d of ['hooks', 'tools', 'templates', '.claude-plugin']) {
-    fs.cpSync(path.join(PLUGIN_ROOT, d), path.join(checkout, d), { recursive: true });
-  }
-  git(checkout, 'add', '-A');
-  git(checkout, 'commit', '-q', '-m', 'base');
+  git(checkout, 'commit', '-q', '--allow-empty', '-m', 'base');
   git(checkout, 'push', '-q', '-u', 'origin', 'HEAD');
   if (ahead) {
     const other = path.join(base, 'other');
@@ -914,148 +898,43 @@ function inPlaceCheckout(t, ahead) {
     for (let i = 0; i < ahead; i++) git(other, 'commit', '-q', '--allow-empty', '-m', `upstream ${i}`);
     git(other, 'push', '-q', 'origin', 'HEAD');
   }
-  const configDir = path.join(base, 'config');
-  fs.mkdirSync(path.join(configDir, 'plugins'), { recursive: true });
-  fs.writeFileSync(path.join(configDir, 'plugins', 'known_marketplaces.json'),
-    JSON.stringify({ joserah: { source: { source: 'directory', path: checkout }, installLocation: checkout } }, null, 2));
-  return { checkout, configDir };
+  return { base, checkout };
 }
-function briefFrom(checkout, ws, configDir) {
-  const r = spawnSync(process.execPath, [path.join(checkout, 'hooks', 'session-brief.js')],
-    { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir } });
-  assert.strictEqual(r.status, 0, r.stderr);
-  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+function briefAt(pluginRoot, ws) {
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'joserah-brief-tmp-'));
+  try {
+    const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js')],
+      { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: HERMETIC_CONFIG_DIR,
+        CLAUDE_PLUGIN_ROOT: pluginRoot, TEMP: tmp, TMP: tmp, TMPDIR: tmp } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
 
-test('an in-place checkout behind its upstream says how many commits, and names /joserah:update', (t) => {
-  const { checkout, configDir } = inPlaceCheckout(t, 2);
-  const ctx = briefFrom(checkout, hookWs(t), configDir);
+test('a checkout behind its upstream says how many commits, and names /joserah:update', (t) => {
+  const { checkout } = checkoutBehind(t, 2);
+  const ctx = briefAt(checkout, hookWs(t));
   assert.match(ctx, /\[update\] Joserah has 2 new commits upstream — run \/joserah:update/);
-  assert.doesNotMatch(ctx, /Updating the plugin is theirs/, 'the plugin-manager path is gone for a checkout');
   assert.strictEqual(git(checkout, 'rev-list', '--count', 'HEAD..@{u}').trim(), '2', 'the hook fetched, it did not pull');
 });
 
-test('an in-place checkout level with its upstream says nothing about updates', (t) => {
-  const { checkout, configDir } = inPlaceCheckout(t, 0);
-  assert.doesNotMatch(briefFrom(checkout, hookWs(t), configDir), /\[update\]/);
+test('the checkout is found through the skills-dir link', (t) => {
+  const { base, checkout } = checkoutBehind(t, 1);
+  const link = path.join(base, 'skills', 'joserah');
+  fs.mkdirSync(path.dirname(link));
+  fs.symlinkSync(checkout, link, process.platform === 'win32' ? 'junction' : 'dir');
+  assert.match(briefAt(link, hookWs(t)), /\[update\] Joserah has 1 new commits upstream/);
 });
 
-// ---- 0.13.6: a directory marketplace still loads a cache copy ---------------
-// Measured on CLI 2.1.251: `installPath` is cache/joserah/joserah/<version>, a
-// real copy, so a pulled checkout is not what runs until the plugin is
-// re-copied. The hook compares the loaded copy's version with the checkout's.
-function directoryMarketplace(t, version) {
-  const base = tmpdir(t);
-  const checkout = path.join(base, 'checkout');
-  fs.mkdirSync(path.join(checkout, '.claude-plugin'), { recursive: true });
-  if (version) {
-    fs.writeFileSync(path.join(checkout, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'joserah', version }));
-  }
-  const configDir = path.join(base, 'config');
-  fs.mkdirSync(path.join(configDir, 'plugins'), { recursive: true });
-  fs.writeFileSync(path.join(configDir, 'plugins', 'known_marketplaces.json'),
-    JSON.stringify({ joserah: { source: { source: 'directory', path: checkout }, installLocation: checkout } }));
-  return configDir;
-}
-const LOADED = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
-
-// 0.13.8, reworked in 0.13.10: the hook re-copies the pulled checkout itself,
-// synchronously — a detached child of a short-lived hook died unseen in the
-// IDE. A fake `claude` the test controls records how it was called, and every
-// run gets its own temp dir and home, so no test can reach the real `claude`
-// or leave a stamp in the machine's real temp dir.
-function fakeClaude(t, exitCode = 0) {
-  const dir = tmpdir(t);
-  const log = path.join(dir, 'calls.log');
-  if (process.platform === 'win32') {
-    fs.writeFileSync(path.join(dir, 'claude.cmd'), `@echo %*>>"${log}"\r\n@exit /b ${exitCode}\r\n`);
-  } else {
-    fs.writeFileSync(path.join(dir, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\nexit ${exitCode}\n`, { mode: 0o755 });
-  }
-  return { dir, log };
-}
-function isolatedEnv(t, pathDir, home) {
-  const tmp = tmpdir(t);
-  home = home || tmpdir(t);
-  return {
-    tmp,
-    env: { ...process.env, PATH: pathDir, Path: pathDir, TEMP: tmp, TMP: tmp, TMPDIR: tmp,
-      HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming') },
-  };
-}
-function briefIn(ws, configDir, env) {
-  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js')],
-    { cwd: ws, encoding: 'utf8', env: { ...env, CLAUDE_CONFIG_DIR: configDir } });
-  assert.strictEqual(r.status, 0, r.stderr);
-  assert.doesNotMatch(r.stderr, /DEP0190/, 'no shell-with-args warning');
-  return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
-}
-const calls = (log) => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split(/\r?\n/).filter(Boolean) : []);
-const recopyStamps = (tmp) => fs.readdirSync(tmp).filter((f) => f.startsWith('joserah-recopied-'));
-
-test('a pulled checkout is re-copied at session start, once per version, then reported ready', (t) => {
-  const ws = hookWs(t);
-  const configDir = directoryMarketplace(t, '99.0.0');
-  const claude = fakeClaude(t);
-  const { tmp, env } = isolatedEnv(t, claude.dir);
-  const first = briefIn(ws, configDir, env);
-  assert.match(first, /\[update\] Joserah 99\.0\.0 was loaded into the plugin cache — restart Claude Code once to run it\./);
-  assert.deepStrictEqual(calls(claude.log).map((l) => l.trim()), ['plugin update joserah@joserah']);
-  assert.strictEqual(recopyStamps(tmp).length, 1, 'one stamp, keyed by checkout and version');
-  const diag = JSON.parse(fs.readFileSync(path.join(tmp, 'joserah-recopy-diag.json'), 'utf8'));
-  assert.strictEqual(path.dirname(diag.claudeFound), claude.dir);
-  assert.strictEqual(diag.platform, process.platform);
-  assert.ok('PATH' in diag && 'exitCode' in diag);
-  assert.ok(fs.existsSync(path.join(tmp, 'joserah-recopy.log')), 'the run is logged');
-
-  const second = briefIn(ws, configDir, env);
-  assert.match(second, /\[update\] Joserah 99\.0\.0 is ready — restart Claude Code to run it\./);
-  assert.strictEqual(calls(claude.log).length, 1, 'at most once per version');
+test('a checkout level with its upstream, or a plugin root that is no checkout, says nothing', (t) => {
+  const { checkout } = checkoutBehind(t, 0);
+  assert.doesNotMatch(briefAt(checkout, hookWs(t)), /\[update\]/);
+  assert.doesNotMatch(briefAt(tmpdir(t), hookWs(t)), /\[update\]/);
 });
 
-test('a failed re-copy leaves no stamp, names the log, and is tried again next session', (t) => {
-  const ws = hookWs(t);
-  const configDir = directoryMarketplace(t, '99.0.0');
-  const claude = fakeClaude(t, 1);
-  const { tmp, env } = isolatedEnv(t, claude.dir);
-  const ctx = briefIn(ws, configDir, env);
-  const logPath = path.join(tmp, 'joserah-recopy.log');
-  assert.ok(ctx.includes(`[update] Joserah 99.0.0 could not be loaded automatically (see ${logPath}) — run /joserah:update`), ctx);
-  assert.strictEqual(recopyStamps(tmp).length, 0);
-  briefIn(ws, configDir, env);
-  assert.strictEqual(calls(claude.log).length, 2, 'retried');
-});
-
-test('claude off PATH is found in its usual install place', (t) => {
-  const home = tmpdir(t);
-  const log = path.join(home, 'calls.log');
-  if (process.platform === 'win32') {
-    const npm = path.join(home, 'AppData', 'Roaming', 'npm');
-    fs.mkdirSync(npm, { recursive: true });
-    fs.writeFileSync(path.join(npm, 'claude.cmd'), `@echo %*>>"${log}"\r\n`);
-  } else {
-    const bin = path.join(home, '.local', 'bin');
-    fs.mkdirSync(bin, { recursive: true });
-    fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
-  }
-  const { env } = isolatedEnv(t, tmpdir(t), home);
-  const ctx = briefIn(hookWs(t), directoryMarketplace(t, '99.0.0'), env);
-  assert.match(ctx, /was loaded into the plugin cache/);
-  assert.strictEqual(calls(log).length, 1);
-});
-
-test('with no claude anywhere the brief falls back to the /joserah:update line and names the diag file', (t) => {
-  const { tmp, env } = isolatedEnv(t, tmpdir(t));
-  const ctx = briefIn(hookWs(t), directoryMarketplace(t, '99.0.0'), env);
-  const diagPath = path.join(tmp, 'joserah-recopy-diag.json');
-  assert.ok(ctx.includes(`[update] Joserah 99.0.0 is pulled but not loaded — run /joserah:update (claude not found; see ${diagPath})`), ctx);
-  assert.strictEqual(JSON.parse(fs.readFileSync(diagPath, 'utf8')).claudeFound, null);
-  assert.doesNotMatch(ctx, /Updating the plugin is theirs/);
-});
-
-test('a checkout at the loaded version, or with no plugin.json, says nothing', (t) => {
-  assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, LOADED)), /\[update\]/);
-  assert.doesNotMatch(brief(hookWs(t), directoryMarketplace(t, null)), /\[update\]/);
+test('nothing about marketplaces, cache copies or claude plugin update is left in the hook', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js'), 'utf8');
+  assert.doesNotMatch(text, /plugin update|recopy|known_marketplaces|pluginCheckout|findClaude/);
 });
 
 // ---- 0.13.7: a chain of tool calls with no word to the owner ---------------

@@ -56,22 +56,6 @@ function marketplaceClone(configDir) {
   return entry && typeof entry.installLocation === 'string' ? entry.installLocation : null;
 }
 
-// 0.13.6: the checkout Joserah is installed from, when that is a `directory`
-// marketplace — found by what it holds, not by the name it was added under.
-// Claude Code 2.1.251 still loads a copy of it from the plugin cache, so this
-// path and CLAUDE_PLUGIN_ROOT differ, and only this one is a git repository.
-function pluginCheckout(configDir = defaultConfigDir()) {
-  const known = readJson(path.join(configDir, 'plugins', 'known_marketplaces.json')) || {};
-  for (const [marketplace, entry] of Object.entries(known)) {
-    if (!entry || !entry.source || entry.source.source !== 'directory' || typeof entry.installLocation !== 'string') continue;
-    const manifest = readJson(path.join(entry.installLocation, '.claude-plugin', 'plugin.json'));
-    if (manifest && manifest.name === 'joserah') {
-      return { marketplace, path: entry.installLocation, version: typeof manifest.version === 'string' ? manifest.version : null };
-    }
-  }
-  return null;
-}
-
 function candidate(kind, dir) {
   if (!dir) return null;
   const file = path.join(dir, 'templates', 'AGENTS.md');
@@ -165,5 +149,5 @@ module.exports = {
   PROMPT_VERSION_RE, normalizeEol, readPromptVersion, promptSha,
   resolvePromptSource, promptState, decidePromptAction, installPrompt,
   marketplaceCloneDir: (configDir = defaultConfigDir()) => marketplaceClone(configDir),
-  pluginVersions, compareVersions, pluginCheckout,
+  pluginVersions, compareVersions,
 };

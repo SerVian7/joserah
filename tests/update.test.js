@@ -123,39 +123,3 @@ test('check-update reports a newer plugin in the marketplace clone as `newer`, s
   assert.strictEqual(none.available, null);
   assert.strictEqual(none.newer, null);
 });
-
-// 0.13.6: the skill pulls the checkout, not ${CLAUDE_PLUGIN_ROOT} — that is
-// the cache copy. check-update names the checkout and its marketplace.
-test('check-update names the directory-marketplace checkout and the marketplace it is registered as', (t) => {
-  const dir = path.join(tmpdir(t), 'ws');
-  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
-  const base = tmpdir(t);
-  const checkout = path.join(base, 'checkout');
-  fs.mkdirSync(path.join(checkout, '.claude-plugin'), { recursive: true });
-  fs.writeFileSync(path.join(checkout, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'joserah', version: '9.9.9' }));
-  fs.mkdirSync(path.join(base, 'plugins'));
-  fs.writeFileSync(path.join(base, 'plugins', 'known_marketplaces.json'),
-    JSON.stringify({ mine: { source: { source: 'directory', path: checkout }, installLocation: checkout } }));
-  const out = JSON.parse(runTool('check-update.js', [dir], { env: { CLAUDE_CONFIG_DIR: base } }).stdout);
-  assert.deepStrictEqual(out.checkout, { marketplace: 'mine', path: checkout, version: '9.9.9' });
-  assert.strictEqual(JSON.parse(runTool('check-update.js', [dir]).stdout).checkout, null);
-});
-
-// 0.13.10: the developer's checkout — a pull or a commit there re-copies the
-// plugin by itself, so one restart is all that is left. Installed by hand only.
-test('install-dev-hook writes marked post-merge and post-commit hooks, idempotently, and never a foreign one', (t) => {
-  const repo = tmpdir(t);
-  spawnSync('git', ['init', '-q', repo]);
-  const run = () => JSON.parse(runTool('install-dev-hook.js', [repo]).stdout);
-  assert.deepStrictEqual(run(), { 'post-merge': 'created', 'post-commit': 'created' });
-  for (const name of ['post-merge', 'post-commit']) {
-    const text = fs.readFileSync(path.join(repo, '.git', 'hooks', name), 'utf8');
-    assert.match(text, /^#!\/bin\/sh\n# joserah:dev-hook/);
-    assert.match(text, /claude plugin update joserah@joserah/);
-  }
-  assert.deepStrictEqual(run(), { 'post-merge': 'current', 'post-commit': 'current' });
-  fs.writeFileSync(path.join(repo, '.git', 'hooks', 'post-commit'), '#!/bin/sh\necho mine\n');
-  assert.deepStrictEqual(run(), { 'post-merge': 'current', 'post-commit': 'foreign' });
-  assert.strictEqual(fs.readFileSync(path.join(repo, '.git', 'hooks', 'post-commit'), 'utf8'), '#!/bin/sh\necho mine\n');
-  assert.strictEqual(runTool('install-dev-hook.js', [tmpdir(t)]).status, 1, 'not a git checkout');
-});

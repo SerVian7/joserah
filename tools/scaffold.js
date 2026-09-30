@@ -4,29 +4,20 @@
  * Usage: node scaffold.js --target DIR --workspace NAME
  *                         [--owner NAME] [--language LANG] [--role LINE] [--git] [--force]
  *                         [--trust owner|guest] [--kind home|hosted|shared] [--assistant NAME]
- *                         [--host-path DIR] [--consent-model NAME]
- *                         [--feedback auto|manual|off] [--github USER]
- *                         [--identity-mode auto|manual|off]
+ *                         [--host-path DIR] [--feedback auto|manual|off] [--github USER]
  *        node scaffold.js --settings-only --target DIR [--force]
  *        node scaffold.js --root-shell-only --target DIR
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
- *                         [--role LINE] [--consent-model NAME]
- *                         [--feedback auto|manual|off] [--github USER]
- *                         [--identity-mode auto|manual|off]
+ *                         [--role LINE] [--feedback auto|manual|off] [--github USER]
  *
- * `--feedback`/`--identity-mode` record whether the owner has been asked
- * about self-improvement feedback notes and about .joserah/agent.md keeping
- * itself current — same non-destructive rule as `--consent-model`: both are
- * accepted on both entry points, and omitting either flag on a later
- * --identity-only call leaves an existing block untouched rather than
- * clearing it. They differ on which entry point the install flow actually
- * uses, because the two questions sit at different points in the interview:
- * feedback is asked after consent, so the create call always runs first and
- * --identity-only is the only path that ever carries it for real; the
- * self-update question is asked before creation, alongside --trust and
- * --assistant, so the install flow passes --identity-mode on the main
- * create call instead — never held across the consent question, where a
- * "no" would otherwise drop an answer the owner already gave.
+ * 0.14.0: setup asks only what a newcomer can answer — location, the owner's
+ * name, the assistant's name, the language — and passes them on the create
+ * call. `--trust`, `--kind`, `--host-path` and `--feedback` stay for
+ * developers and are never asked. The consent record and the identity
+ * self-update mode are gone: nothing ever read either, and setup gives a
+ * one-line notice instead of a stored consent. `--feedback`, when given, is
+ * non-destructive: omitting it on a later --identity-only call leaves an
+ * existing block untouched.
  *
  * Refuses to touch a target where any file it would write already exists,
  * unless --force is given. Nothing is written until that check has passed.
@@ -121,7 +112,7 @@ const { FORMAT_VERSION, roleFor } = require('./lib/note-format');
 const { readPromptVersion, promptSha } = require('./lib/prompt');
 const { installClaudeMd } = require('../hooks/lib/standing-context');
 
-// `--feedback` and `--identity-mode` share one three-value vocabulary.
+// `--feedback` takes one of three values.
 // Defined once, up here, so both the main create path and --identity-only
 // (below) can validate before either writes a single byte — an unknown value
 // must be refused, never silently coerced or guessed.
@@ -256,7 +247,6 @@ if (args.identityOnly) {
   // them for real — validated before the profile.md/conventions.md rewrite
   // below touches a single file, same as the main path.
   validateThreeMode('feedback', args.feedback);
-  validateThreeMode('identity-mode', args['identity-mode']);
   const cfg = readJson(cfgPath);
   const owner = args.owner || '';
   const language = args.language || '';
@@ -287,21 +277,10 @@ if (args.identityOnly) {
   }
   cfg.ownerName = owner;
   cfg.dialogueLanguage = language;
-  // The install skill asks consent in the same dialogue turn as identity and
-  // submits both on this one call — see the note at the main config.json
-  // write below. Omitted here means the answer wasn't yes on this call; an
-  // existing consent record from an earlier call is left untouched.
-  if (args['consent-model']) {
-    cfg.consent = { askedOn: localISODate(), model: args['consent-model'], version: 1 };
-  }
-  // Same non-destructive rule as consent above: omitted here means the
-  // question wasn't asked on this call, not "off" — an existing block from an
-  // earlier call is left exactly as it was.
+  // Omitted here means not given on this call, not "off" — an existing block
+  // from an earlier call is left exactly as it was.
   if (args.feedback) {
     cfg.feedback = { mode: args.feedback, github: args.github || null, askedOn: localISODate() };
-  }
-  if (args['identity-mode']) {
-    cfg.identity = { mode: args['identity-mode'], askedOn: localISODate() };
   }
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
   console.log(JSON.stringify({ updated }));
@@ -348,7 +327,6 @@ if (args.trust !== 'owner' && args.trust !== 'guest') {
 // means never asked (see the config.json write below), so only a *given*
 // value is checked against the vocabulary.
 validateThreeMode('feedback', args.feedback);
-validateThreeMode('identity-mode', args['identity-mode']);
 
 const root = path.resolve(args.target);
 if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
@@ -489,18 +467,10 @@ fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify({
   kind: args.kind,
   ...(hosting ? { hosting } : {}),
   lastBackup: null,
-  // Recorded only when the install skill actually asked and got a yes. Absent
-  // means never asked — never write a consent record nobody gave.
-  ...(args['consent-model'] ? {
-    consent: { askedOn: today, model: args['consent-model'], version: 1 },
-  } : {}),
-  // Recorded only when the install skill actually asked. Absent means never
-  // asked; never write an opt-in nobody gave.
+  // Only when a developer passed --feedback. Absent means off; never write an
+  // opt-in nobody gave.
   ...(args.feedback ? {
     feedback: { mode: args.feedback, github: args.github || null, askedOn: today },
-  } : {}),
-  ...(args['identity-mode'] ? {
-    identity: { mode: args['identity-mode'], askedOn: today },
   } : {}),
 }, null, 2) + '\n', 'utf8');
 // Note: the capture hook also honours an optional `captureTriggers` array in

@@ -22,41 +22,34 @@ const { withinBudget } = require('./lib/standing-context');
 const ROOT = findWorkspace(process.cwd());
 if (!ROOT) process.exit(0);
 
-// The standing instructions travel apart from the plugin (tools/lib/prompt.js).
-// Once a day the marketplace clone is pulled — a plain git checkout, so this
-// is the one place a refresh needs no plugin update and no restart — and on
-// every session start a pristine-but-behind AGENTS.md is brought current on
-// the spot, exactly as refresh-prompt.js would do it: same shared decision,
-// so a hand-edited file is never touched here either, only reported. A newer
-// *plugin* is only ever reported: that update is the owner's to run.
+// The standing instructions travel apart from the plugin's code
+// (tools/lib/prompt.js): on every session start a pristine-but-behind
+// AGENTS.md is brought current on the spot, exactly as refresh-prompt.js would
+// do it — same shared decision, so a hand-edited file is never touched here,
+// only reported.
+// 0.14.0: the plugin is a git checkout linked into ~/.claude/skills and loaded
+// in place (joserah@skills-dir); CLAUDE_PLUGIN_ROOT is that link. An update is
+// commits upstream that the checkout lacks: fetched here once a day, never
+// pulled — pulling is /joserah:update's. No marketplace, no cache copy.
 // Everything here is best-effort — an update check must never break a
 // session start, so every failure is swallowed and produces no line.
-const CLONE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
-function maybeRefreshClone(lib, now) {
-  const clone = lib.marketplaceCloneDir();
-  if (!clone || !fs.existsSync(path.join(clone, '.git'))) return;
-  const stamp = path.join(os.tmpdir(), 'joserah-clone-refresh.stamp');
+const FETCH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+function ownCheckout() {
+  const root = process.env.CLAUDE_PLUGIN_ROOT;
+  if (!root) return null;
   try {
-    if (now.getTime() - fs.statSync(stamp).mtimeMs < CLONE_REFRESH_INTERVAL_MS) return;
-  } catch { /* no stamp yet */ }
-  // Stamped before the pull, so an unreachable remote is retried tomorrow,
-  // not on every session start today.
-  try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return; }
-  spawnSync('git', ['-C', clone, 'pull', '--ff-only', '--quiet'], { stdio: 'ignore', timeout: 8000 });
+    const real = fs.realpathSync(root);
+    return fs.existsSync(path.join(real, '.git')) ? real : null;
+  } catch { return null; }
 }
-// 0.13.5: installed from a `directory` marketplace, an update is commits
-// upstream that the checkout's HEAD lacks, and bringing them in is
-// /joserah:update's `git pull` — never this hook's, so the daily step is a
-// fetch, not a pull. 0.13.6: the loaded plugin is still a cache copy of that
-// checkout (measured on 2.1.251), so a checkout newer than this copy is the
-// second half: pulled, not yet loaded. Anything else keeps the old comparison.
 function commitsBehindLine(checkout, now) {
   const key = require('crypto').createHash('sha1').update(checkout).digest('hex').slice(0, 12);
   const stamp = path.join(os.tmpdir(), `joserah-fetch-${key}.stamp`);
   let fresh = false;
-  try { fresh = now.getTime() - fs.statSync(stamp).mtimeMs < CLONE_REFRESH_INTERVAL_MS; } catch { /* no stamp yet */ }
+  try { fresh = now.getTime() - fs.statSync(stamp).mtimeMs < FETCH_INTERVAL_MS; } catch { /* no stamp yet */ }
   if (!fresh) {
-    // Stamped first, for the same reason as the pull above.
+    // Stamped before the fetch, so an unreachable remote is retried tomorrow,
+    // not on every session start today.
     try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return null; }
     spawnSync('git', ['-C', checkout, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 8000 });
   }
@@ -65,84 +58,16 @@ function commitsBehindLine(checkout, now) {
   return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update. Tell the owner in one line, in their language.` : null;
 }
 
-// 0.13.8: a pulled checkout ahead of the loaded copy is re-copied here, so
-// nothing is left after a `git pull` but the restart. 0.13.10: synchronously —
-// a detached child of this short-lived hook died unseen in the IDE — capped at
-// 25 s, logged, and stamped only on success, so a failure is retried next
-// session. Once per checkout and version: the key is those two, nothing more.
-// `claude` on Windows is an npm `.cmd` shim, which only cmd.exe runs; the one
-// argument that varies is sanitised. The hooks docs name no variable for the
-// Claude executable, so the fallbacks are the usual install places.
-function findClaude() {
-  const win = process.platform === 'win32';
-  const exts = win ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
-  const home = os.homedir();
-  const dirs = (process.env.PATH || process.env.Path || '').split(path.delimiter).filter(Boolean);
-  if (win && process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, 'npm'));
-  dirs.push(path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'));
-  if (!win) dirs.push('/usr/local/bin');
-  for (const dir of dirs) {
-    for (const ext of exts) {
-      const p = path.join(dir, 'claude' + ext);
-      try { if (fs.statSync(p).isFile()) return p; } catch { /* not here */ }
-    }
-  }
-  return null;
-}
-function recopyLine(checkout) {
-  const v = checkout.version;
-  const tell = ' Tell the owner in one line, in their language.';
-  const tmp = os.tmpdir();
-  const diagPath = path.join(tmp, 'joserah-recopy-diag.json');
-  const logPath = path.join(tmp, 'joserah-recopy.log');
-  const claude = findClaude();
-  const marketplace = String(checkout.marketplace).replace(/[^A-Za-z0-9._-]/g, '');
-  const diag = { claudeFound: claude, PATH: process.env.PATH || process.env.Path || '', platform: process.platform,
-    shell: null, exitCode: null, error: null };
-  const writeDiag = () => { try { fs.writeFileSync(diagPath, JSON.stringify(diag, null, 2), 'utf8'); } catch { /* diagnostics only */ } };
-  if (!claude || !marketplace) {
-    writeDiag();
-    return `[update] Joserah ${v} is pulled but not loaded — run /joserah:update (claude not found; see ${diagPath}).${tell}`;
-  }
-  const key = require('crypto').createHash('sha1').update(`${checkout.path}\n${v}`).digest('hex').slice(0, 12);
-  const stamp = path.join(tmp, `joserah-recopied-${key}.stamp`);
-  if (fs.existsSync(stamp)) return `[update] Joserah ${v} is ready — restart Claude Code to run it.${tell}`;
-  const target = `joserah@${marketplace}`;
-  const opts = { encoding: 'utf8', timeout: 25000, windowsHide: true };
-  let r;
-  if (/\.(cmd|bat)$/i.test(claude)) {
-    diag.shell = process.env.ComSpec || 'cmd.exe';
-    r = spawnSync(diag.shell, ['/d', '/s', '/c', `""${claude}" plugin update ${target}"`], { ...opts, windowsVerbatimArguments: true });
-  } else {
-    r = spawnSync(claude, ['plugin', 'update', target], opts);
-  }
-  diag.exitCode = r.status;
-  diag.error = r.error ? String(r.error.message || r.error) : null;
-  writeDiag();
-  try {
-    fs.writeFileSync(logPath, `$ ${claude} plugin update ${target}\nexit: ${r.status}${r.error ? `\nerror: ${diag.error}` : ''}\n\n${r.stdout || ''}${r.stderr || ''}`, 'utf8');
-  } catch { /* the log is a courtesy */ }
-  if (r.status !== 0 || r.error) {
-    return `[update] Joserah ${v} could not be loaded automatically (see ${logPath}) — run /joserah:update.${tell}`;
-  }
-  try { fs.writeFileSync(stamp, v, 'utf8'); } catch { /* retried next session */ }
-  return `[update] Joserah ${v} was loaded into the plugin cache — restart Claude Code once to run it.${tell}`;
-}
-
 function updateLines(cfg, now) {
-  let lib;
-  try { lib = require('../tools/lib/prompt'); } catch { return []; }
   const lines = [];
   try {
-    const checkout = lib.pluginCheckout();
-    if (checkout) {
-      const line = fs.existsSync(path.join(checkout.path, '.git')) ? commitsBehindLine(checkout.path, now) : null;
-      if (line) lines.push(line);
-      const loaded = lib.pluginVersions().installed;
-      if (loaded && checkout.version && lib.compareVersions(checkout.version, loaded) > 0) {
-        lines.push(recopyLine(checkout));
-      }
-    } else maybeRefreshClone(lib, now);
+    const checkout = ownCheckout();
+    const behind = checkout ? commitsBehindLine(checkout, now) : null;
+    if (behind) lines.push(behind);
+  } catch { /* best-effort, see above */ }
+  let lib;
+  try { lib = require('../tools/lib/prompt'); } catch { return lines; }
+  try {
     const source = lib.resolvePromptSource();
     if (source) {
       const st = lib.promptState(ROOT, cfg, source);
@@ -157,10 +82,6 @@ function updateLines(cfg, now) {
         const why = st.state === 'hand-edited' ? 'was hand-edited' : 'predates prompt versioning and differs';
         lines.push(`[update] Prompt v${source.version} is available but this workspace's AGENTS.md ${why}, so it was left alone. Tell the owner in one line, in their language, and offer /joserah:update.`);
       }
-    }
-    const v = checkout ? {} : lib.pluginVersions();
-    if (v.installed && v.available && lib.compareVersions(v.available, v.installed) > 0) {
-      lines.push(`[update] Joserah plugin ${v.available} is available (installed: ${v.installed}). Tell the owner in one line, in their language. Updating the plugin is theirs to do and needs a restart afterwards; do not explain further unless asked.`);
     }
   } catch { /* best-effort, see above */ }
   return lines;

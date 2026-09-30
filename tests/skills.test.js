@@ -129,14 +129,15 @@ test('setup covers both halves of the journey', () => {
 // 0.13.4 (plugin audit 19): the description fired on "a workspace is empty or
 // half-filled", so a plain greeting in a new workspace loaded a 17 KB skill
 // whose first half creates a workspace that already exists.
-// 0.13.5 (owner, 2026-09-30): /joserah:update is the only way Joserah updates
-// itself — a git pull on the checkout the plugin runs from, then /reload-plugins.
-test('update pulls the plugin checkout and never sends the owner to the plugin manager', () => {
+// 0.14.0: the plugin is a git checkout linked into ~/.claude/skills; an update is
+// a pull on it, then the workspace migration, then /reload-plugins. No
+// marketplace, no cache copy, no `claude plugin update`.
+test('update pulls the checkout behind the plugin root and knows no marketplace', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'update', 'SKILL.md'), 'utf8');
-  assert.ok(text.includes('git -C "<checkout.path>" pull --ff-only'), 'the checkout, not the cache copy');
-  assert.ok(text.includes('claude plugin update joserah@<checkout.marketplace>'), 'the re-copy');
+  assert.ok(text.includes('git -C "<checkout>" pull --ff-only'));
+  assert.ok(text.includes('realpath'), 'the checkout is the plugin root resolved through the link');
   assert.ok(text.includes('/reload-plugins'));
-  assert.doesNotMatch(text, /claude plugin marketplace update/);
+  assert.doesNotMatch(text, /claude plugin update|marketplace|known_marketplaces|plugin cache/i);
 });
 
 // 0.13.7 (owner, 2026-09-30): a factual question got lookup after lookup, in

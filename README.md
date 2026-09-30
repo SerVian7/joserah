@@ -16,27 +16,63 @@ tomorrow, you still have every file.
 
 ## Install
 
-Clone the repository, register the clone as a local marketplace, install from it:
+Clone this repository, open your assistant in the folder where you want your memory, and paste:
 
 ```
-git clone https://github.com/SerVian7/joserah.git <path>
-/plugin marketplace add <path>
-/plugin install joserah@joserah
+Install Joserah from <path-to-clone> and set it up for me.
 ```
 
-Claude Code loads a copy of `<path>` from its plugin cache, one per version. `/joserah:update` is
-how it updates: it pulls the clone, has Claude Code copy the new version, and brings your workspace
-along; `/reload-plugins` loads the new copy.
+*(For the assistant: the steps are in `skills/setup/SKILL.md` inside that clone — follow them.)*
 
-Then create your workspace:
+It notices which assistant it is running in, makes Joserah load there, creates the workspace, and
+asks a few short questions: where, your name, a name for the assistant if you want one. It speaks
+the language you write in.
+
+**Antigravity or another assistant:** Joserah runs in *AGENTS.md-only mode* there — your files and
+the standing instructions work, the automatic parts do not. See below.
+
+## Where Joserah runs
+
+**Claude Code.** Setup links the clone as `~/.claude/skills/joserah`. The Claude Code docs:
+"Your personal skills directory is `~/.claude/skills/`. Claude Code loads any folder there that
+contains a `.claude-plugin/plugin.json` as a plugin in every session, with no flag and no install
+step" ([Create plugins](https://code.claude.com/docs/en/plugins/create#scaffold-a-plugin-that-loads-every-session)),
+and such a plugin "loads in place and is never copied"
+([Plugin loading](https://code.claude.com/docs/en/plugins/loading#in-place-and-copied-plugins)).
+It appears as `joserah@skills-dir`. The docs do not say whether a link in that folder is followed;
+Joserah relies on it. By hand, with `<clone>` the absolute path:
 
 ```
-/joserah:setup
+Windows (cmd):         mklink /J "%USERPROFILE%\.claude\skills\joserah" "<clone>"
+Windows (PowerShell):  New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\joserah" -Target "<clone>"
+macOS / Linux:         mkdir -p ~/.claude/skills && ln -s "<clone>" ~/.claude/skills/joserah
 ```
 
-It asks where to put it and what language to speak to you in, sets everything
-up, and then interviews you — a few questions at a time, across as many
-sessions as you like.
+Then restart Claude Code once. `/joserah:update` pulls the clone (`git pull --ff-only`), brings the
+workspace along, and `/reload-plugins` loads the new code; the session briefing says when the clone
+has new commits upstream.
+
+**Antigravity — AGENTS.md-only mode.** Antigravity reads a workspace-root `AGENTS.md` as a rule that
+is always active ("Antigravity treats its entire content as plain Markdown and keeps it continuously
+active (`always_on`)", [Rules](https://antigravity.google/docs/rules/)); it does not read `CLAUDE.md`.
+Setup adds `.agents/rules/joserah.md`, an `always_on` rule that inlines `JOSERAH-ROLE.md` and
+`.joserah/directives.md` with Antigravity's `@[label](path)` syntax. Antigravity has hooks of its own
+(`PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`, in `.agents/hooks.json`,
+[Hooks](https://antigravity.google/docs/hooks/)) with a different input and output than Claude
+Code's, and no session-start or prompt-submit event; Joserah's hooks are not ported to it. So:
+
+| Does not run | Instead |
+|---|---|
+| Session briefing (date, open tasks, today's journal, learnings) | The assistant opens `.joserah/desk/tasks/now.md` and today's journal at session start |
+| Capture hook ("remind me", "kaydet") | The assistant writes the capture itself |
+| Vault guard | `AGENTS.md` rule 3 still applies — by instruction only |
+| Tool-call nudge | `AGENTS.md` §2 "one lookup, then the answer" |
+| `/joserah:*` skills | Ask for the step by name; the files are in the clone's `skills/` |
+
+**Any other assistant** — the same AGENTS.md-only mode, minus the `.agents/rules` file: most tools
+read a root `AGENTS.md`. Whether yours does is in its own documentation.
+
+`node tools/detect-harness.js` prints which assistant setup found, and the evidence.
 
 Already have years of notes lying around? `/joserah:import` takes the pile.
 
@@ -301,23 +337,9 @@ The standing prompt is unchanged, still version 4, so nothing needs
 `/joserah:update`; this is a plugin update and the new hook starts working
 after the restart that follows it.
 
-## Developing Joserah
-
-Working in your own clone of this repository, run once:
-
-```
-node tools/install-dev-hook.js
-```
-
-It writes `.git/hooks/post-merge` and `post-commit` in the clone, each running
-`claude plugin update joserah@<marketplace>`, so a pull or a commit there copies the new version
-into Claude Code's plugin cache by itself and one restart is all that is left. Never installed
-automatically; re-running it is safe, and a hook of the same name that it did not write is left
-alone. Every release still bumps `.claude-plugin/plugin.json` — see CONTRIBUTING.md.
-
 ## Requirements
 
-- Claude Code
+- Claude Code (or AGENTS.md-only mode in another assistant — see Install)
 - Node.js 18 or newer on your `PATH`
 - **On Windows: [Git for Windows](https://git-scm.com/download/win)**, which
   provides the `bash` the hooks are executed with. Without it the hooks do not
@@ -592,3 +614,13 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 ### Upgrading to 0.13.10
 
 **The re-copy runs where it can be seen.** 0.13.8 started `claude plugin update` as a detached child of the session-start hook, and in the IDE the cache stayed on the old version. It now runs synchronously (at most 25 s, about 2 s measured), once per clone version, logged to `joserah-recopy.log` in the temp dir; a failure leaves no stamp and is retried next session, with the log named in the briefing. `claude` is also looked for off PATH (`%APPDATA%\npm`, `~/.local/bin`, `~/.claude/local`, `/usr/local/bin`), and every attempt writes `joserah-recopy-diag.json` there. Developers: `node tools/install-dev-hook.js` (see Developing Joserah).
+
+### Upgrading to 0.14.0
+
+**No marketplace, no cache, no `claude plugin update`.** Joserah is a git clone linked as `~/.claude/skills/joserah` and loaded in place as `joserah@skills-dir` (see "Where Joserah runs"). `/joserah:update` is a `git pull` on the clone, the workspace migration, then `/reload-plugins`. The re-copy of 0.13.8–0.13.10, its diagnostics file and stamps, and `tools/install-dev-hook.js` are gone; the briefing keeps the daily "N new commits upstream" line. Doctor's new `plugin loaded from the skills dir` check warns on a copy in the plugin cache.
+
+**Install is one prompt, and setup notices the assistant.** `tools/detect-harness.js` reads documented markers only (`CLAUDECODE=1`, Antigravity's `~/.gemini/config` and `~/.gemini/antigravity-cli`, `claude` on PATH, `~/.claude`). Claude Code gets the link; Antigravity and anything else get AGENTS.md-only mode.
+
+**Setup asks four things.** Location (none, when the current folder is empty), the owner's name, an optional assistant name, and the language — inferred from how they write. Gone: the machine-or-folder question (trust is `owner`, kind `home`; hosting only on an explicit `--hosted` request), the definition and its keep-itself-current mode (`--identity-mode` and the `identity` block are removed), the consent gate (a one-line notice now; `--consent-model` and the `consent` block are removed) and the feedback question (off unless a developer passes `--feedback`).
+
+**Upgrading from 0.13.x, once:** `/plugin uninstall joserah@joserah`, `/plugin marketplace remove joserah`, link the clone as above, restart Claude Code. Workspaces are untouched; run `/joserah:update` afterwards.

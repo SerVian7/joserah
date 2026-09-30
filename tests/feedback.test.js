@@ -197,15 +197,6 @@ test('scaffold rejects an unknown feedback mode before writing anything', (t) =>
 
 // R12: a second config block, same shape and same discipline as `feedback`,
 // for whether .joserah/agent.md is allowed to keep itself up to date.
-test('scaffold records the identity-mode choice', (t) => {
-  const dir = path.join(tmpdir(t), 'ws');
-  const r = runTool('scaffold.js',
-    ['--target', dir, '--workspace', 'w', '--identity-mode', 'manual']);
-  assert.strictEqual(r.status, 0, r.stderr);
-  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
-  assert.strictEqual(cfg.identity.mode, 'manual');
-  assert.match(cfg.identity.askedOn, /^\d{4}-\d{2}-\d{2}$/);
-});
 
 test('scaffold omits the identity block when it was never asked', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
@@ -214,56 +205,42 @@ test('scaffold omits the identity block when it was never asked', (t) => {
   assert.strictEqual('identity' in cfg, false, 'absent, not a fabricated opt-in');
 });
 
-test('scaffold rejects an unknown identity-mode before writing anything', (t) => {
-  const dir = path.join(tmpdir(t), 'ws');
-  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--identity-mode', 'sometimes']);
-  assert.notStrictEqual(r.status, 0);
-  assert.match(r.stderr, /identity/i);
-  assert.strictEqual(fs.existsSync(dir), false, 'nothing written on a bad flag');
-});
 
-// R13: an earlier task established that the install flow's create call runs
-// before these questions are asked, so both blocks must also be reachable
-// through --identity-only — the same entry point --consent-model already
-// uses for exactly this reason.
-test('scaffold --identity-only accepts --feedback and --identity-mode on an existing workspace', (t) => {
+// R13: --feedback is reachable through --identity-only as well as the create
+// call (0.14.0: a developer flag; setup never asks it).
+test('scaffold --identity-only accepts --feedback on an existing workspace', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
   const r = runTool('scaffold.js', ['--identity-only', '--target', dir,
-    '--feedback', 'auto', '--github', 'someuser', '--identity-mode', 'off']);
+    '--feedback', 'auto', '--github', 'someuser']);
   assert.strictEqual(r.status, 0, r.stderr);
   const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
   assert.strictEqual(cfg.feedback.mode, 'auto');
   assert.strictEqual(cfg.feedback.github, 'someuser');
-  assert.strictEqual(cfg.identity.mode, 'off');
 });
 
-test('scaffold --identity-only rejects an unknown feedback or identity-mode before writing anything', (t) => {
+test('scaffold --identity-only rejects an unknown feedback value before writing anything', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
   const before = fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8');
   const r1 = runTool('scaffold.js', ['--identity-only', '--target', dir, '--feedback', 'sometimes']);
   assert.notStrictEqual(r1.status, 0);
   assert.match(r1.stderr, /feedback/i);
-  const r2 = runTool('scaffold.js', ['--identity-only', '--target', dir, '--identity-mode', 'sometimes']);
-  assert.notStrictEqual(r2.status, 0);
-  assert.match(r2.stderr, /identity/i);
   const after = fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8');
   assert.strictEqual(after, before, 'config.json untouched by a rejected --identity-only call');
 });
 
-// Non-destructive, like --consent-model: a later --identity-only run that
-// does not repeat the flag must leave the existing block exactly as it was.
-test('a later --identity-only call without --feedback/--identity-mode leaves existing blocks untouched', (t) => {
+// Non-destructive: a later --identity-only run that does not repeat the flag
+// must leave the existing block exactly as it was.
+test('a later --identity-only call without --feedback leaves the existing block untouched', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w',
-    '--feedback', 'auto', '--github', 'someuser', '--identity-mode', 'manual']);
+    '--feedback', 'auto', '--github', 'someuser']);
   const r = runTool('scaffold.js', ['--identity-only', '--target', dir, '--owner', 'O', '--language', 'en']);
   assert.strictEqual(r.status, 0, r.stderr);
   const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
   assert.strictEqual(cfg.feedback.mode, 'auto');
   assert.strictEqual(cfg.feedback.github, 'someuser');
-  assert.strictEqual(cfg.identity.mode, 'manual');
 });
 
 // Task 19: tools/feedback.js — file it, or drop it without fuss.
@@ -570,31 +547,6 @@ test('the feedback skill names no one and ships no real example', () => {
 // serves is not a proxy for privilege and is never asked. Reach and the
 // assistant's definition take its place in the order this test checks;
 // written against the strings the amended skill text actually contains.
-test('setup asks its questions in the agreed order', () => {
-  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'setup', 'SKILL.md'), 'utf8');
-  const at = (s) => {
-    const i = text.indexOf(s);
-    assert.notStrictEqual(i, -1, 'missing: ' + s);
-    return i;
-  };
-  // Fix round 2 (controller review of cb16d36): 'only inside this folder'
-  // occurs twice — once in the reach question itself (step 3), once in step
-  // 4's cross-reference back to it — so on its own it landed on the right
-  // spot by luck (step 3 happens to sit before step 4), not by construction.
-  // The longer phrase below is the question's own wording and appears only
-  // once. Every anchor in this test is checked to occur exactly once in
-  // skills/setup/SKILL.md, verified with a plain occurrence count per
-  // string (see task-20-report.md), so each `at(...)` can only resolve to
-  // the real question it names, never to a mention of it in passing
-  // elsewhere in the file.
-  assert.ok(at('dialogue language') < at('owner name'), 'language before name');
-  assert.ok(at('owner name') < at('act on this machine, or only inside this folder'),
-    'name before reach');
-  assert.ok(at('act on this machine, or only inside this folder') < at('what it is for here'),
-    'reach before the assistant\'s definition');
-  assert.ok(at('what it is for here') < at('Ask for consent'), 'definition before consent');
-  assert.ok(at('Ask for consent') < at('Then offer feedback'), 'consent before the feedback question');
-});
 
 // --- IMPORTANT 4 -----------------------------------------------------------
 // Every forbidden-word test above this line passes a SINGLE word, while
