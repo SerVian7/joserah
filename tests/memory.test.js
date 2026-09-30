@@ -395,3 +395,9 @@ test('questions: the member AGENTS.md tells the assistant to write an answer onl
   const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8');
   assert.match(agents, /Write the answer only after the member approves its wording/);
 });
+
+// ce2b7a7 re-added a questions paragraph 8f0b96c already had.
+test('the memory AGENTS.md states the questions rule once', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8');
+  assert.strictEqual(text.split('Questions between members').length - 1, 1);
+});
