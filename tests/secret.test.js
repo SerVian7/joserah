@@ -260,3 +260,21 @@ test('secret: --set with a terminal asks for the value, echoes nothing, stores i
   assert.strictEqual(run(dir, ['acme.db.password']).stdout, 'fake-typed-pw');
   assert.match(index(dir), /- acme\.db\.password/);
 });
+
+test('secret: --remove deletes a name, rewrites the index, never prints a value', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'acme.api.token'], 'fake-value-1');
+  run(dir, ['--set', 'acme.db.password'], 'fake-value-2');
+  const r = run(dir, ['--remove', 'acme.api.token']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout.trim(), 'removed acme.api.token');
+  assert.doesNotMatch(r.stdout + r.stderr, /fake-value/);
+  assert.strictEqual(run(dir, ['--has', 'acme.api.token']).status, 2);
+  assert.strictEqual(run(dir, ['--has', 'acme.db.password']).status, 0);
+  const index = fs.readFileSync(path.join(dir, '.joserah', 'vault-index.md'), 'utf8');
+  assert.doesNotMatch(index, /acme\.api\.token/);
+  assert.match(index, /acme\.db\.password/);
+  const miss = run(dir, ['--remove', 'acme.api.token']);
+  assert.strictEqual(miss.status, 1);
+  assert.match(miss.stderr, /secret: no such name/);
+});

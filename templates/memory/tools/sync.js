@@ -2,6 +2,7 @@
 /**
  * sync.js — the start and the end of every session in this memory.
  * Usage: node tools/sync.js                   pull (rebase), then say the sweep-due line if due
+ *        (the pull also prints one checks line: broken links, malformed claim lines)
  *        node tools/sync.js --push [--who X]  commit members/<me>/, inbox/ and questions/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
  *
@@ -18,6 +19,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { detectMember } = require('./detect-member');
 const { sweepState, sweepLine } = require('./sweep-due');
+const { brokenLinks } = require('./verify-links');
+const { checkClaims } = require('./claims');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -34,6 +37,15 @@ function pull() {
   if (r.status !== 0) die(`pull failed — ${(r.stderr || r.stdout).trim()}`);
   const n = git('rev-list', '--count', `${before}..HEAD`).stdout.trim();
   return n === '0' ? 'up to date' : `pulled ${n} commit(s)`;
+}
+
+// Links and claim lines, checked after every pull; a finding is told, never a reason to fail.
+function checks() {
+  try {
+    const links = brokenLinks(root), claims = checkClaims(root);
+    if (!links.length && !claims.errors.length) return `checks: links ok, claims ${claims.total} ok`;
+    return `checks: ${links.length} broken link(s), ${claims.errors.length} claim error(s) — node tools/verify-links.js / node tools/claims.js`;
+  } catch (e) { return `checks: could not run (${e.message})`; }
 }
 
 // questions/<date>-<from>-<to>-<slug>.md: frontmatter from, to, status open|answered, then "## Question".
@@ -53,6 +65,7 @@ function questions(me) {
 
 if (!flag('--push')) {
   console.log(pull());
+  console.log(checks());
   const line = sweepLine(sweepState(root));
   if (line) console.log(line);
   const who = detectMember(root);

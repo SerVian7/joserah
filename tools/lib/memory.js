@@ -16,16 +16,11 @@ const PLUGIN_ROOT = path.resolve(__dirname, '..', '..');
 const TEMPLATE = path.join(PLUGIN_ROOT, 'templates', 'memory');
 
 // Every tool a memory carries → its source in the plugin. Doctor compares each.
-const MEMORY_TOOLS = {
-  'tools/verify-links.js': 'tools/verify-links.js',
-  'tools/lib/untouchable.js': 'tools/lib/untouchable.js',
-  'tools/claims.js': 'tools/check-claims.js',
-  'tools/lib/workspace-scan.js': 'tools/lib/workspace-scan.js',
-  'tools/lib/note-format.js': 'tools/lib/note-format.js',
-  'tools/sync.js': 'templates/memory/tools/sync.js',
-  'tools/sweep-due.js': 'templates/memory/tools/sweep-due.js',
-  'tools/detect-member.js': 'templates/memory/tools/detect-member.js',
-};
+// 0.15.3: the memory's tools stand alone (Node built-ins, nothing outside tools/),
+// so all of them live in templates/memory/tools and the template walk copies them.
+const TOOLS_DIR = path.join(TEMPLATE, 'tools');
+const MEMORY_TOOLS = Object.fromEntries(['', 'lib/'].flatMap((sub) => fs.readdirSync(path.join(TOOLS_DIR, sub)).filter((f) => f.endsWith('.js'))
+  .map((f) => ['tools/' + sub + f, 'templates/memory/tools/' + sub + f])));
 const LAYOUT = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'members', 'inbox', 'knowledge/index.md',
   'desk/tasks/now.md', '.brand/README.md'];
 const SHARED_DIR = '.joserah/shared';
@@ -65,6 +60,42 @@ function hostWorkspace(dir) {
 
 function fail(msg) { const e = new Error(msg); e.userError = true; throw e; }
 
+function substitutions({ company, members, sweeper, language }) {
+  return { '{{COMPANY}}': company, '{{MEMBERS}}': members.join(', '), '{{SWEEPER}}': sweeper,
+    '{{LANGUAGE}}': language || 'the language the members write in' };
+}
+function render(rel, cfg) {
+  let text = fs.readFileSync(path.join(TEMPLATE, rel), 'utf8');
+  for (const [k, v] of Object.entries(substitutions(cfg))) text = text.split(k).join(v);
+  return text;
+}
+const refreshCmd = (dir) => 'node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --refresh-memory ' + dir;
+
+/**
+ * scaffold.js --refresh-memory <dir>: bring an existing memory's AGENTS.md and tools/*.js
+ * up to this plugin's templates, with the memory's own values. Writes only what differs;
+ * never touches knowledge/, members/, inbox/, questions/, .memory/, .brand/.
+ * Returns the changed files, relative to the memory.
+ */
+function refreshMemory(dir) {
+  const root = path.resolve(dir);
+  if (!isMemory(root)) fail(root + ' is not a Joserah Memory (no .memory/config.json of kind "memory")');
+  const cfg = readJson(path.join(root, '.memory', 'config.json'));
+  const wanted = { 'AGENTS.md': render('AGENTS.md', cfg) };
+  for (const [rel, src] of Object.entries(MEMORY_TOOLS)) wanted[rel] = fs.readFileSync(path.join(PLUGIN_ROOT, src), 'utf8');
+  const changed = [];
+  for (const [rel, text] of Object.entries(wanted)) {
+    const dst = path.join(root, rel);
+    let cur = null;
+    try { cur = fs.readFileSync(dst, 'utf8'); } catch { /* missing: written below */ }
+    if (cur !== null && eol(cur) === eol(text)) continue;
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.writeFileSync(dst, text, 'utf8');
+    changed.push(rel);
+  }
+  return changed;
+}
+
 /** scaffold.js --kind memory. Returns { root, files, registered }. */
 function scaffoldMemory({ target, company, members, sweeper, language }) {
   if (!target) fail('--kind memory needs --target DIR');
@@ -76,8 +107,7 @@ function scaffoldMemory({ target, company, members, sweeper, language }) {
   const root = path.resolve(target);
   if (fs.existsSync(root) && fs.readdirSync(root).length) fail(`${root} is not empty — nothing was written`);
 
-  const subs = { '{{COMPANY}}': company, '{{MEMBERS}}': list.join(', '), '{{SWEEPER}}': sw,
-    '{{LANGUAGE}}': language || 'the language the members write in' };
+  const subs = substitutions({ company, members: list, sweeper: sw, language });
   let files = 0;
   (function copy(from, to) {
     fs.mkdirSync(to, { recursive: true });
@@ -90,10 +120,6 @@ function scaffoldMemory({ target, company, members, sweeper, language }) {
       files++;
     }
   })(TEMPLATE, root);
-  for (const [rel, src] of Object.entries(MEMORY_TOOLS)) {
-    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
-    fs.copyFileSync(path.join(PLUGIN_ROOT, src), path.join(root, rel));
-  }
   fs.mkdirSync(path.join(root, '.memory'), { recursive: true });
   fs.writeFileSync(path.join(root, '.memory', 'config.json'), JSON.stringify({
     kind: 'memory', company, language: language || null, members: list, sweeper: sw, lastSweep: null,
@@ -110,7 +136,7 @@ function scaffoldMemory({ target, company, members, sweeper, language }) {
 
   const ws = hostWorkspace(root);
   if (ws) registerShared(ws, path.basename(root));
-  return { root, files: files + Object.keys(MEMORY_TOOLS).length + 1, registered: !!ws };
+  return { root, files: files + 1, registered: !!ws };
 }
 
 /** scaffold.js --join-memory <url> --target <workspace>. Returns { name, path }. */
@@ -149,8 +175,11 @@ function memoryChecks(root) {
   for (const [rel, src] of Object.entries(MEMORY_TOOLS)) {
     let same = false;
     try { same = eol(fs.readFileSync(path.join(root, rel), 'utf8')) === eol(fs.readFileSync(path.join(PLUGIN_ROOT, src), 'utf8')); } catch { /* missing */ }
-    out.push(check(`memory tool current: ${rel}`, same, same ? '' : `differs from the plugin's ${src} — copy it over`));
+    out.push(check(`memory tool current: ${rel}`, same, same ? '' : `differs from the plugin's ${src} — ${refreshCmd(root)}`));
   }
+  let agentsSame = false;
+  try { agentsSame = eol(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')) === eol(render('AGENTS.md', cfg)); } catch { /* missing: reported by the exists check */ }
+  if (!agentsSame) out.push(warn('memory AGENTS.md current', 'differs from the template — ' + refreshCmd(root)));
   const gi = fs.existsSync(path.join(root, '.gitignore')) ? eol(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).split('\n') : [];
   out.push(check('.gitignore keeps .memory/me on this machine', gi.includes('.memory/me'), ''));
   const links = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'verify-links.js'), root], { encoding: 'utf8' });
@@ -202,5 +231,5 @@ function sharedChecks(root, cfg) {
   return out;
 }
 
-module.exports = { MEMORY_TOOLS, SHARED_DIR, SHARED_IGNORE, isMemory, registerShared, scaffoldMemory, joinMemory,
+module.exports = { MEMORY_TOOLS, SHARED_DIR, SHARED_IGNORE, isMemory, registerShared, scaffoldMemory, joinMemory, refreshMemory,
   memoryChecks, sharedChecks };

@@ -22,6 +22,7 @@
  *                                                         skipped, exit 1); --replace --yes empties the store
  *                                                         first; a file that is not a vault (service-account
  *                                                         key, PEM, other JSON) is refused, exit 4
+ *   node .joserah/tools/secret.js --remove <name>         deletes a name from the store; prints no value
  *   node .joserah/tools/secret.js --rename <old> <new>    correct a name without seeing the value
  *
  * Embed, never print:
@@ -250,6 +251,14 @@ if (args[0] === '--import') {
   console.log(`import: ${n.imported} imported, ${n.unchanged} unchanged, ${n.skipped} skipped`);
   if (n.skipped) process.exit(1);
   if (args.includes('--delete')) fs.rmSync(file);
+  process.exit(0);
+}
+
+if (args[0] === '--remove') {
+  if (!has(args[1])) die(1, 'secret: no such name');
+  delete secrets[args[1]];
+  save();
+  console.log('removed ' + args[1]);
   process.exit(0);
 }
 

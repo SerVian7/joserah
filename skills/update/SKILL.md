@@ -117,6 +117,20 @@ Run doctor and act on these lines only:
 - `exists: JOSERAH-ROLE.md` FAIL with "does not match the role template" → delete it and run
   `migrate.js` again; it reinstalls the right one for the workspace's `kind`.
 
+## 5b. Shared memories
+
+After migrate, for every entry under `shared` in `.joserah/config.json`, refresh that memory's own
+rules and tools from this plugin's templates (a memory works without Joserah, so its copy is renewed
+by whichever member updates first):
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --refresh-memory <workspace-root>/<entry path>
+```
+
+It prints the files it changed, or `up to date`, and never touches `knowledge/`, `members/`,
+`inbox/`, `questions/`, `.memory/` or `.brand/`. When files changed, run `node tools/sync.js --push`
+inside that memory and show the owner its push notice as always; on their yes, run it again with `--yes`.
+
 ## 6. Verify and report
 
 ```

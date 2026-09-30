@@ -65,7 +65,8 @@ assistant uses a value inside a command, `$(node .joserah/tools/secret.js <name>
 it. To save one yourself, run `secret.js --set <name>` in your terminal. It asks for the value and
 shows nothing as you type. `--index` writes `.joserah/vault-index.md`, the list of names that is the
 only vault file the assistant reads. `--import` brings in an old vault (JSON, a collector's record list
-or a `.env` file), lists names only and never overwrites a value. `secret-scan.js --extract` moves a
+or a `.env` file), lists names only and never overwrites a value. `--remove <name>` deletes a name
+from the vault. `secret-scan.js --extract` moves a
 password it finds in a note into the vault, and the note calls it by name from then on.
 
 **Routines nobody has to ask for.** Say "remind me" or "add to my todos" and the note is captured with
@@ -89,6 +90,9 @@ and their next sync lists it for them. `sync.js --push` lists what would leave y
 machine and pushes only after you say yes. One person, the sweeper, merges the inbox into
 `knowledge/`, so commits never collide. Nothing personal and no password goes in. The briefing shows,
 for each memory, whether it is up to date, whether a sweep is due, and your open items there.
+The memory works without Joserah: anyone with git and Node can use it, and every pull runs its own
+link and claim-line checks. When a member who has Joserah updates it, their update refreshes the
+memory's tools and rules and pushes them after the usual notice.
 
 ## Skills
 

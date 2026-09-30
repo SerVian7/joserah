@@ -6,13 +6,15 @@
  *   --json     prints { days, inbox, due, sweeper }
  *   --stamp    records now as lastSweep in .memory/config.json (the sweeper, after a sweep)
  *
- * Due: the inbox holds a note, and there has been no sweep for a week or ever.
+ * Due: the inbox holds 5 or more files, or it holds any and a week has passed since the last sweep
+ * (or there never was one) — whichever comes first.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const DUE_AFTER_DAYS = 7;
+const DUE_INBOX_FILES = 5;
 const cfgPath = (root) => path.join(root, '.memory', 'config.json');
 const readCfg = (root) => JSON.parse(fs.readFileSync(cfgPath(root), 'utf8').replace(/^﻿/, ''));
 
@@ -22,16 +24,17 @@ function sweepState(root, now = new Date()) {
   try { inbox = fs.readdirSync(path.join(root, 'inbox')).filter((f) => f.endsWith('.md')).length; } catch { /* no inbox */ }
   const last = cfg.lastSweep ? new Date(cfg.lastSweep) : null;
   const days = last && !isNaN(last) ? Math.floor((now - last) / 86400000) : null;
-  return { days, inbox, sweeper: cfg.sweeper || null, due: inbox > 0 && (days === null || days >= DUE_AFTER_DAYS) };
+  return { days, inbox, sweeper: cfg.sweeper || null, byInbox: inbox >= DUE_INBOX_FILES, byDays: inbox > 0 && (days === null || days >= DUE_AFTER_DAYS),
+    due: inbox >= DUE_INBOX_FILES || (inbox > 0 && (days === null || days >= DUE_AFTER_DAYS)) };
 }
 
 function sweepLine(s) {
   if (!s.due) return '';
-  const since = s.days === null ? 'never swept' : `${s.days} days since last sweep`;
-  return `Sweep due: ${since}, ${s.inbox} inbox file(s) — the sweeper (${s.sweeper}) runs it.`;
+  const why = [s.byInbox && `${s.inbox} inbox files`, s.byDays && (s.days === null ? 'never swept' : `${s.days} days`)].filter(Boolean);
+  return `sweep due: ${why.join(', ')} — the sweeper (${s.sweeper}) runs it.`;
 }
 
-module.exports = { sweepState, sweepLine, DUE_AFTER_DAYS };
+module.exports = { sweepState, sweepLine, DUE_AFTER_DAYS, DUE_INBOX_FILES };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, '..');

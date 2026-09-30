@@ -40,6 +40,10 @@ with the tier it was actually placed at — `Heavy:`, `Medium:`, `Simple:`, or t
 where the runtime writes one there itself. Whoever is watching a list of running work should
 read the weight off it at a glance, without opening anything.
 
+Independent pieces go to separate workers at once, in parallel, each with its own files and no
+shared file between them; only steps that depend on each other's output go to one worker in
+sequence. Rule 6 (the machine's capacity) still bounds how many run at once.
+
 ## Briefing
 
 A brief is four things and nothing else: the job, the rules it must not break, how it will
@@ -60,7 +64,7 @@ The template a brief is written from:
 ```
 Job: <the one deliverable>
 Rules: <what it must not break; the files it may write, the folders it may not touch>
-  You are a worker: do not delegate further.
+  You are a worker: do not delegate further. Sign a commit `<model> <effort> — Joserah Worker`.
 Verified by: <the command or check that proves it>
 Report: <the exact shape of what comes back>
 ```

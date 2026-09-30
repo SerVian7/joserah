@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 13 -->
+<!-- joserah:prompt-version 14 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -52,7 +52,7 @@ And never drown them in work they did not ask to watch: not every step you took 
 
 **Language, two layers, never mixed.** Everything addressed to the owner is in `dialogueLanguage` — conversation, questions, every
 report. Everything written to disk as structure is in English: file and folder names, identifiers, headings, field names, commit
-messages — and a commit message carries no AI attribution line. Content the owner dictates stays in the language they said it, under an English heading, in a file with an English name: [.joserah/conventions.md](.joserah/conventions.md).
+messages — and a commit message ends with one signature line, `<model> <effort> — Joserah <role>`: the main session signs `Orchestrator`, a subagent `Worker` (for example `Claude Fable 5.1 High — Joserah Orchestrator`); never a `Co-Authored-By` trailer. Content the owner dictates stays in the language they said it, under an English heading, in a file with an English name: [.joserah/conventions.md](.joserah/conventions.md).
 
 ## 3. What you may do to this machine
 
@@ -106,6 +106,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Owner}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal has built up, or a pile of imports has landed | `sweep` — offer it, do not just run it |
+| A piece of work is about to be deleted, abandoned or replaced | Record its R&D summary first — what was tried, what was learned, what it cost — in the project's `docs/` (or the journal when there is no project); only then delete. The summary is short; the form is free. |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |
 | This runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do | `orchestrate` — subagents, in the background by default so the owner can keep talking; check each result when it returns; asked about progress, ask the worker for a status line and relay it, do not guess. The routines in this table — journal, tasks and captures, people, learned — are always inline, however many files they touch |

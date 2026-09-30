@@ -12,6 +12,7 @@
  *        node scaffold.js --kind memory --target DIR --company NAME --members a,b
  *                         --sweeper a [--language LANG]
  *        node scaffold.js --join-memory <git-url> --target WORKSPACE
+ *        node scaffold.js --refresh-memory <memory-dir>
  *
  * 0.14.0: a Joserah Memory is a company's shared memory in its own git
  * repository (tools/lib/memory.js). `--kind memory` creates a new one — inside
@@ -116,9 +117,14 @@ const args = parseArgs(process.argv.slice(2));
 
 // The memory kind is a different repository altogether, not a workspace; it is
 // handled before anything below reads a workspace flag.
-if (args.kind === 'memory' || args['join-memory']) {
+if (args.kind === 'memory' || args['join-memory'] || args['refresh-memory']) {
   const memory = require('./lib/memory');
   try {
+    if (args['refresh-memory']) {
+      const changed = memory.refreshMemory(args['refresh-memory']);
+      console.log(changed.length ? changed.join('\n') : 'up to date');
+      process.exit(0);
+    }
     const out = args['join-memory'] ? memory.joinMemory({ url: args['join-memory'], target: args.target })
       : memory.scaffoldMemory(args);
     console.log(JSON.stringify(out));

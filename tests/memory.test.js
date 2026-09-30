@@ -77,7 +77,7 @@ test('A2: scaffold --kind memory writes the memory, fills every placeholder, and
     members: ['ada', 'bora'], sweeper: 'ada', lastSweep: null, created: 'x' });
   for (const f of walk(dir)) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /{{[A-Z_]+}}/, f);
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /# AGENTS\.md — Acme Memory/);
-  for (const rel of ['tools/verify-links.js', 'tools/lib/untouchable.js', 'tools/claims.js', 'tools/sync.js',
+  for (const rel of ['tools/verify-links.js', 'tools/claims.js', 'tools/sync.js',
     'tools/sweep-due.js', 'tools/detect-member.js']) assert.ok(fs.existsSync(path.join(dir, rel)), rel);
   assert.strictEqual(git(dir, 'rev-list', '--count', 'HEAD').trim(), '1');
   assert.strictEqual(git(dir, 'status', '--porcelain').trim(), '', 'everything committed');
@@ -117,7 +117,7 @@ test('A3: sweep-due says the line once the inbox holds a note, and --stamp clear
   const dir = memory(t);
   fs.writeFileSync(path.join(dir, 'inbox', '2026-09-30-bora-encoder.md'), '# Encoder\n');
   const due = node(dir, path.join(dir, 'tools', 'sweep-due.js'));
-  assert.match(due.stdout, /never swept, 1 inbox file/);
+  assert.match(due.stdout, /sweep due: never swept/);
   assert.match(due.stdout, /ada/, 'names the sweeper');
   assert.strictEqual(node(dir, path.join(dir, 'tools', 'sweep-due.js'), ['--stamp']).status, 0);
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, '.memory', 'config.json'), 'utf8')).lastSweep);
@@ -175,15 +175,15 @@ test('A4: the member is .memory/me, else the workspace owner\'s first name, else
   assert.strictEqual(memberSlug('Şükrü Çağlar'), 'sukru');
   assert.strictEqual(memberSlug('  İpek Işık '), 'ipek');
   const ws = workspace(t, 'Serkan Adem Atay');
-  const dir = memory(t, path.join(ws, '.joserah', 'shared', 'acme-memory'));
+  const dir = memory(t, path.join(ws, '.joserah', 'shared', 'acme-memory'), ['--members', 'Ada,bora,Serkan']);
   assert.strictEqual(detectMember(dir), 'serkan');
   fs.writeFileSync(path.join(dir, '.memory', 'me'), 'Bora\n');
   assert.strictEqual(detectMember(dir), 'bora');
   const alone = memory(t);
-  git(alone, 'config', 'user.name', 'Onur Kaya');
-  assert.strictEqual(detectMember(alone), 'onur');
+  git(alone, 'config', 'user.name', 'Ada Kaya');
+  assert.strictEqual(detectMember(alone), 'ada');
   const r = node(alone, path.join(alone, 'tools', 'detect-member.js'));
-  assert.strictEqual(r.stdout.trim(), 'onur');
+  assert.strictEqual(r.stdout.trim(), 'ada');
 });
 
 // ---- A5: doctor ----------------------------------------------------------------
@@ -287,7 +287,7 @@ test('A6: the brief carries one block per memory: sync state, the sweep line, th
   const ctx = brief(ws);
   assert.match(ctx, /### Shared memory: acme-memory \(\.joserah\/shared\/acme-memory\), you are "bora"/);
   assert.match(ctx, /The Acme shared memory is behind: 1 new commit — latest: t, 'ada: 2026-09-30', (just now|\d+ minutes? ago)\. It will be pulled at session start\./);
-  assert.match(ctx, /never swept, 1 inbox file/);
+  assert.match(ctx, /sweep due: never swept/);
   assert.match(ctx, /- \[ \] ship the encoder note/);
   assert.doesNotMatch(ctx, /done one/);
 });

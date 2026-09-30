@@ -115,19 +115,19 @@ test('decidePromptAction', () => {
 
 test('installPrompt writes the file and records version + sha; recordOnly leaves the file alone', (t) => {
   const dir = freshWs(t);
-  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 13) });
+  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 14) });
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 13);
+  assert.strictEqual(cfg.promptVersion, 14);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
-  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 13) });
+  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 14) });
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 13);
+  assert.strictEqual(cfg.promptVersion, 14);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -260,9 +260,12 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v13 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
+test('prompt v14 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 13);
+  assert.strictEqual(prompt.readPromptVersion(text), 14);
+  assert.ok(text.includes('Joserah Orchestrator'), '§2 (v14): a commit ends with the signature line');
+  assert.ok(text.includes('R&D summary first'), '§5 (v14): summary before deletion');
+  assert.ok(!text.includes('no AI attribution'), '§2 (v14): the no-attribution line gave way to the signature');
   assert.ok(text.includes('say the name, never the value'), 'rule 3: the name is said, the value never');
   assert.ok(text.includes('What exists: `.joserah/vault-index.md` (names only); never open `keys/`'), 'rule 3: the index, not keys/');
   assert.ok(text.includes('--extract` moves it — you never copy it by hand'), 'rule 3: extract, not hand-copying');

@@ -5,7 +5,8 @@
  *
  * In order: `.memory/me` (this machine only, gitignored); the owner of the
  * Joserah workspace this memory sits in (<workspace>/.joserah/shared/<name>/),
- * first name; the git user name, first name. Always lowercase ASCII.
+ * first name; the git user name, first name. Always lowercase ASCII, and always one of the
+ * `members` in .memory/config.json — a name that is not one is no answer (exit 1).
  */
 'use strict';
 const fs = require('fs');
@@ -21,7 +22,7 @@ function memberSlug(name) {
 
 function read(p) { try { return fs.readFileSync(p, 'utf8').replace(/^﻿/, ''); } catch { return ''; } }
 
-function detectMember(root) {
+function candidate(root) {
   const me = memberSlug(read(path.join(root, '.memory', 'me')));
   if (me) return me;
   // <workspace>/.joserah/shared/<name>/ → <workspace>/.joserah/config.json
@@ -33,12 +34,28 @@ function detectMember(root) {
   return memberSlug(git.stdout) || null;
 }
 
-module.exports = { detectMember, memberSlug };
+// The members this memory names, or null when the config cannot be read.
+function membersOf(root) {
+  try { const m = JSON.parse(read(path.join(root, '.memory', 'config.json'))).members; return Array.isArray(m) ? m : null; } catch { return null; }
+}
+
+/** The member at the keyboard, or null — a guess that is not in the members list is no member. */
+function detectMember(root) {
+  const who = candidate(root);
+  const members = membersOf(root);
+  return who && (!members || members.includes(who)) ? who : null;
+}
+
+module.exports = { detectMember, memberSlug, candidate, membersOf };
 
 if (require.main === module) {
-  const who = detectMember(path.resolve(__dirname, '..'));
+  const root = path.resolve(__dirname, '..');
+  const who = detectMember(root);
   if (!who) {
-    console.error('detect-member: unknown — ask the member once and write their first name into .memory/me');
+    const guess = candidate(root), members = membersOf(root);
+    console.error(guess && members
+      ? `detect-member: member '${guess}' is not in this memory's members (${members.join(', ')}); write .memory/me`
+      : 'detect-member: unknown — ask the member once and write their first name into .memory/me');
     process.exit(1);
   }
   console.log(who);

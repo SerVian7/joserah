@@ -3,6 +3,20 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.3
+
+**A commit signs itself.** A commit message ends with one signature line, `<model> <effort> — Joserah <role>` — the main session signs Orchestrator, a subagent Worker (for example `Claude Fable 5.1 High — Joserah Orchestrator`); never a `Co-Authored-By` trailer. Prompt v14.
+
+**A summary before deletion.** Work about to be deleted, abandoned or replaced gets its R&D summary recorded first — what was tried, what was learned, what it cost — in the project's docs or the journal; only then the delete.
+
+**Independent pieces run in parallel.** The orchestrate skill places independent work on separate workers at once, each with its own files; only dependent steps go to one worker in sequence.
+
+**The shared memory works without Joserah.** Git and Node are enough: `tools/verify-links.js` and `tools/claims.js` now ship inside the memory (built-ins only), and every pull prints one `checks:` line. Any Joserah member's `/joserah:update` refreshes a joined memory's rules and tools from the template (`scaffold.js --refresh-memory <dir>`), with the usual push notice; doctor names that command when a memory drifts. `detect-member.js` accepts only a name in the memory's members list and asks otherwise. Sweep is due at five inbox files or seven days. The memory rules now state the decision criterion (a dated purchase or operating decision inside the member's own responsibility is a company decision; an idea is a proposal), that claim lines travel verbatim through a sweep with a count before and after, and that a member pushes as soon as something worth sharing is written, not at the end of the day.
+
+**Verified procedures live in the memory as tools.** A procedure that worked against a system goes in as a script under `tools/<system>/` (Node by default, PowerShell only where the host is Windows-only), never holding a secret: `tools/lib/secret.js` `getSecret(envName, vaultName)` takes the value from an environment variable, from the member's Joserah vault, or from a hidden terminal prompt — the assistant never sees it. Every member uses the same secret names.
+
+**`secret.js --remove <name>`** deletes a stored name and rewrites the index.
+
 ## 0.15.2
 
 **Install from the repository URL.** The install prompt is "Install Joserah from https://github.com/SerVian7/joserah and set it up for me"; setup clones a URL to `~/joserah` first and skips the clone only for a local path.
