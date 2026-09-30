@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 0af9b00 · 2026-09-30 16:43 +0300 · 0.16.3: notes on building the assistant stay out of the shared memory
+Last change: 51d18aa · 2026-09-30 16:49 +0300 · 0.16.4: sweep.js counts a struck claim line as carried
 
 - Released: 0.16.4 on main, 630 tests (`node --test tests/*.test.js`), prompt v18.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
