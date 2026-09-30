@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 15);
+  assert.strictEqual(cfg.promptVersion, 16);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 15);
+  assert.strictEqual(cfg.promptVersion, 16);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -260,12 +260,13 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v15 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
+test('prompt v16 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 15);
+  assert.strictEqual(prompt.readPromptVersion(text), 16);
   assert.ok(text.includes('**Do the right thing; do not ask for it.**'), '§2 (v15): act, then report (owner, 2026-09-30)');
   assert.ok(text.includes('A question the owner has to answer for routine work is a cost, not a courtesy.'), '§2 (v15)');
   assert.ok(text.includes('`workspace backup`, `shared memory <name>` or `project <name>` — and the remote it went to.'), '§2 (v15): the push names its target');
+  assert.ok(text.includes("A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30)."), '§2 (v16): the shared-memory push asks');
   assert.ok(text.includes('Nothing that destroys work or changes a live system happens without confirmation'), 'rule 2 stays');
   assert.ok(text.includes('Joserah Orchestrator'), '§2 (v14): a commit ends with the signature line');
   assert.ok(text.includes('R&D summary first'), '§5 (v14): summary before deletion');

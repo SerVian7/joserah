@@ -36,9 +36,8 @@ Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8)
 - Push as soon as you wrote something worth sharing — an inbox note, a question, a decision — and at the
   end of the session; do not wait for the end of the day.
 - `node tools/sync.js --push` prints the push notice, `Push notice — shared memory <name> (<origin url>):
-  N file(s)`, one line per file. Show the list in the member's language, then push with `--yes`; wait
-  only when the list holds a deletion or a file outside the member's own folder, inbox/ and questions/.
-  Never push unannounced. Report the result as it prints: `pushed to shared memory <name>: <commit>`.
+  N file(s)`, one line per file. Show the list in the member's language, one line per file, wait for
+  their yes, then run it again with `--yes`. Never push unannounced. Report the result as it prints: `pushed to shared memory <name>: <commit>`.
 
 ## 4. Questions between members
 

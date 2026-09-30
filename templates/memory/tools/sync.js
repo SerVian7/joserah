@@ -8,9 +8,8 @@
  *
  * --push first prints a "Push notice" naming its target (shared memory <folder> and
  * its origin URL) and every file about to go out, one line each, then exits 3. The
- * assistant shows that list to the member and runs the same command again with --yes;
- * it waits for the member only when the list holds a deletion or a file outside
- * members/<me>/, inbox/ and questions/.
+ * assistant shows that list to the member, waits for their yes, and only then runs
+ * the same command again with --yes.
  *
  * A member's commit carries only their own folder and the inbox, so two members
  * never touch the same file; anything else stays unstaged. Commit subjects start
@@ -112,7 +111,7 @@ if (!changes.length && (!hasUpstream || git('rev-list', '--count', '@{u}..HEAD')
 }
 if (!flag('--yes')) {
   console.log(`Push notice — ${target} (${originUrl}): ${changes.length} file(s)\n${changes.join('\n')}\n` +
-    `Show this list to the member in their language, then run the same command again with --yes; wait for them only when it holds a deletion or a file outside members/${me}/, inbox/ and questions/.`);
+    `Show this list to the member in their language and wait for their yes; only then run the same command again with --yes.`);
   process.exit(3);
 }
 const staged = git('diff', '--cached', '--quiet').status !== 0;

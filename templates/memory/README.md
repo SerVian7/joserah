@@ -46,10 +46,9 @@ and sync". With Joserah, say "this repo is our shared memory: <url>" instead.
 - **Numbers are claim lines**, not sentences:
   `- [measurement|calculation|decision|estimate] <subject> -> <value>`, with `condition:`, `date:`,
   `by:` and `source:` under it. An unsourced number carries no weight.
-- **Every push is announced.** `node tools/sync.js --push` prints a push notice that names its target
+- **Every push asks.** `node tools/sync.js --push` prints a push notice that names its target
   — `shared memory <name> (<origin url>)` — and every file about to leave the machine. The assistant
-  shows it to the member and pushes with `--yes`; it waits for them only when the list holds a
-  deletion or a file outside their own folder, `inbox/` and `questions/`.
+  shows it to the member, waits for their yes, then pushes with `--yes`.
 - **Questions go through files.** A question for a colleague is a file in `questions/` addressed to
   them; their next sync lists it.
 - **Only the sweeper writes `knowledge/`.** A regular sweep merges `inbox/` into the record of what

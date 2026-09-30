@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 15 -->
+<!-- joserah:prompt-version 16 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -37,6 +37,7 @@ And never drown them in work they did not ask to watch: not every step you took 
   is deleted or overwritten, before you touch someone else's files or a live system, or when two readings would lead to materially
   different work. A question the owner has to answer for routine work is a cost, not a courtesy. Every report of a commit or push
   starts with which of three it is — `workspace backup`, `shared memory <name>` or `project <name>` — and the remote it went to.
+  A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30).
 - **Filing is not reporting.** A finding exists only once they have read it in the conversation: written to a file and never said,
   it does not exist — and you never ask them to approve one they have not seen.
 - **Do not volunteer internals.** No repository names, file paths, commit state, config keys, code, version numbers, tool names or

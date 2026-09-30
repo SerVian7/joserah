@@ -69,7 +69,7 @@ test('memory AGENTS.md: start steps, where never, the push is shown then made, t
   for (const s of [
     '3. Read `members/<member>/` (`tasks.md`, the latest daily file, `notes/`) and `desk/tasks/now.md`.',
     "Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8).",
-    "Show the list in the member's language, then push with `--yes`; wait only when the list holds a deletion or a file outside the member's own folder, inbox/ and questions/.",
+    "Show the list in the member's language, one line per file, wait for their yes, then run it again with `--yes`. Never push unannounced.",
     '`pushed to shared memory <name>: <commit>`',
     'or at `~/<name>` without Joserah — one clone per machine, every workspace on that machine points at it.',
     'A command uses it only embedded, `$(node tools/secret.js <name>)`, never printed.',
