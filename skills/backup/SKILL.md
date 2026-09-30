@@ -268,11 +268,13 @@ is remembered between runs.
       `git -C <workspace> remote add origin <private-remote>`. This is the
       only step that ever adds a remote. If a remote is already configured,
       there is nothing to ask or add here: this step is naturally moot on a
-      repeat backup, not skipped by any remembered flag. Step 6 below still
-      confirms the actual remote, fresh, on every run — but by the time it
-      runs, a remote is always already configured, either from an earlier
-      backup or from this step just now, so it never needs to add one
-      itself (this is step 2.4, referenced there by that name).
+      repeat backup, not skipped by any remembered flag. The owner's yes to
+      "private?" here is the one step 6 records as `remoteConfirmed` — it is
+      not asked a second time in the same run. Step 6 still reads the
+      actual remote on every run — but by the time it runs, a remote is
+      always already configured, either from an earlier backup or from
+      this step just now, so it never needs to add one itself (this is
+      step 2.4, referenced there by that name).
 
 2.5. **Measure what staging would take — before `git add` writes a single
    object.** `git add` copies file contents into the repository's object
@@ -348,12 +350,14 @@ is remembered between runs.
       at here.
    3. `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace>` → exit
       0. **A non-zero exit here means do not push.** Exit 1 lists
-      file:line locations of credential-shaped text pasted into notes — move
-      each into `keys/` (or have the owner confirm out loud it is a false
-      positive), then unstage and re-run this step from `git add -A`. Exit 2
-      means the scan could not be completed at all (an unreadable file) —
-      that is a failed check to fix and re-run, not a hit to remedy by
-      moving anything into `keys/`.
+      file:line locations of credential-shaped text pasted into notes. Open
+      each one: a hit that is plainly plan or test prose — a name, a
+      placeholder, a description of a secret, no value — is judged by you and
+      reported in the push report, not asked about. A hit that holds a value
+      stops the push: move it into the vault, then unstage and re-run this
+      step from `git add -A`. Exit 2 means the scan could not be completed at
+      all (an unreadable file) — that is a failed check to fix and re-run,
+      not a hit to remedy by moving anything into `keys/`.
 5. Commit, then fold in the manifest exactly as section 2's repository-route
    two-pass describes — including which of its two closing moves applies:
    `git -C <workspace> commit -m "workspace snapshot"` (note if there was
@@ -361,18 +365,27 @@ is remembered between runs.
    `git -C <workspace> add .joserah/backup-manifest.md`, then either amend
    or commit separately, per section 2's rule for the state you're actually
    in. Never amend a commit that might already be on the remote.
-6. Confirm the remote before touching it: `git -C <workspace> remote
+6. Read the remote before touching it: `git -C <workspace> remote
    get-url origin`. Step 2.4 above already added one if none existed, so
    this always prints a URL by the time you reach it here — this step only
-   confirms, it never adds. Show the URL to the owner and get a fresh yes,
-   right now, that it is their private remote — never rely on what was
-   said earlier in this session or a previous one. A value they don't
-   recognise, or any hesitation, means stop, never push there silently.
-7. Say once more, plainly, and get an explicit yes right before the push:
-   this puts the owner's journal, their notes about the people around them,
-   and everything in `.joserah/personal/` on that remote, for good. Question
-   1 in section 1 was the route choice; this is the consent that belongs to
-   the actual moment the data leaves the machine.
+   reads, it never adds. Compare it with `remoteConfirmed` in the `backup`
+   object of `.joserah/config.json`:
+   - **Same URL** — confirmed before. Push without asking (step 8) and name
+     the URL in the report.
+   - **No `remoteConfirmed` yet (first backup to this remote)** — ask once
+     (unless step 2.4 just asked it),
+     in plain words: is this their private remote, and do they accept that
+     the journal, their notes about the people around them and everything
+     in `.joserah/personal/` go there for good? On their yes, record it:
+
+     ```
+     node -e "const fs=require('fs');const p=process.argv[1];const c=JSON.parse(fs.readFileSync(p,'utf8'));c.backup=Object.assign(c.backup||{},{remoteConfirmed:process.argv[2]});fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');" "<workspace>/.joserah/config.json" "<url>"
+     ```
+   - **A different URL** — stop. Show both URLs and ask; on their yes,
+     record the new one as above. Never push to an unconfirmed remote.
+7. The gate's stops still stop, confirmed remote or not: a secret-scan hit
+   that holds a value (step 4.3), a `keys/` or `.env` decision (step 3), a
+   file over the size limits (step 2.5), out-of-scope history (step 2.6).
 8. Push **the branch that actually holds the commit you just made** — do
    not assume its name. Ask git, don't predict:
 
@@ -385,8 +398,10 @@ is remembered between runs.
    This flow never renames branches: push the current branch by name. The scope reset is the one
    exception.
 
-**Pushing is the owner's decision every time.** Ask in plain words before running it; never push
-unprompted.
+**The push itself is routine once the remote is confirmed.** The owner decides the remote once;
+after that a backup to that same URL is committed, pushed and reported, not asked about. The report
+is one line and names the target first: `workspace backup (<url>): <short hash> — <n> file(s)`,
+plus any secret-scan hit judged as prose.
 
 ### Second machine
 
@@ -424,10 +439,10 @@ Measure-Object -Line).Lines`), or on the zip route
   to push — the whole numbered sequence, not a subset. Step 2.4 naturally has nothing to ask
   once a remote is configured (it isn't skipped by a remembered flag, it's
   just moot). Everything else — the `keys/` listing in step 3, the
-  secret-scan re-check in step 4, step 6's fresh remote confirmation, step
-  8's push-the-current-branch — runs the same way on every backup: whatever
-  changed since `lastBackup` is content the owner has not had scanned,
-  listed, or confirmed before.
+  secret-scan re-check in step 4, step 6's comparison against
+  `remoteConfirmed`, step 8's push-the-current-branch — runs the same way on
+  every backup: whatever changed since `lastBackup` is content that has not
+  been scanned or listed before.
 - On conflict: markdown conflicts are resolved by reading both sides, never
   by taking one wholesale. Journal entries for the same day append; task
   lists merge line by line. Never resolve a conflict in `.joserah/personal/`
@@ -586,9 +601,9 @@ explicit yes, since every old version disappears from the backup:
   any of them.
 - Never write a zip inside the workspace it backs up.
 - Never restore over an existing workspace without explicit confirmation.
-- Never add or push to a repository remote the owner did not name — confirm
-  what `origin` already points at before every push, not just the first
-  one, and never push without their agreement in that session.
+- Never add or push to a repository remote the owner did not name — read
+  what `origin` points at before every push, not just the first one, and
+  push without asking only when it equals `remoteConfirmed` (step 6).
 - Never include `keys/` (other than `keys/AGENTS.md`) in a repository route
   unless the owner explicitly said yes to question 3 — and even then, only
   after the safety gate has otherwise passed and the consequences were said

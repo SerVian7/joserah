@@ -22,13 +22,13 @@ test('memory AGENTS.md: the pull checks, early push, the decision criterion, the
 });
 
 test('memory README: works without Joserah, with git and Node', () => {
-  assert.ok(read('README.md').includes('Joserah is not required: anyone with git and Node can work here — the rules are in `AGENTS.md`, the tools in `tools/`.'));
+  assert.ok(read('README.md').includes('Joserah is not required: anyone with git and Node can work here — the rules are in `AGENTS.md`, the tools in `tools/` (Node built-ins only, nothing to install).'));
 });
 
 test('memory AGENTS.md: verified procedures live as scripts that hold no secret', () => {
   const text = read('AGENTS.md');
   assert.ok(text.includes("Record first, script later. What was verified against a system"));
-  assert.ok(text.includes("A script enters `tools/<system>/` only when a sweep decides it (§5), built from a recorded, verified procedure; it holds no secret"));
+  assert.ok(text.includes("A script enters `tools/<system>/` only when a sweep decides it (§7), built from a recorded, verified procedure; it holds no secret"));
   assert.ok(text.includes("Node by default, PowerShell only where the host is Windows-only."));
   assert.ok(text.includes("From the R&D records merged in this sweep, list tool proposals"));
   assert.ok(text.includes("`desk/tools-proposed.md`"));
@@ -44,5 +44,35 @@ test('memory AGENTS.md and README: own vault and sweep check', () => {
     'A sweep with missing lines is not finished',
     '5. `keys/` is never opened by an assistant; what exists is in `.memory/vault-index.md`; a secret is saved by the member with `node tools/secret.js --set <name>` in their own terminal, or lives in their Joserah vault.',
   ]) assert.ok(a.includes(s), `missing: ${s}`);
-  assert.ok(read('README.md').includes('The memory carries its own vault (names only ever leave the machine) and its own sweep check, so no plugin is needed for either.'));
+  assert.ok(read('README.md').includes('The memory carries its own vault (names only ever leave the machine) and its own sweep check, so no plugin is needed for either:'));
+});
+
+// 0.15.6 (owner, 2026-09-30): the memory reads well to an AI opening it cold, names the clone
+// location, and its push notice is shown, then pushed.
+test('memory README: what this is, the first three steps, the clone location, the push target', () => {
+  const text = read('README.md');
+  for (const s of [
+    "{{COMPANY}}'s shared memory: what the company knows about its own work",
+    '## If you are an AI assistant opening this repository',
+    '1. `node tools/sync.js` — pulls, checks links and claim lines, lists questions waiting for the member.',
+    '2. `node tools/detect-member.js` — prints which member you work for (from `.memory/me`).',
+    "3. Read the member's folder, `members/<member>/`, and the company's open items, `desk/tasks/now.md`.",
+    '**With Joserah:** the plugin clones it into the workspace, at `.joserah/shared/<name>/`.',
+    '**Without Joserah:** clone it to `~/<name>`. One clone per machine; every workspace on that machine points at that clone instead of keeping its own.',
+    '— `shared memory <name> (<origin url>)` — and every file about to leave the machine.',
+  ]) assert.ok(text.includes(s), `missing: ${s}`);
+  assert.ok(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'README.md'), 'utf8').trimEnd().split(/\r?\n/).length <= 90, 'README ≤ 90 lines');
+});
+
+test('memory AGENTS.md: start steps, where never, the push is shown then made, the clone location', () => {
+  const text = read('AGENTS.md');
+  for (const s of [
+    '3. Read `members/<member>/` (`tasks.md`, the latest daily file, `notes/`) and `desk/tasks/now.md`.',
+    "Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8).",
+    "Show the list in the member's language, then push with `--yes`; wait only when the list holds a deletion or a file outside the member's own folder, inbox/ and questions/.",
+    '`pushed to shared memory <name>: <commit>`',
+    'or at `~/<name>` without Joserah — one clone per machine, every workspace on that machine points at it.',
+    'A command uses it only embedded, `$(node tools/secret.js <name>)`, never printed.',
+  ]) assert.ok(text.includes(s), `missing: ${s}`);
+  assert.ok(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8').trimEnd().split(/\r?\n/).length <= 110, 'AGENTS.md ≤ 110 lines');
 });

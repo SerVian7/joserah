@@ -86,13 +86,13 @@ an `AGENTS.md` that any assistant can follow, with or without Joserah. Create on
 shared memory for <company>" (`scaffold.js --kind memory`). Join one by saying "this repo is our shared
 memory: <url>", which clones it into `.joserah/shared/<name>/`. Each member writes only in
 `members/<name>/`, `inbox/` and `questions/`. A question for a colleague is a file addressed to them,
-and their next sync lists it for them. `sync.js --push` lists what would leave your
-machine and pushes only after you say yes. One person, the sweeper, merges the inbox into
+and their next sync lists it for them. `sync.js --push` shows what leaves your machine, then
+pushes; it waits for you only on a deletion or a file outside your own folder, `inbox/` and `questions/`. One person, the sweeper, merges the inbox into
 `knowledge/`, so commits never collide. Nothing personal and no password goes in. The briefing shows,
 for each memory, whether it is up to date, whether a sweep is due, and your open items there.
 The memory works without Joserah: anyone with git and Node can use it, and every pull runs its own
 link and claim-line checks. Verified procedures go in as records; tools are proposed at sweeps and written only from records (Node by default, PowerShell only where the host is Windows-only). When a member who has Joserah updates it, their update refreshes the
-memory's tools and rules and pushes them after the usual notice.
+memory's tools and rules and pushes them after the usual notice. Without Joserah the clone lives at `~/<name>`, one per machine, and every workspace on that machine points at it. Every commit or push report names its target first: `workspace backup`, `shared memory <name>` or `project <name>`, with the remote.
 
 ## Skills
 

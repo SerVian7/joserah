@@ -129,7 +129,8 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --refresh-memory <workspace-root>
 
 It prints the files it changed, or `up to date`, and never touches `knowledge/`, `members/`,
 `inbox/`, `questions/`, `.memory/` or `.brand/`. When files changed, run `node tools/sync.js --push`
-inside that memory and show the owner its push notice as always; on their yes, run it again with `--yes`.
+inside that memory and show the owner its push notice (`Push notice — shared memory <name> (<url>)`); the refreshed
+files lie outside the owner's own folder, so on their yes run it again with `--yes`.
 
 ## 6. Verify and report
 

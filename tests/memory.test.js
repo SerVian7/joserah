@@ -138,14 +138,15 @@ test('A3: sync.js --push commits only the member folder and the inbox, and pull 
   fs.appendFileSync(path.join(dir, 'knowledge', 'index.md'), '\nnot mine to write\n');
   const notice = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push']);
   assert.strictEqual(notice.status, 3, notice.stdout + notice.stderr);
-  assert.match(notice.stdout, /Push notice - 2 file\(s\)/);
+  // 0.15.6: the notice names its target — shared memory <folder name> (<origin url>).
+  assert.match(notice.stdout, /^Push notice — shared memory acme-memory \(.*acme-memory\.git\): 2 file\(s\)$/m);
   assert.match(notice.stdout, /inbox\/2026-09-30-bora-x\.md \(added\) - x$/m);
   assert.match(notice.stdout, /members\/bora\/daily\/2026-09-30\.md \(added\) - 2026-09-30$/m);
   assert.doesNotMatch(notice.stdout, /knowledge/);
   assert.strictEqual(git(dir, 'rev-list', '--count', '@{u}..HEAD').trim(), '0', 'notice pushes nothing');
   const r = node(dir, path.join(dir, 'tools', 'sync.js'), ['--push', '--yes']);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /bora: \d{4}-\d{2}-\d{2}/);
+  assert.match(r.stdout, /^pushed to shared memory acme-memory: [0-9a-f]{7,} bora: \d{4}-\d{2}-\d{2}$/m);
   const files = git(dir, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n').sort();
   assert.deepStrictEqual(files, ['inbox/2026-09-30-bora-x.md', 'members/bora/daily/2026-09-30.md']);
   assert.match(git(dir, 'status', '--porcelain'), /knowledge\/index\.md/, 'knowledge/ stays unstaged');

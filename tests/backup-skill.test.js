@@ -40,3 +40,15 @@ test('gate 2.6 prose says a hit routes to the scope reset, and that deleting fil
   assert.match(section, /scope reset/i);
   assert.match(section, /not (be )?fixed by deleting/i);
 });
+
+// 0.15.6 (owner, 2026-09-30): a routine push is done and reported. The remote is
+// confirmed once and recorded; a different URL or a secret with a value still stops.
+test('repository route: the remote is confirmed once, recorded, and later pushes are reported', () => {
+  const text = backupSkillText();
+  assert.match(text, /remoteConfirmed/);
+  assert.match(text, /\*\*A different URL\*\* — stop\./);
+  assert.match(text, /reported in the push report, not asked about/);
+  assert.match(text, /`workspace backup \(<url>\)/);
+  assert.doesNotMatch(text, /Pushing is the owner's decision every time/);
+  assert.doesNotMatch(text, /get a fresh yes/);
+});

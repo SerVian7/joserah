@@ -6,8 +6,11 @@
  *        node tools/sync.js --push [--who X]  commit members/<me>/, inbox/ and questions/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
  *
- * --push first prints a "Push notice" (every file about to go out, one line each)
- * and exits 3; the member sees it, says yes, and the same command runs again with --yes.
+ * --push first prints a "Push notice" naming its target (shared memory <folder> and
+ * its origin URL) and every file about to go out, one line each, then exits 3. The
+ * assistant shows that list to the member and runs the same command again with --yes;
+ * it waits for the member only when the list holds a deletion or a file outside
+ * members/<me>/, inbox/ and questions/.
  *
  * A member's commit carries only their own folder and the inbox, so two members
  * never touch the same file; anything else stays unstaged. Commit subjects start
@@ -30,6 +33,9 @@ function die(msg) { console.error(`sync: ${msg}`); process.exit(1); }
 
 const hasUpstream = git('rev-parse', '--abbrev-ref', '@{u}').status === 0;
 const hasOrigin = git('remote', 'get-url', 'origin').status === 0;
+// The push target, named in every notice and report: "shared memory <folder name>".
+const target = `shared memory ${path.basename(root)}`;
+const originUrl = hasOrigin ? git('remote', 'get-url', 'origin').stdout.trim() : 'no remote';
 function pull() {
   if (!hasUpstream) return 'no remote to pull from';
   const before = git('rev-parse', 'HEAD').stdout.trim();
@@ -105,7 +111,8 @@ if (!changes.length && (!hasUpstream || git('rev-list', '--count', '@{u}..HEAD')
   process.exit(0);
 }
 if (!flag('--yes')) {
-  console.log(`Push notice - ${changes.length} file(s) would go to the shared memory:\n${changes.join('\n')}\nShow this to the member; on their yes, run the same command again with --yes.`);
+  console.log(`Push notice — ${target} (${originUrl}): ${changes.length} file(s)\n${changes.join('\n')}\n` +
+    `Show this list to the member in their language, then run the same command again with --yes; wait for them only when it holds a deletion or a file outside members/${me}/, inbox/ and questions/.`);
   process.exit(3);
 }
 const staged = git('diff', '--cached', '--quiet').status !== 0;
@@ -113,15 +120,16 @@ if (staged) {
   const c = git('commit', '-q', '-m', subject);
   if (c.status !== 0) die(`commit failed — ${(c.stderr || c.stdout).trim()}`);
 }
-let pushed = 'committed locally, no remote configured';
+let pushed = `committed locally, not pushed (no remote configured for ${target})`;
 if (hasUpstream) {
   pull();
   const p = git('push', '--quiet');
   if (p.status !== 0) die(`push failed — ${(p.stderr || p.stdout).trim()}`);
-  pushed = 'pushed';
+  pushed = `pushed to ${target}`;
 } else if (hasOrigin) {
   const p = git('push', '--quiet', '-u', 'origin', 'HEAD');
   if (p.status !== 0) die(`push failed — ${(p.stderr || p.stdout).trim()}`);
-  pushed = 'pushed';
+  pushed = `pushed to ${target}`;
 }
-console.log(staged ? `${pushed}: ${subject}` : `nothing new to commit; ${pushed}`);
+const head = git('rev-parse', '--short', 'HEAD').stdout.trim();
+console.log(staged ? `${pushed}: ${head} ${subject}` : `nothing new to commit; ${pushed}`);

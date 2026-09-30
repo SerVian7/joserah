@@ -3,6 +3,14 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.6
+
+**Act, then report.** A routine, reversible step that follows from the request — a commit, a push of the assistant's own work to its own remote, a backup, a note in its own folder — is now done and reported in one line, not asked about. Questions are kept for deletions and overwrites, someone else's files, live systems, and requests with two materially different readings; hard rule 2 is unchanged. The backup skill asks once whether a new remote is private, records it in the `backup` object as `remoteConfirmed`, and pushes later backups to that same URL without asking; a different URL, or a secret-scan hit that holds a value, still stops. A hit judged as plan or test prose is reported, not asked about. Prompt v15.
+
+**The push names its target.** Every commit or push report starts with one of three fixed names and the remote: `workspace backup` (the assistant's own memory, to the owner's private backup repository), `shared memory <name>`, or `project <name>`. The memory's `sync.js` prints `Push notice — shared memory <name> (<origin url>): N file(s)` and ends with `pushed to shared memory <name>: <commit>`; the assistant shows the list and pushes, waiting only when it holds a deletion or a file outside the member's own folder, `inbox/` and `questions/`. Run `--refresh-memory` to pick it up.
+
+**The memory reads well to any AI.** The memory's `README.md` and `AGENTS.md` are rewritten for an assistant opening the repository cold, with or without Joserah: what it is, the first three steps (sync, who the member is, their folder and `desk/tasks/now.md`), where to write and where never, claim lines, the push notice, questions, secrets and the sweep. Every existing rule is kept. The standard clone location is stated: `.joserah/shared/<name>/` inside a Joserah workspace, `~/<name>` without Joserah — one clone per machine, every workspace on it points there.
+
 ## 0.15.5
 
 **Tool proposals from both sweeps.** The ordinary workspace sweep now lists tool proposals in `.joserah/desk/tools-proposed.md` from the R&D records and journal it merged, as the memory sweep does: one line each (system, what it would do, which records back it). Record first, script later; a proposal becomes a script only on the owner's yes.
