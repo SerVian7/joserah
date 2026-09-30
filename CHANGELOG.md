@@ -15,6 +15,8 @@ any of them.
 
 **`ownerIsDeveloper` is removed.** No config key decides how technical the talk is: the briefing always says to match the owner and volunteer no internals they did not ask for. A developer who wants them named plainly writes one line in their own `.joserah/directives.md`. `migrate.js` deletes a leftover key (`configKeysRemoved`).
 
+**A shared memory's state is a sentence.** The briefing says it in the owner's language (Turkish or English): behind — the count, the latest commit's author, subject and age, and that it will be pulled at session start; ahead — the unpushed commits and `sync --push` for the push notice; level — up to date. The sweep-due and open-item lines stay.
+
 ## 0.14.0
 
 **No marketplace, no cache, no `claude plugin update`.** Joserah is a git clone linked as `~/.claude/skills/joserah` and loaded in place as `joserah@skills-dir` (README, "Where Joserah runs"). `/joserah:update` is a `git pull` on the clone, the workspace migration, then `/reload-plugins`. The re-copy of 0.13.8–0.13.10, its diagnostics file and stamps, and `tools/install-dev-hook.js` are gone; the briefing keeps the daily "N new commits upstream" line. Doctor's new `plugin loaded from the skills dir` check warns on a copy in the plugin cache.

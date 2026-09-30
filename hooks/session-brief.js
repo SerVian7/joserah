@@ -69,6 +69,39 @@ function commitsBehindLine(checkout, now) {
 // clones under .joserah/shared/). Best-effort like the update lines: a memory
 // that cannot be read is named, never a reason for the brief to fail.
 const MEMORY_TASK_CHARS = 600;
+
+// 0.15.0 (owner, 2026-09-30): the sync state is said to the owner as a
+// sentence in their language, not a status code. Turkish or English; the
+// bracketed tail is for the assistant.
+function ago(ms, tr) {
+  const min = Math.max(0, Math.round(ms / 60000));
+  const [n, unit] = min < 60 ? [min, 0] : min < 48 * 60 ? [Math.round(min / 60), 1] : [Math.round(min / 1440), 2];
+  if (tr) return n === 0 && unit === 0 ? 'az önce' : `${n} ${['dakika', 'saat', 'gün'][unit]} önce`;
+  if (n === 0 && unit === 0) return 'just now';
+  return `${n} ${['minute', 'hour', 'day'][unit]}${n === 1 ? '' : 's'} ago`;
+}
+function syncSentences(repo, company, language, now) {
+  const tr = /^(tr|turk|türk)/i.test(String(language || ''));
+  const behind = countCommits(repo, 'HEAD..@{u}');
+  const ahead = countCommits(repo, '@{u}..HEAD');
+  const out = [];
+  if (behind) {
+    const log = spawnSync('git', ['-C', repo, 'log', '-1', '--format=%an|%ct|%s', '@{u}'], { encoding: 'utf8', timeout: 8000 });
+    const [an = '?', ct = '0', ...rest] = (log.stdout || '').trim().split('|');
+    const age = ago(now.getTime() - Number(ct) * 1000, tr);
+    out.push((tr
+      ? `${company} ortak hafızası eski kalmış: ${behind} yeni commit var — son: ${an}, '${rest.join('|')}', ${age}. Oturum başında çekilecek.`
+      : `The ${company} shared memory is behind: ${behind} new commit${behind === 1 ? '' : 's'} — latest: ${an}, '${rest.join('|')}', ${age}. It will be pulled at session start.`)
+      + ' [run `node tools/sync.js` there first]');
+  }
+  if (ahead) {
+    out.push(tr
+      ? `${company} ortak hafızasında gönderilmemiş ${ahead} commit'in var — push bildirimi için sync --push.`
+      : `The ${company} shared memory has ${ahead} unpushed commit${ahead === 1 ? '' : 's'} of yours — sync --push for the push notice.`);
+  }
+  if (!behind && !ahead) out.push(tr ? `${company} ortak hafızası güncel.` : `The ${company} shared memory is up to date.`);
+  return out;
+}
 function memoryBlocks(cfg, now) {
   const out = [];
   for (const m of Array.isArray(cfg.shared) ? cfg.shared : []) {
@@ -83,10 +116,9 @@ function memoryBlocks(cfg, now) {
       const lines = [`### Shared memory: ${m.name} (${m.path}), you are "${me || '?'}"`];
       if (!me) lines.push('Member name unknown: ask once and write it into .memory/me there.');
       if (fetchDaily(abs, now)) {
-        const behind = countCommits(abs, 'HEAD..@{u}');
-        const ahead = countCommits(abs, '@{u}..HEAD');
-        if (behind) lines.push(`${behind} new commit(s) upstream — run \`node tools/sync.js\` there before relying on it.`);
-        if (ahead) lines.push(`${ahead} local commit(s) not pushed — \`node tools/sync.js --push\`.`);
+        let company = m.name;
+        try { company = JSON.parse(fs.readFileSync(path.join(abs, '.memory', 'config.json'), 'utf8')).company || m.name; } catch { /* the name will do */ }
+        lines.push(...syncSentences(abs, company, cfg.dialogueLanguage, now));
       }
       const due = spawnSync(process.execPath, [path.join(abs, 'tools', 'sweep-due.js')], { encoding: 'utf8', timeout: 5000 });
       if (due.stdout && due.stdout.trim()) lines.push(due.stdout.trim());

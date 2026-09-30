@@ -286,10 +286,51 @@ test('A6: the brief carries one block per memory: sync state, the sweep line, th
 
   const ctx = brief(ws);
   assert.match(ctx, /### Shared memory: acme-memory \(\.joserah\/shared\/acme-memory\), you are "bora"/);
-  assert.match(ctx, /1 new commit\(s\) upstream/);
+  assert.match(ctx, /The Acme shared memory is behind: 1 new commit — latest: t, 'ada: 2026-09-30', (just now|\d+ minutes? ago)\. It will be pulled at session start\./);
   assert.match(ctx, /never swept, 1 inbox file/);
   assert.match(ctx, /- \[ \] ship the encoder note/);
   assert.doesNotMatch(ctx, /done one/);
+});
+
+// 0.15.0: the sync state reads as a sentence in the owner's language.
+function joinedTr(t) {
+  const base = tmpdir(t);
+  const src = memory(t, path.join(base, 'src'));
+  const bare = path.join(base, 'acme-memory.git');
+  git(base, 'clone', '-q', '--bare', src, bare);
+  const ws = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', ws, '--workspace', 'w', '--owner', 'Bora Tan', '--language', 'Turkish']);
+  assert.strictEqual(runTool('scaffold.js', ['--join-memory', bare, '--target', ws]).status, 0);
+  return { base, bare, ws, mem: path.join(ws, '.joserah', 'shared', 'acme-memory') };
+}
+const syncLines = (ctx) => ctx.split('\n').filter((l) => /ortak hafıza/.test(l));
+
+test('A6: in Turkish, a level memory is one sentence: güncel', (t) => {
+  const { ws } = joinedTr(t);
+  assert.deepStrictEqual(syncLines(brief(ws)), ['Acme ortak hafızası güncel.']);
+});
+
+test('A6: in Turkish, behind names the count, the latest author, subject and age', (t) => {
+  const { base, bare, ws } = joinedTr(t);
+  const other = path.join(base, 'other');
+  git(base, 'clone', '-q', bare, other);
+  for (const n of [1, 2, 3]) {
+    fs.writeFileSync(path.join(other, 'inbox', `2026-09-30-ada-${n}.md`), '# y\n');
+    git(other, 'add', '.'); git(other, 'commit', '-q', '-m', `sweep 2026-09-30 ${n}`);
+  }
+  git(other, 'push', '-q');
+  const lines = syncLines(brief(ws));
+  assert.strictEqual(lines.length, 1, lines.join('\n'));
+  assert.match(lines[0], /^Acme ortak hafızası eski kalmış: 3 yeni commit var — son: t, 'sweep 2026-09-30 3', (az önce|\d+ dakika önce)\. Oturum başında çekilecek\./);
+});
+
+test('A6: in Turkish, ahead says the unpushed commits and the push notice', (t) => {
+  const { ws, mem } = joinedTr(t);
+  for (const n of [1, 2]) {
+    fs.writeFileSync(path.join(mem, 'inbox', `2026-09-30-bora-${n}.md`), '# x\n');
+    git(mem, 'add', '.'); git(mem, 'commit', '-q', '-m', `bora ${n}`);
+  }
+  assert.deepStrictEqual(syncLines(brief(ws)), ["Acme ortak hafızasında gönderilmemiş 2 commit'in var — push bildirimi için sync --push."]);
 });
 
 test('A6: a workspace with no shared memory has no memory block', (t) => {
