@@ -34,3 +34,12 @@ test('stampKey tolerates a UTF-8 BOM and keeps it', () => {
   assert.ok(r.text.startsWith('\uFEFF{'));
   assert.deepStrictEqual(JSON.parse(r.text.replace(/^\uFEFF/, '')), { k: 'v', a: 1 });
 });
+
+// 0.15.1: migrate records imported vault files as `vault: { imported: [...] }`.
+test('stampKey replaces an existing object value whole, leaving the rest alone', () => {
+  const text = '{\n  "vault": { "imported": ["keys/a.json", "keys/b,c.json"] },\n  "z": [1, 2]\n}\n';
+  const r = stampKey(text, 'vault', { imported: ['keys/a.json', 'keys/d.json'] });
+  assert.strictEqual(r.changed, true);
+  assert.strictEqual(r.text, '{\n  "vault": {"imported":["keys/a.json","keys/d.json"]},\n  "z": [1, 2]\n}\n');
+  assert.strictEqual(stampKey(r.text, 'vault', { imported: ['keys/a.json', 'keys/d.json'] }).changed, false);
+});

@@ -182,3 +182,81 @@ test('secret: --rename moves a name without showing the value; refuses a taken o
   assert.strictEqual(run(dir, ['--rename', 'nope.x', 'acme.db.other']).status, 2, 'missing');
   assert.strictEqual(run(dir, ['acme.db.user']).stdout, 'fake-2');
 });
+
+// 0.15.1 (ctrl server): a collector's record array was flattened by index into
+// 382 names like `0.value` and `0.found-in.3`.
+test('secret: --import reads a record array by record, metadata left out, duplicates numbered', (t) => {
+  const dir = ws(t);
+  const src = path.join(dir, 'collected.json');
+  fs.writeFileSync(src, JSON.stringify([
+    { name: 'Ctrl root', system: 'Ctrl Server', kind: 'password', username: 'fake-root', value: 'fake-p1', collected: '2026-09-01', 'found-in': ['a.md', 'b.md'] },
+    { name: 'Ctrl root 2', system: 'Ctrl Server', kind: 'Password', value: 'fake-p2', 'found-in': [] },
+    { name: 'Sheets', system: 'Sheets', kind: 'API Key', value: 'fake-k', note: 'fake-n' },
+  ]));
+  assert.match(run(dir, ['--import', src]).stderr, /record array — its names need --prefix/);
+  const r = run(dir, ['--import', src, '--prefix', 'zg']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.deepStrictEqual(run(dir, ['--list']).stdout.trim().split(/\r?\n/),
+    ['zg.ctrl-server.password', 'zg.ctrl-server.password-2', 'zg.ctrl-server.user', 'zg.sheets.api-token', 'zg.sheets.note']);
+  assert.match(r.stdout, /duplicate zg\.ctrl-server\.password -> zg\.ctrl-server\.password-2/);
+  assert.strictEqual(run(dir, ['zg.ctrl-server.password-2']).stdout, 'fake-p2');
+  assert.strictEqual(run(dir, ['zg.ctrl-server.user']).stdout, 'fake-root');
+  assert.strictEqual(run(dir, ['zg.sheets.api-token']).stdout, 'fake-k');
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
+});
+
+test('secret: --import --replace counts and refuses without --yes, empties the store with it', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'old.one.pin'], 'fake-1');
+  run(dir, ['--set', 'old.two.pin'], 'fake-2');
+  const src = path.join(dir, 'new.json');
+  fs.writeFileSync(src, JSON.stringify({ acme: { db: { password: 'fake-3' } } }));
+  const no = run(dir, ['--import', src, '--replace']);
+  assert.strictEqual(no.status, 1);
+  assert.match(no.stderr, /would delete all 2 name\(s\).*--yes/);
+  assert.strictEqual(run(dir, ['--has', 'old.one.pin']).status, 0, 'nothing deleted without --yes');
+  const yes = run(dir, ['--import', src, '--replace', '--yes']);
+  assert.strictEqual(yes.status, 0, yes.stderr);
+  assert.deepStrictEqual(run(dir, ['--list']).stdout.trim().split(/\r?\n/), ['acme.db.password']);
+});
+
+test('secret: --import refuses what is not a vault and leaves it alone', (t) => {
+  const dir = ws(t);
+  const sa = path.join(dir, 'google-sa.json');
+  fs.writeFileSync(sa, JSON.stringify({ type: 'service_account', project_id: 'fake', private_key: 'fake-key', client_email: 'fake@x' }));
+  const r = run(dir, ['--import', sa, '--prefix', 'g']);
+  assert.strictEqual(r.status, 4);
+  assert.match(r.stderr, /not a vault: google-sa\.json \(a service-account key\)/);
+  const other = path.join(dir, 'list.json');
+  fs.writeFileSync(other, JSON.stringify({ hosts: ['a', 'b'] }));
+  assert.strictEqual(run(dir, ['--import', other]).status, 4);
+  assert.ok(!fs.existsSync(store(dir)), 'no store written');
+});
+
+// 0.15.1 (owner, 2026-09-30): saving a secret is one line the owner runs; with
+// nothing piped, --set asks for the value with echo off. A real console cannot
+// be driven headlessly, so a preload stands one in: stdin claims to be a TTY
+// and readline answers the question with what the owner "typed".
+test('secret: --set with a terminal asks for the value, echoes nothing, stores it', (t) => {
+  const dir = ws(t);
+  const fake = path.join(dir, 'fake-tty.js');
+  fs.writeFileSync(fake, [
+    "Object.defineProperty(process.stdin, 'isTTY', { value: true });",
+    "const rl = require('readline');",
+    "rl.createInterface = () => ({ question(q, cb) { process.stderr.write('ASKED:' + q); cb(process.env.FAKE_TYPED); }, close() {} });",
+  ].join('\n'));
+  const { spawnSync } = require('child_process');
+  const { PLUGIN_ROOT } = require('./helpers');
+  const go = (typed) => spawnSync(process.execPath, ['-r', fake, path.join(PLUGIN_ROOT, 'tools', 'secret.js'), '--set', 'acme.db.password'],
+    { cwd: dir, encoding: 'utf8', env: { ...process.env, FAKE_TYPED: typed } });
+  const empty = go('');
+  assert.strictEqual(empty.status, 1);
+  assert.ok(!fs.existsSync(store(dir)), 'an empty value is refused');
+  const r = go('fake-typed-pw');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stderr, /ASKED:Value for acme\.db\.password: /);
+  assert.strictEqual(r.stdout.trim(), 'saved: acme.db.password');
+  assert.doesNotMatch(r.stdout + r.stderr, /fake-typed/);
+  assert.strictEqual(run(dir, ['acme.db.password']).stdout, 'fake-typed-pw');
+  assert.match(index(dir), /- acme\.db\.password/);
+});

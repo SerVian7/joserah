@@ -11,13 +11,17 @@
  *   node .joserah/tools/secret.js --list                  names only, never a value
  *   node .joserah/tools/secret.js --has <name>            present/absent, no value
  *   node .joserah/tools/secret.js <name>                  prints the value — only ever inside $(...)
+ *   node .joserah/tools/secret.js --set <name> [--force]   in a terminal: asks for the value, echo off
  *   <value> | node .joserah/tools/secret.js --set <name> [--force]
  *                                                         value from stdin, never echoed
  *   node .joserah/tools/secret.js --index                 writes .joserah/vault-index.md, names only
- *   node .joserah/tools/secret.js --import <file> [--prefix <scope>] [--delete]
- *                                                         a foreign vault (.json, any nesting) or .env
- *                                                         into names; lists names, never values; never
- *                                                         overwrites (conflict = skipped, exit 1)
+ *   node .joserah/tools/secret.js --import <file> [--prefix <scope>] [--delete] [--replace --yes]
+ *                                                         a foreign vault (.json, any nesting, or a record
+ *                                                         array — needs --prefix) or .env into names; lists
+ *                                                         names, never values; never overwrites (conflict =
+ *                                                         skipped, exit 1); --replace --yes empties the store
+ *                                                         first; a file that is not a vault (service-account
+ *                                                         key, PEM, other JSON) is refused, exit 4
  *   node .joserah/tools/secret.js --rename <old> <new>    correct a name without seeing the value
  *
  * Embed, never print:
@@ -26,7 +30,7 @@
  * Names: lowercase, dot-separated, at least two parts — <scope>.<system>[.<sub>].<field>,
  * field one of host|port|url|user|password|token|api-token|pin|ssid|serial|note ...
  *
- * Exit: 0 ok · 1 usage error · 2 no such name · 3 store unreadable / no workspace.
+ * Exit: 0 ok · 1 usage error · 2 no such name · 3 store unreadable / no workspace · 4 not a vault.
  */
 'use strict';
 const fs = require('fs');
@@ -121,15 +125,75 @@ if (args[0] === '--has') {
 const parts = (key) => String(key).toLowerCase().split('.')
   .map((p) => p.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')).filter(Boolean);
 
+// 0.15.1: a record array — [{ system, kind, username, value, note, ... }], what a
+// secret collector writes. Flattening it by index gave 382 useless names
+// (`0.value`, `0.found-in.3`). One record: <prefix>.<system>.<field>, the field
+// from `kind`; `username` -> .user, `note` -> .note; name, collected, found-in
+// and anything else are metadata and are not stored.
+const isRecordArray = (d) => Array.isArray(d) && d.length > 0 &&
+  d.every((r) => r && typeof r === 'object' && !Array.isArray(r) && 'value' in r);
+const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const FIELDS = { 'api-key': 'api-token', apikey: 'api-token', 'api-token': 'api-token', password: 'password', token: 'token', pin: 'pin' };
+const duplicates = [];
+function recordEntries(data, pre) {
+  const seen = new Map();
+  // Same name, different value: -2, -3 ... on the field. Same value: one entry.
+  const unique = (name, value) => {
+    for (let i = 1; ; i++) {
+      const n = i === 1 ? name : `${name}-${i}`;
+      if (!seen.has(n) || seen.get(n) === value) {
+        if (i > 1 && !seen.has(n)) duplicates.push(`${name} -> ${n}`);
+        seen.set(n, value);
+        return n;
+      }
+    }
+  };
+  const out = [];
+  for (const r of data) {
+    const base = pre.concat(slug(r.system)).join('.');
+    const kind = slug(r.kind);
+    const add = (field, v) => {
+      if (v === undefined || v === null || typeof v === 'object') return;
+      const name = unique(`${base}.${field}`, String(v));
+      out.push([name, String(v)]);
+    };
+    add(FIELDS[kind] || kind, r.value);
+    add('user', r.username);
+    add('note', r.note);
+  }
+  return out;
+}
+
+// 0.15.1: a file that holds secrets but is not a vault — a service-account key a
+// live MCP server reads, a PEM key — is never imported, and neither is a JSON of
+// any other shape. `null` means it is a vault.
+const MAX_VAULT_BYTES = 512 * 1024;
+function notAVault(file, text) {
+  if (fs.statSync(file).size > MAX_VAULT_BYTES) return 'larger than 512 KB';
+  if (/-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)/.test(text)) return 'a PEM or OpenSSH key';
+  if (!(/\.json$/i.test(file) || /^\s*[{[]/.test(text))) return null;
+  let data;
+  try { data = JSON.parse(text); } catch { return 'not valid JSON'; }
+  if (data && (data.type === 'service_account' || 'private_key' in Object(data))) return 'a service-account key';
+  if (standard(data) || isRecordArray(data)) return null;
+  const leavesAreStrings = (n) => n !== null && typeof n === 'object' && !Array.isArray(n) &&
+    Object.values(n).every((v) => v === null || ['string', 'number'].includes(typeof v) || leavesAreStrings(v));
+  return leavesAreStrings(data) ? null : 'not a name -> value map';
+}
+
 // Foreign vault -> [name, value] pairs. JSON: any nesting, keys become parts
-// (a standard store is read through its `secrets`). Anything else: .env lines.
-function entriesOf(file, prefix) {
-  const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
+// (a standard store is read through its `secrets`); a record array by record.
+// Anything else: .env lines.
+function entriesOf(file, prefix, text) {
   const pre = prefix ? parts(prefix) : [];
   const out = [];
   // By extension, or by content: a renamed store (secrets.json.imported-<date>) is still JSON.
   if (/\.json$/i.test(file) || /^\s*[{[]/.test(text)) {
     let data = JSON.parse(text);
+    if (isRecordArray(data)) {
+      if (!pre.length) die(1, 'secret: ' + path.basename(file) + ' is a record array — its names need --prefix <scope>');
+      return recordEntries(data, pre);
+    }
     if (standard(data)) data = data.secrets;
     (function walk(node, trail) {
       if (node !== null && typeof node === 'object') {
@@ -154,9 +218,25 @@ if (args[0] === '--import') {
   if (!file || !fs.existsSync(file)) die(1, 'secret: --import needs an existing file');
   if (file === path.resolve(STORE)) die(1, 'secret: that is the store itself');
   const pi = args.indexOf('--prefix');
-  let entries;
-  try { entries = entriesOf(file, pi > 0 ? args[pi + 1] : ''); }
+  let text;
+  try { text = fs.readFileSync(file, 'utf8').replace(/^﻿/, ''); }
   catch (err) { die(1, 'secret: cannot read ' + path.basename(file) + ' (' + err.name + ')'); }
+  const why = notAVault(file, text);
+  if (why) die(4, `secret: not a vault: ${path.basename(file)} (${why}) — nothing imported, the file is untouched`);
+  let entries;
+  try { entries = entriesOf(file, pi > 0 ? args[pi + 1] : '', text); }
+  catch (err) { die(1, 'secret: cannot read ' + path.basename(file) + ' (' + err.name + ')'); }
+  if (!entries.some(([name, value]) => NAME.test(name) && value)) {
+    die(4, `secret: not a vault: ${path.basename(file)} (no valid name in it${pi > 0 ? '' : ' — try --prefix'}) — nothing imported`);
+  }
+  // --replace: the store is emptied first (its .bak keeps the old one). Counted, never done without --yes.
+  if (args.includes('--replace')) {
+    const count = Object.keys(secrets).length;
+    if (!args.includes('--yes')) die(1, `secret: --replace would delete all ${count} name(s) in the store first; add --yes`);
+    for (const k of Object.keys(secrets)) delete secrets[k];
+    console.log(`replace: ${count} name(s) removed from the store`);
+  }
+  for (const d of duplicates) console.log(`duplicate ${d}`);
   const n = { imported: 0, unchanged: 0, skipped: 0 };
   for (const [name, value] of entries) {
     // Lines carry names only; a value never reaches stdout or stderr.
@@ -166,7 +246,7 @@ if (args[0] === '--import') {
     else if (has(name)) { n.skipped++; console.log(`skipped ${name}: exists with a different value`); }
     else { secrets[name] = value; n.imported++; console.log(`imported ${name}`); }
   }
-  if (n.imported) save(); else writeIndex();
+  if (n.imported || args.includes('--replace')) save(); else writeIndex();
   console.log(`import: ${n.imported} imported, ${n.unchanged} unchanged, ${n.skipped} skipped`);
   if (n.skipped) process.exit(1);
   if (args.includes('--delete')) fs.rmSync(file);
@@ -189,18 +269,39 @@ if (args[0] === '--set') {
   const name = args[1];
   if (!name || !NAME.test(name)) die(1, 'secret: name must be <scope>.<system>.<field> (lowercase letters, digits, hyphens)');
   if (has(name) && !args.includes('--force')) die(1, `secret: "${name}" already exists; --force to overwrite`);
-  const value = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, '');
-  if (!value) die(1, 'secret: stdin is empty');
-  secrets[name] = value;
-  save();
-  console.log('saved: ' + name);
-  process.exit(0);
+  const store = (value) => {
+    secrets[name] = value;
+    save();
+    console.log('saved: ' + name);
+    process.exit(0);
+  };
+  if (process.stdin.isTTY) {
+    // 0.15.1 (owner, 2026-09-30): the owner runs this line in their own
+    // terminal, so the value never passes through the assistant. The prompt
+    // goes to stderr; what is typed is not echoed.
+    const rl = require('readline').createInterface({ input: process.stdin, output: process.stderr, terminal: true });
+    const question = `Value for ${name}: `;
+    rl._writeToOutput = (s) => { if (s.includes(question)) process.stderr.write(question); };
+    rl.question(question, (typed) => {
+      rl.close();
+      process.stderr.write('\n');
+      if (!typed) die(1, 'secret: nothing typed, nothing saved');
+      store(typed);
+    });
+  } else {
+    const value = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, '');
+    if (!value) die(1, 'secret: stdin is empty');
+    store(value);
+  }
 }
 
 const key = args[0];
-if (!has(key)) {
-  // Suggesting names helps fix a typo without leaking a value.
-  const near = Object.keys(secrets).filter((k) => k.startsWith(key.split('.')[0])).slice(0, 8);
-  die(2, `secret: "${key}" not found.` + (near.length ? '\nclose names:\n  ' + near.join('\n  ') : ''));
+// --set on a terminal answers asynchronously, above; nothing below is for it.
+if (key !== '--set') {
+  if (!has(key)) {
+    // Suggesting names helps fix a typo without leaking a value.
+    const near = Object.keys(secrets).filter((k) => k.startsWith(key.split('.')[0])).slice(0, 8);
+    die(2, `secret: "${key}" not found.` + (near.length ? '\nclose names:\n  ' + near.join('\n  ') : ''));
+  }
+  process.stdout.write(String(secrets[key]));
 }
-process.stdout.write(String(secrets[key]));

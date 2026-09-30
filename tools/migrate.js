@@ -280,21 +280,37 @@ for (const rel of LOCAL_TOOLS) {
 // passwords.json — or a secrets.json in a foreign shape) is imported once
 // through secret.js --import, so no value passes through this tool or its
 // report. Only keys/ is read: a module's own .env (docker-stack, projects) is
-// that module's secret and stays where it is (owner, 2026-09-29). A source is
-// renamed <name>.imported-<date>, never deleted — the owner deletes it — and
-// only when its import was clean; a foreign secrets.json has to move before a
-// standard store can take its place, so it is renamed first. `migratedTo`
-// decides: a workspace at 0.15.0 or later is not imported again.
+// that module's secret and stays where it is (owner, 2026-09-29).
+// 0.15.1 (a field near-miss: a live MCP server's service-account key was
+// taken for a vault): a source is never renamed or moved. A clean import is
+// recorded under `vault.imported` in config.json and not read again; the owner
+// deletes the original if they want. A file that live config names (.mcp.json,
+// .claude/settings*.json) is not even opened, and secret.js refuses what is
+// not a vault (service-account key, PEM, other JSON, over 512 KB) — exit 4,
+// reported under `notVault`. The one exception is a foreign-shaped
+// keys/secrets.json: its path is the store's, so it moves to
+// secrets.json.imported-<date> — and back again if it proves not to be a vault.
+// `migratedTo` decides: a workspace at 0.15.0 or later is not imported again.
 const VAULT_SINCE = '0.15.0';
 const vaultFrom = cfgForKind && (cfgForKind.migratedTo || cfgForKind.createdByPluginVersion);
 let vault = null;
 const keysPath = path.join(root, 'keys');
 if ((!vaultFrom || compareVersions(vaultFrom, VAULT_SINCE) < 0) && fs.existsSync(keysPath)) {
   const stamp = new Date().toISOString().slice(0, 10);
+  const prior = (cfgForKind && cfgForKind.vault) || {};
+  const done = new Set(Array.isArray(prior.imported) ? prior.imported : []);
   const isVault = (f) => /\.json$/i.test(f) || /(^|\.)env$|^\.env\./i.test(f);
   const sources = fs.readdirSync(keysPath, { withFileTypes: true })
-    .filter((e) => e.isFile() && isVault(e.name) && e.name !== 'secrets.json')
+    .filter((e) => e.isFile() && isVault(e.name) && e.name !== 'secrets.json' && !done.has('keys/' + e.name))
     .map((e) => e.name);
+  // Live config, as text: a file named in it is in use, whatever its shape.
+  let live = '';
+  const readLive = (p) => { try { live += fs.readFileSync(p, 'utf8') + '\n'; } catch { /* absent */ } };
+  readLive(path.join(root, '.mcp.json'));
+  try {
+    for (const f of fs.readdirSync(path.join(root, '.claude'))) if (/^settings.*\.json$/i.test(f)) readLive(path.join(root, '.claude', f));
+  } catch { /* no .claude/ */ }
+  const inUse = (name) => live.includes(name);
   const storePath = path.join(keysPath, 'secrets.json');
   let foreignStore = false;
   if (fs.existsSync(storePath)) {
@@ -303,26 +319,43 @@ if ((!vaultFrom || compareVersions(vaultFrom, VAULT_SINCE) < 0) && fs.existsSync
       foreignStore = !(d && d.secrets && typeof d.secrets === 'object' && !Array.isArray(d.secrets));
     } catch { /* unreadable: secret.js reports it; not ours to move */ }
   }
-  vault = { sources: [], imported: 0, unchanged: 0, skipped: 0, renamed: [], kept: [] };
+  vault = { sources: [], imported: 0, unchanged: 0, skipped: 0, recorded: [], kept: [], notVault: [], needsPrefix: [], inUse: [], renamed: [] };
   const secretTool = path.join(root, '.joserah', 'tools', 'secret.js');
-  const importOne = (name, renameAfter) => {
-    vault.sources.push('keys/' + name);
-    if (dryRun) return;
+  // 'ok' | 'not-a-vault' | 'kept'
+  const importOne = (name, label) => {
+    vault.sources.push(label);
+    if (dryRun) return 'ok';
     const r = spawnSync(process.execPath, [secretTool, '--import', path.join(keysPath, name)], { cwd: root, encoding: 'utf8' });
     const m = /import: (\d+) imported, (\d+) unchanged, (\d+) skipped/.exec(r.stdout || '');
     if (m) { vault.imported += +m[1]; vault.unchanged += +m[2]; vault.skipped += +m[3]; }
-    if (r.status === 0 && renameAfter) {
-      fs.renameSync(path.join(keysPath, name), path.join(keysPath, `${name}.imported-${stamp}`));
-      vault.renamed.push('keys/' + name);
-    } else if (r.status !== 0) vault.kept.push('keys/' + name);
+    if (r.status === 0) return 'ok';
+    if (r.status === 4) {
+      const why = /not a vault: [^(]*\(([^)]*)\)/.exec(r.stderr || '');
+      vault.notVault.push({ file: label, reason: why ? why[1] : 'not a vault' });
+      return 'not-a-vault';
+    }
+    if (/needs --prefix/.test(r.stderr || '')) vault.needsPrefix.push(label);
+    else vault.kept.push(label);
+    return 'kept';
   };
-  if (foreignStore) {
+  if (foreignStore && inUse('secrets.json')) vault.inUse.push('keys/secrets.json');
+  else if (foreignStore) {
     const moved = `secrets.json.imported-${stamp}`;
     if (!dryRun) fs.renameSync(storePath, path.join(keysPath, moved));
-    vault.renamed.push('keys/secrets.json');
-    importOne(dryRun ? 'secrets.json' : moved, false);
+    const res = importOne(dryRun ? 'secrets.json' : moved, 'keys/secrets.json');
+    if (res === 'not-a-vault' && !dryRun) fs.renameSync(path.join(keysPath, moved), storePath);
+    else vault.renamed.push('keys/secrets.json');
   }
-  for (const name of sources) importOne(name, true);
+  for (const name of sources) {
+    const label = 'keys/' + name;
+    if (inUse(name)) { vault.inUse.push(label); continue; }
+    if (importOne(name, label) === 'ok') vault.recorded.push(label);
+  }
+  if (!dryRun && vault.recorded.length) {
+    const r = stampKey(fs.readFileSync(cfgPath, 'utf8'), 'vault',
+      { ...prior, imported: [...done, ...vault.recorded] });
+    if (r.changed) fs.writeFileSync(cfgPath, r.text, 'utf8');
+  }
   if (!dryRun) spawnSync(process.execPath, [secretTool, '--index'], { cwd: root, encoding: 'utf8' });
 }
 

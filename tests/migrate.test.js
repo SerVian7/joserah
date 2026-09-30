@@ -735,8 +735,9 @@ test('migrate --dry-run decides the same way but writes no tool copy', (t) => {
   assert.ok(!fs.existsSync(path.join(dir, '.joserah', 'tools', 'secret.js')));
 });
 
-// 0.15.0: an old vault under keys/ is imported once, by name, and renamed —
-// never deleted, and no value reaches migrate's report.
+// 0.15.0: an old vault under keys/ is imported once, by name — and, since
+// 0.15.1, left where it is (a live MCP server may read it) and recorded in
+// config.json; no value reaches migrate's report.
 function oldVaultWs(t) {
   const dir = ws(t);
   const p = path.join(dir, '.joserah', 'config.json');
@@ -748,7 +749,7 @@ function oldVaultWs(t) {
 const keysDir = (dir) => path.join(dir, 'keys');
 const secretHas = (dir, name) => runTool('secret.js', ['--has', name], { cwd: dir }).status === 0;
 
-test('migrate imports an old vault under keys/ once, renames it, reports counts only', (t) => {
+test('migrate imports an old vault under keys/ once, leaves it in place, records it, reports counts only', (t) => {
   const dir = oldVaultWs(t);
   write(dir, 'keys/vault.json', JSON.stringify({ corlu: { cam1: { user: 'fake-admin', password: 'fake-pw-9' } } }));
   write(dir, 'keys/id_ed25519', '-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n');
@@ -761,8 +762,9 @@ test('migrate imports an old vault under keys/ once, renames it, reports counts 
   assert.doesNotMatch(r.stdout + r.stderr, /fake/);
   assert.ok(secretHas(dir, 'corlu.cam1.user'));
   const left = fs.readdirSync(keysDir(dir));
-  assert.ok(!left.includes('vault.json'));
-  assert.ok(left.some((f) => /^vault\.json\.imported-\d{4}-\d{2}-\d{2}$/.test(f)), left.join(','));
+  assert.ok(left.includes('vault.json'), 'the source stays where it is');
+  assert.ok(!left.some((f) => /\.imported-/.test(f)), left.join(','));
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8')).vault, { imported: ['keys/vault.json'] });
   assert.ok(left.includes('id_ed25519'), 'a key file is not a vault and is left alone');
   assert.ok(fs.existsSync(path.join(dir, 'docker-stack', 'app', '.env')), "a module's own .env is never imported");
   assert.ok(!secretHas(dir, 'env.db-pass'));
@@ -770,6 +772,26 @@ test('migrate imports an old vault under keys/ once, renames it, reports counts 
 
   const again = JSON.parse(runTool('migrate.js', [dir]).stdout);
   assert.strictEqual(again.vault.imported, 0, 'a second run imports nothing');
+  assert.deepStrictEqual(again.vault.sources, [], 'a recorded source is not even read again');
+});
+
+// 0.15.1 (a field near-miss): keys/google-sheets-sa.json, a service-account key
+// a live Sheets MCP server reads, was taken for an old vault.
+test('migrate never touches a service-account key or a file live config names', (t) => {
+  const dir = oldVaultWs(t);
+  const sa = JSON.stringify({ type: 'service_account', project_id: 'fake', private_key: 'fake-key', client_email: 'fake@x' });
+  write(dir, 'keys/google-sheets-sa.json', sa);
+  write(dir, 'keys/mcp-token.json', JSON.stringify({ acme: { api: { token: 'fake-t' } } }));
+  write(dir, '.mcp.json', JSON.stringify({ mcpServers: { x: { env: { TOKEN_FILE: 'keys/mcp-token.json' } } } }));
+  const r = runTool('migrate.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.strictEqual(out.vault.imported, 0);
+  assert.deepStrictEqual(out.vault.notVault, [{ file: 'keys/google-sheets-sa.json', reason: 'a service-account key' }]);
+  assert.deepStrictEqual(out.vault.inUse, ['keys/mcp-token.json']);
+  assert.strictEqual(fs.readFileSync(path.join(keysDir(dir), 'google-sheets-sa.json'), 'utf8'), sa);
+  assert.deepStrictEqual(fs.readdirSync(keysDir(dir)).filter((f) => /imported/.test(f)), []);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake/);
 });
 
 test('migrate turns a foreign-shaped secrets.json into the standard store and keeps the original', (t) => {

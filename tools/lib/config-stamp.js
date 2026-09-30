@@ -22,13 +22,28 @@ function stampKey(text, key, value) {
   if (typeof cfg !== 'object' || cfg === null || Array.isArray(cfg)) {
     return { text, changed: false };
   }
-  if (cfg[key] === value) return { text, changed: false };
+  if (JSON.stringify(cfg[key]) === JSON.stringify(value)) return { text, changed: false };
 
   const rendered = `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
 
   // The key may already exist (just stale) — replace only its value, in
   // place, rather than treating "already present" the same as "missing".
   const escaped = JSON.stringify(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // 0.15.1: an object or array value is replaced whole, its end found by
+  // matching brackets outside strings.
+  const open = new RegExp(`${escaped}\\s*:\\s*(?=[\\[{])`).exec(text);
+  if (open) {
+    let depth = 0, inStr = false, i = open.index + open[0].length;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; }
+      else if (c === '"') inStr = true;
+      else if (c === '{' || c === '[') depth++;
+      else if ((c === '}' || c === ']') && --depth === 0) break;
+    }
+    const out = text.slice(0, open.index) + rendered + text.slice(i + 1);
+    try { JSON.parse(out.replace(/^﻿/, '')); return { text: out, changed: true }; } catch { return { text, changed: false }; }
+  }
   const keyRe = new RegExp(`${escaped}\\s*:\\s*[^,}\\r\\n]*`);
   if (keyRe.test(text)) {
     return { text: text.replace(keyRe, rendered), changed: true };
