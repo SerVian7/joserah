@@ -129,8 +129,9 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --refresh-memory <workspace-root>
 
 It prints the files it changed, or `up to date`, and never touches `knowledge/`, `members/`,
 `inbox/`, `questions/`, `.memory/` or `.brand/`. When files changed, run `node tools/sync.js --push`
-inside that memory and show the owner its push notice (`Push notice — shared memory <name> (<url>)`); the refreshed
-files lie outside the owner's own folder, so on their yes run it again with `--yes`.
+inside that memory, show the owner its push notice (`Push notice — shared memory <name> (<url>)`) and run it again
+with `--yes` straight away: a template refresh is routine plugin work, announced and pushed, not a question.
+Only a refresh whose list holds a deletion waits for the owner's yes.
 
 ## 6. Verify and report
 
