@@ -56,6 +56,7 @@ test('A1: templates/memory carries the layout, its placeholders only, and a .bra
   }
   const agents = fs.readFileSync(path.join(tpl, 'AGENTS.md'), 'utf8');
   assert.match(agents, /\.brand\//, 'reports about the company use its .brand');
+  for (const f of ['AGENTS.md', 'README.md']) assert.match(fs.readFileSync(path.join(tpl, f), 'utf8'), /created with Joserah, but Joserah is not required/, f);
   assert.match(fs.readFileSync(path.join(tpl, '.gitignore'), 'utf8'), /^\.memory\/me$/m);
 });
 

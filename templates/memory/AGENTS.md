@@ -1,7 +1,7 @@
 # AGENTS.md — {{COMPANY}} Memory
 
 This repository is {{COMPANY}}'s shared memory: records, not conversation. Any AI may work here, with
-or without Joserah. Read this file first, every session.
+or without Joserah. This memory was created with Joserah, but Joserah is not required: any AI that reads `AGENTS.md` can work in it. Read this file first, every session.
 
 ## 1. Who you are
 
