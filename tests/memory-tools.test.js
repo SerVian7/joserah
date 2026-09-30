@@ -216,6 +216,18 @@ test('sweep.js: --before counts the inbox, --after names every claim line that d
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, '.memory', 'config.json'), 'utf8')).lastSweep);
 });
 
+test('sweep.js: a struck claim line counts as carried, struck or plain on either side (0.16.4)', (t) => {
+  const dir = memory(t);
+  fs.writeFileSync(path.join(dir, 'inbox', 'a.md'), '# A\n- [decision] alpha -> yes\n- [decision] beta -> yes\n- [decision] ~~gamma -> yes~~\n');
+  const sw = (a) => node(dir, tool(dir, 'sweep.js'), [a]);
+  sw('--before');
+  fs.writeFileSync(path.join(dir, 'knowledge', 'k.md'), '# K\n- [decision] alpha -> yes\n- [decision] ~~beta~~ -> yes\n  superseded: [[k]]\n- [decision] gamma -> ~~yes~~\n  superseded: [[k]]\n');
+  fs.rmSync(path.join(dir, 'inbox', 'a.md'));
+  const r = sw('--after');
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /claims: 3\/3 carried/);
+});
+
 test('tools: verify-links reports a dangling wikilink and resolves titled ones', (t) => {
   const dir = memory(t);
   fs.writeFileSync(path.join(dir, 'knowledge', 'a.md'), '# Alpha Note\n[[nowhere]] [[alpha note]] [[Alpha Note|the a]] `[[code]]`\n');

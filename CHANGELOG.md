@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.4
+
+sweep.js counts a struck line as carried. The after-check no longer reports a claim missing when it arrived plain and now stands struck in knowledge (or the reverse). Run `--refresh-memory` for a shared memory.
+
 ## 0.16.3
 
 **How the assistant was built stays out of the shared memory.** The memory rules now list notes on building the assistant or its tools — versions, rule debates, who proposed which rule — with private life and gossip: they stay in the member's own workspace. How the company works with the assistant is a record; how it was built is not.

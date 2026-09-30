@@ -16,6 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const STATE = path.join(ROOT, '.memory', 'sweep-state.json');
 const CLAIM = /^\s*-\s+\[(?:measurement|calculation|decision|estimate)\]\s+.+$/;
 const norm = (s) => s.trim().replace(/\s+/g, ' ');
+const plain = (s) => norm(s.replace(/~~/g, ''));  // a struck line and its plain twin are one claim
 const run = (script, args = []) => spawnSync(process.execPath, [path.join(__dirname, script), ...args], { encoding: 'utf8' });
 const claimLines = (text) => text.split(/\r?\n/).filter((l) => CLAIM.test(l)).map(norm);
 
@@ -47,8 +48,8 @@ if (mode === '--before') {
     process.stdout.write(r.stdout);
     if (r.status !== 0) { bad = true; console.log(`sweep: ${label} not clean`); }
   }
-  const have = new Set([...mdFiles(path.join(ROOT, 'knowledge'))].flatMap((f) => claimLines(fs.readFileSync(f, 'utf8'))));
-  const missing = state.claims.filter((l) => !have.has(l));
+  const have = new Set([...mdFiles(path.join(ROOT, 'knowledge'))].flatMap((f) => claimLines(fs.readFileSync(f, 'utf8')).map(plain)));
+  const missing = state.claims.filter((l) => !have.has(plain(l)));
   const carried = state.claims.length - missing.length;
   console.log(missing.length ? `claims: ${carried}/${state.count} carried — ${missing.length} missing:` : `claims: ${carried}/${state.count} carried`);
   for (const l of missing) console.log('  ' + (/\]\s+(.+?)\s+->/.exec(l) || [, l])[1]);
