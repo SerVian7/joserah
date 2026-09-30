@@ -65,7 +65,7 @@ function brokenLinks(root = ROOT) {
         for (const m of line.matchAll(/\]\(([^)\n]+)\)/g)) {
           let t = m[1].trim().replace(/\s+["'][^"']*["']$/, '');
           if (t.startsWith('<') && t.endsWith('>')) t = t.slice(1, -1);
-          if (/^(https?:|mailto:|tel:|#)/i.test(t)) continue;
+          if (/^(https?:|mailto:|tel:|data:|#)/i.test(t)) continue;
           const rel = `${path.relative(root, file).split(path.sep).join('/')}:${i + 1} -> ${m[1]}`;
           if (t.includes('\\')) { broken.push(`${rel} (use / in paths)`); continue; }
           try { t = decodeURIComponent(t.split('#')[0]); } catch { t = t.split('#')[0]; }
@@ -77,7 +77,7 @@ function brokenLinks(root = ROOT) {
   return broken;
 }
 
-module.exports = { brokenLinks };
+module.exports = { brokenLinks, mdFiles };
 
 if (require.main === module) {
   const broken = brokenLinks();

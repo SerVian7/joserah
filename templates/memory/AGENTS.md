@@ -32,7 +32,7 @@ Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8)
 
 - After research or R&D, ask whether the note should go into {{COMPANY}}'s shared record, in the
   member's language. Yes → one file in `inbox/`, written as a record (subject, claim lines, sources).
-  No → it stays in `members/<member>/notes/`.
+  No → it stays in `members/<member>/notes/`. A project's page carries frontmatter `repo: <remote url>` and a `Last change: <hash> · <date time tz> · <subject>` line, brought up to date after the project's commits; `sync.js` names the pages behind their repo.
 - Push as soon as you wrote something worth sharing — an inbox note, a question, a decision — and at the
   end of the session; do not wait for the end of the day.
 - `node tools/sync.js --push` prints the push notice, `Push notice — shared memory <name> (<origin url>):

@@ -242,3 +242,10 @@ test('a malformed config.json does not break the link check', (t) => {
   const d = ws(t, { '.joserah/config.json': '{not json', 'a.md': '[b](b.md)\n', 'b.md': '\n' });
   assert.strictEqual(runTool('verify-links.js', [d]).status, 0);
 });
+
+// 0.15.8 (ctrl, 2026-09-30): an embedded image is not a file link.
+test('data:, mailto: and tel: targets are not file links', (t) => {
+  const d = ws(t, { 'a.md': '![logo](data:image/png;base64,iVBORw0KGgo+/AAA=) [m](mailto:a@b.c) [p](tel:+905551112233)\n' });
+  const r = runTool('verify-links.js', [d]);
+  assert.strictEqual(r.status, 0, r.stdout);
+});

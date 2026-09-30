@@ -169,7 +169,7 @@ for (const file of ALL_FILES) {
   lines.forEach((line, i) => {
     for (const m of line.matchAll(LINK_RE)) {
       let target = cleanTarget(m[1]);
-      if (/^(https?:|mailto:|tel:|#)/i.test(target)) continue;
+      if (/^(https?:|mailto:|tel:|data:|#)/i.test(target)) continue;
       if (target.includes('\\')) {
         broken.push(`${path.relative(ROOT, file)}:${i + 1} → ${m[1]} (backslash separators break on Linux — use /)`);
         continue;

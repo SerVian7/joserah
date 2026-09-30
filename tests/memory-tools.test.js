@@ -224,3 +224,10 @@ test('tools: verify-links reports a dangling wikilink and resolves titled ones',
   assert.match(r.stdout, /knowledge\/a\.md:2 -> \[\[nowhere\]\]/);
   assert.strictEqual((r.stdout.match(/\[\[/g) || []).length, 1);
 });
+
+test('tools: verify-links skips data:, mailto: and tel: targets', (t) => {
+  const dir = memory(t);
+  fs.writeFileSync(path.join(dir, 'knowledge', 'img.md'), '# Img\n![x](data:image/png;base64,iVBORw0KGgo+/AAA=) [m](mailto:a@b.c) [p](tel:+90555)\n');
+  const r = node(dir, tool(dir, 'verify-links.js'));
+  assert.strictEqual(r.status, 0, r.stdout);
+});

@@ -6,6 +6,7 @@ keys/*
 !keys/AGENTS.md
 # who you are here, on this machine only
 .memory/me
+.memory/repos.json
 # OS noise
 .DS_Store
 Thumbs.db

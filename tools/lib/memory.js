@@ -216,6 +216,44 @@ function memoryChecks(root) {
   return out;
 }
 
+// 0.15.8: a project's page in a memory against its repo's HEAD. The workspace's own
+// checkouts (projects/<x>/ or projects/<company>/<x>/, real repos only) are mapped into
+// the memory's .memory/repos.json, written only when it changes and kept out of its
+// commits; the memory's project-drift line is then reported.
+const { normaliseRepo, driftLine } = require(path.join(TEMPLATE, 'tools', 'project-drift.js'));
+function projectCheckouts(ws) {
+  const out = {};
+  (function visit(dir, depth) {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries.filter((x) => x.isDirectory() && !x.name.startsWith('.'))) {
+      const p = path.join(dir, e.name);
+      if (!fs.existsSync(path.join(p, '.git'))) { if (depth < 2) visit(p, depth + 1); continue; }
+      const url = git(p, 'remote', 'get-url', 'origin');
+      if (url.status === 0) out[normaliseRepo(url.stdout)] = p.split(path.sep).join('/');
+    }
+  })(path.join(ws, 'projects'), 1);
+  return out;
+}
+function projectDrift(ws, mem, name) {
+  const file = path.join(mem, '.memory', 'repos.json');
+  let cur = {};
+  try { cur = readJson(file); } catch { /* none yet */ }
+  const next = { ...cur, ...projectCheckouts(ws) };
+  if (JSON.stringify(next) !== JSON.stringify(cur)) {
+    fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n', 'utf8');
+    // A memory cloned before its .gitignore named the file keeps it out through info/exclude.
+    if (git(mem, 'check-ignore', '-q', '.memory/repos.json').status !== 0) {
+      const ex = path.resolve(mem, git(mem, 'rev-parse', '--git-path', 'info/exclude').stdout.trim());
+      fs.mkdirSync(path.dirname(ex), { recursive: true });
+      fs.appendFileSync(ex, '\n.memory/repos.json\n');
+    }
+  }
+  const line = driftLine(mem);
+  if (!line || /no local checkouts/.test(line)) return [];
+  return [/all current/.test(line) ? check(`project pages in ${name}`, true, line) : warn(`project pages in ${name}`, line)];
+}
+
 /** Doctor's line per shared memory a workspace names. */
 function sharedChecks(root, cfg) {
   const list = (cfg && Array.isArray(cfg.shared)) ? cfg.shared : [];
@@ -224,8 +262,9 @@ function sharedChecks(root, cfg) {
     const abs = path.resolve(root, m.path || '');
     if (!isMemory(abs)) return warn(`shared memory ${m.name}`, `no memory at ${m.path} — clone it again with scaffold.js --join-memory <url>, or remove the entry`);
     const bad = memoryChecks(abs).filter((c) => !c.ok);
-    return bad.length ? warn(`shared memory ${m.name}`, `${bad.length} check(s) fail there — run doctor on ${m.path}`) : check(`shared memory ${m.name}`, true, m.path);
-  });
+    if (bad.length) return warn(`shared memory ${m.name}`, `${bad.length} check(s) fail there — run doctor on ${m.path}`);
+    return [check(`shared memory ${m.name}`, true, m.path), ...projectDrift(root, abs, m.name)];
+  }).flat();
   const gi = fs.existsSync(path.join(root, '.gitignore')) ? eol(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).split('\n') : [];
   if (!gi.includes(SHARED_IGNORE)) out.push(warn('.gitignore keeps shared memories out', `add the line ${SHARED_IGNORE}`));
   return out;

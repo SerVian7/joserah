@@ -3,6 +3,12 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.8
+
+**Project records keep up.** Owner via ctrl, 2026-09-30, after a module's page in the shared memory lagged 13 hours and 20+ commits behind its repo. A commit or push inside `projects/` now adds one `[project]` line to the session, once per repo HEAD: update `docs/status.md` `Last change:`, record new decisions as `[decision]` with the old one struck, move measurements to the device's page — and, when a joined shared memory has a page whose `repo:` matches the project's origin, update that page through an inbox note (the sweeper writes it itself; the push still waits for the yes). The convention: a project's page carries frontmatter `repo: <remote url>` and a line `Last change: <short hash> · <YYYY-MM-DD HH:MM> <tz> · <subject>`. The memory's new `tools/project-drift.js`, run by every `sync.js` pull, prints `projects: all current` or names the pages behind their repo; doctor maps the workspace's `projects/` checkouts into the memory's local, gitignored `.memory/repos.json` and warns on the same drift. Prompt v17. Run `--refresh-memory` to pick up the tool.
+
+**data: links are not files.** Both link checkers (the plugin's and the memory's) skip `data:`, `mailto:` and `tel:` targets, so a page with embedded base64 images no longer counts as broken.
+
 ## 0.15.7
 
 **Shared-memory pushes ask again.** Owner, 2026-09-30: the push to a shared memory is a question again. The assistant shows the push notice, one line per file, waits for the member's yes, then runs it again with `--yes` — template refreshes included. Commits, workspace backups and project pushes stay act-then-report, and pushes still name their target. Prompt v16. Run `--refresh-memory` to pick up the memory text.

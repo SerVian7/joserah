@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 16 -->
+<!-- joserah:prompt-version 17 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -86,8 +86,7 @@ why. Never silently escalate, and never silently substitute a weaker non-privile
 `.joserah/` is what a repository backup carries, so the owner's code lives in `.joserah/tools/` with the small data files it needs;
 `imports/` sits outside the backup and takes everything bulky or generated.
 
-**A knowledge file is a record, not a conversation.** A fact lives in the record of what it is *about* — server access belongs to
-the server's note, not to the person who mentioned it; if you cannot name the subject you do not yet know where it goes.
+**A knowledge file is a record, not a conversation.** A fact lives in the record of what it is *about* — server access belongs to the server's note, not to the person who mentioned it; if you cannot name the subject you do not yet know where it goes. A project's record — its `docs/status.md`, and its page in a shared memory (frontmatter `repo: <remote url>`) — carries `Last change: <short hash> · <YYYY-MM-DD HH:MM> <tz> · <subject>`.
 
 **A load-bearing fact is a claim line, not a sentence:** `- [measurement|calculation|decision|estimate] <subject> -> <value>`, with
 `condition:` (mandatory for a measurement), `date:`, `by:` and `source:` under it. **Every number is one of those four kinds** — never `[fact]` or one of your own — and
@@ -112,6 +111,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Owner}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal has built up, or a pile of imports has landed | `sweep` — offer it, do not just run it |
+| A commit or push lands in a project | The `[project]` line tells you: bring the project's record up to date in the same session — `docs/status.md` Last change, new decisions as `[decision]` with the old one struck, measurements to the device's page; and the project's page in a joined shared memory through an inbox note (the sweeper writes the page itself). The shared-memory push still waits for the owner's yes. |
 | A piece of work is about to be deleted, abandoned or replaced | Record its R&D summary first — what was tried, what was learned, what it cost — in the project's `docs/` (or the journal when there is no project); only then delete. The summary is short; the form is free. |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |

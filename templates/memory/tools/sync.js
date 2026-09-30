@@ -2,7 +2,8 @@
 /**
  * sync.js — the start and the end of every session in this memory.
  * Usage: node tools/sync.js                   pull (rebase), then say the sweep-due line if due
- *        (the pull also prints one checks line: broken links, malformed claim lines)
+ *        (the pull also prints one checks line: broken links, malformed claim lines, and a
+ *        projects line when a knowledge page carries repo: — tools/project-drift.js)
  *        node tools/sync.js --push [--who X]  commit members/<me>/, inbox/ and questions/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
  *
@@ -23,6 +24,7 @@ const { detectMember } = require('./detect-member');
 const { sweepState, sweepLine } = require('./sweep-due');
 const { brokenLinks } = require('./verify-links');
 const { checkClaims } = require('./claims');
+const { driftLine } = require('./project-drift');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -71,6 +73,8 @@ function questions(me) {
 if (!flag('--push')) {
   console.log(pull());
   console.log(checks());
+  // Project pages against their repos' HEAD (.memory/repos.json); a report, never a failure.
+  try { const d = driftLine(root); if (d) console.log(d); } catch { /* the pull still stands */ }
   const line = sweepLine(sweepState(root));
   if (line) console.log(line);
   const who = detectMember(root);
