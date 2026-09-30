@@ -62,7 +62,7 @@ function countCommits(repo, range) {
 function commitsBehindLine(checkout, now) {
   if (!fetchDaily(checkout, now)) return null;
   const n = countCommits(checkout, 'HEAD..@{u}');
-  return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update. Tell the owner in one line, in their language.` : null;
+  return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update, then /reload-plugins (no restart). Tell the owner in one line, in their language.` : null;
 }
 
 // 0.14.0: one block per shared memory the workspace names (config `shared`,

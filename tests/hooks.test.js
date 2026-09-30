@@ -916,7 +916,7 @@ function briefAt(pluginRoot, ws) {
 test('a checkout behind its upstream says how many commits, and names /joserah:update', (t) => {
   const { checkout } = checkoutBehind(t, 2);
   const ctx = briefAt(checkout, hookWs(t));
-  assert.match(ctx, /\[update\] Joserah has 2 new commits upstream — run \/joserah:update/);
+  assert.match(ctx, /\[update\] Joserah has 2 new commits upstream — run \/joserah:update, then \/reload-plugins \(no restart\)/);
   assert.strictEqual(git(checkout, 'rev-list', '--count', 'HEAD..@{u}').trim(), '2', 'the hook fetched, it did not pull');
 });
 

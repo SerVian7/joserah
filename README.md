@@ -121,8 +121,8 @@ one install serves as many workspaces as you like. Rules that apply only to one 
 
 Run `/joserah:update`. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
-It pulls the clone, brings each workspace's standing instructions and structure up to date, and
-reloads the plugin. The briefing tells you when there are new commits upstream.
+It pulls the clone and brings the workspace's standing instructions and structure up to date. Then
+run `/reload-plugins`; no restart is needed. The briefing tells you when there are new commits upstream.
 
 ## Developing Joserah
 

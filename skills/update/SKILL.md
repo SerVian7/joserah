@@ -126,7 +126,8 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <workspace-root>
 Every check `ok` or the update is not done — report what is still red, in the owner's language,
 one line each. When it is clean, tell the owner in one or two lines: what changed, and that a
 **new conversation** picks up the new instructions. If step 1 pulled anything, ask them to run
-`/reload-plugins`; suggest a restart only if the new version is still not active after it.
+`/reload-plugins` — that is enough (owner, 2026-09-30, checked on two machines). Never say
+"restart" unless the new version demonstrably is not active after the reload.
 
 **Then say what an update is not.** Nothing here read a single note: this moved the shell, and the
 owner's own pages are untouched by design. If doctor's `knowledge sweep` warned — or the workspace
