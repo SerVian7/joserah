@@ -93,6 +93,15 @@ function refreshMemory(dir) {
     fs.writeFileSync(dst, text, 'utf8');
     changed.push(rel);
   }
+  // .gitignore: append template lines the memory lacks; never remove or reorder its own.
+  const giPath = path.join(root, '.gitignore');
+  const giCur = fs.existsSync(giPath) ? fs.readFileSync(giPath, 'utf8') : '';
+  const have = new Set(eol(giCur).split('\n'));
+  const add = eol(fs.readFileSync(path.join(TEMPLATE, '.gitignore'), 'utf8')).split('\n').filter((l) => l && !have.has(l));
+  if (add.length) {
+    fs.writeFileSync(giPath, giCur + (giCur && !giCur.endsWith('\n') ? '\n' : '') + add.join('\n') + '\n', 'utf8');
+    changed.push('.gitignore');
+  }
   return changed;
 }
 

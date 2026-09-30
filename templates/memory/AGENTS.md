@@ -68,8 +68,8 @@ push with the notice.
   secret names; `tools/<system>/README.md` lists them. Node by default, PowerShell only where the host is
   Windows-only.
 - Content records in {{LANGUAGE}}; file names, headings and keys in English. READMEs are English.
-- A report, page or mail about {{COMPANY}} uses `.brand/` (logo, colours, report template) whenever it
-  holds them.
+- Every report, artifact, page or mail about {{COMPANY}} is built from `.brand/`: read `.brand/REPORTING.md` first,
+  start from its template (`report.html`, `changelog.html`), embed its logo; never an improvised design.
 
 ## 6. `knowledge/` is read-only for you
 

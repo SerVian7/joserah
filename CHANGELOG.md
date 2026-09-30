@@ -3,6 +3,12 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.2
+
+**Company pages start from the brand.** The memory's AGENTS.md now says every report, artifact, page or mail about the company is built from `.brand/` (read `REPORTING.md`, start from its template, embed the logo), never an improvised design. Run `--refresh-memory` for a shared memory.
+
+**A refresh brings the memory's .gitignore up to date.** `--refresh-memory` appends the template's `.gitignore` lines the memory lacks (such as `.memory/repos.json`), never removing or reordering its own, and lists `.gitignore` when it grew.
+
 ## 0.16.1
 
 **Archived sources are not checked.** ctrl, 2026-09-30. A shared memory's `knowledge/sources/` holds source material archived verbatim (a documentation site, exports); it is never edited, so the link and claim checks skip it (links from other pages into it are still checked) and the memory doctor passes the same exclusion. `verify-links.js` and `check-claims.js` take `--exclude <dir>`, repeatable. Run `--refresh-memory` for a shared memory.

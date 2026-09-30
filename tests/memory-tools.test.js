@@ -252,3 +252,16 @@ test('tools: knowledge/sources/ is archived source material, not checked (0.16.1
   assert.match(r.stdout, /a\.md:4 -> sources\/x\/nope\.md/);
   assert.doesNotMatch(r.stdout, /a\.md:3|sources\/x\/page\.md:/);
 });
+
+test('refresh: the memory .gitignore gains missing template lines, keeps its own, then is up to date', (t) => {
+  const dir = memory(t);
+  const gi = path.join(dir, '.gitignore');
+  const kept = fs.readFileSync(gi, 'utf8').split('\n').filter((l) => l !== '.memory/repos.json').join('\n') + '\nmy-custom-line\n';
+  fs.writeFileSync(gi, kept);
+  const first = runTool('scaffold.js', ['--refresh-memory', dir]);
+  assert.match(first.stdout, /\.gitignore/);
+  const lines = fs.readFileSync(gi, 'utf8').split('\n');
+  assert.ok(lines.includes('.memory/repos.json') && lines.includes('my-custom-line'));
+  assert.ok(fs.readFileSync(gi, 'utf8').startsWith(kept), 'existing lines untouched and in order');
+  assert.match(runTool('scaffold.js', ['--refresh-memory', dir]).stdout, /up to date/);
+});

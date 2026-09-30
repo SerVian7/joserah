@@ -76,3 +76,7 @@ test('memory AGENTS.md: start steps, where never, the push is shown then made, t
   ]) assert.ok(text.includes(s), `missing: ${s}`);
   assert.ok(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'memory', 'AGENTS.md'), 'utf8').trimEnd().split(/\r?\n/).length <= 110, 'AGENTS.md ≤ 110 lines');
 });
+
+test('memory AGENTS.md: company pages start from .brand/', () => {
+  assert.ok(read('AGENTS.md').includes('is built from `.brand/`: read `.brand/REPORTING.md` first, start from its template (`report.html`, `changelog.html`), embed its logo; never an improvised design.'));
+});
