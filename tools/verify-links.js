@@ -12,7 +12,11 @@ const path = require('path');
 const { LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES, SOURCE_MATERIAL_REL, isUnder,
   isHiddenForeignDir, scopeFrom, inScope } = require('./lib/untouchable');
 
-const ROOT = path.resolve(process.argv[2] || process.cwd());
+const ARGS = process.argv.slice(2);
+// --exclude <dir> (repeatable, root-relative): not scanned, links into it still checked.
+const EXCLUDE = [];
+for (let i = 0; i < ARGS.length; i++) if (ARGS[i] === '--exclude' && ARGS[i + 1]) EXCLUDE.push(ARGS.splice(i--, 2)[1].replace(/\/+$/, ''));
+const ROOT = path.resolve(ARGS[0] || process.cwd());
 
 // Which root entries are the workspace at all, as the owner selected them.
 // A missing or malformed config never breaks a walk: any failure reads as no
@@ -42,7 +46,7 @@ const SKIP_ANY = new Set(LINK_SCAN_SKIP_NAMES);
 const SKIP_REL = LINK_SCAN_SKIP_REL;
 
 function isSkippedRel(rel) {
-  return isUnder(rel, SKIP_REL) || !inScope(rel, SCOPE);
+  return isUnder(rel, SKIP_REL) || (EXCLUDE.length > 0 && isUnder(rel, EXCLUDE)) || !inScope(rel, SCOPE);
 }
 
 function* mdFiles(dir, rel) {

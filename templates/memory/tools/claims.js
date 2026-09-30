@@ -14,6 +14,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIRS = ['knowledge', 'members', 'inbox', 'questions', 'desk'];
+const SOURCES = 'knowledge/sources'; // archived verbatim: never claim-checked
 const TYPES = ['measurement', 'calculation', 'decision', 'estimate'];
 const CLAIM_RE = /^(\s*)-\s+\[(measurement|calculation|decision|estimate)\]\s+(.+?)\s*$/;
 const NEAR_RE = /^(\s*)-\s+\[([A-Za-z][A-Za-z0-9_-]*)\]\s+(.+?)\s*$/;
@@ -23,6 +24,7 @@ const KEY_IN_VALUE_RE = /(?:^|[\s·])(condition|date|by|source|superseded):(?:\s
 const BREAK_RE = /^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|~~~|---\s*$)/;
 
 function* mdFiles(dir) {
+  if (path.relative(ROOT, dir).split(path.sep).join('/') === SOURCES) return;
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {

@@ -75,7 +75,7 @@ push with the notice.
 
 Only the sweeper ({{SWEEPER}}) writes there, by running the sweep. Read it freely; cite it by path.
 A struck-through claim with `superseded:` is not used again. When the record and a live system disagree,
-the live system wins: say so and propose an inbox note.
+the live system wins: say so and propose an inbox note. `knowledge/sources/` holds source material archived verbatim (documentation, exports); it is never edited, and links and claim lines inside it are not checked. Records cite it by path.
 
 ## 7. Sweep (sweeper only)
 

@@ -182,9 +182,9 @@ function memoryChecks(root) {
   if (!agentsSame) out.push(warn('memory AGENTS.md current', 'differs from the template — ' + refreshCmd(root)));
   const gi = fs.existsSync(path.join(root, '.gitignore')) ? eol(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).split('\n') : [];
   out.push(check('.gitignore keeps .memory/me on this machine', gi.includes('.memory/me'), ''));
-  const links = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'verify-links.js'), root], { encoding: 'utf8' });
+  const links = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'verify-links.js'), root, '--exclude', 'knowledge/sources'], { encoding: 'utf8' });
   out.push(check('internal links resolve', links.status === 0, (links.stdout || '').trim().split('\n')[0]));
-  const claims = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'check-claims.js'), root], { encoding: 'utf8' });
+  const claims = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'check-claims.js'), root, '--exclude', 'knowledge/sources'], { encoding: 'utf8' });
   out.push(check('typed claims consistent', claims.status === 0, (claims.stdout || '').trim().split('\n').pop()));
 
   const { sweepState } = require(path.join(TEMPLATE, 'tools', 'sweep-due.js'));

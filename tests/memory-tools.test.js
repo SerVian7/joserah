@@ -231,3 +231,24 @@ test('tools: verify-links skips data:, mailto: and tel: targets', (t) => {
   const r = node(dir, tool(dir, 'verify-links.js'));
   assert.strictEqual(r.status, 0, r.stdout);
 });
+
+test('tools: knowledge/sources/ is archived source material, not checked (0.16.1)', (t) => {
+  const dir = memory(t);
+  fs.mkdirSync(path.join(dir, 'knowledge', 'sources', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'knowledge', 'sources', 'x', 'page.md'), '# X\n[gone](/docs/none.md) ![i](/img/a.png)\n- [measurement] bad -> 1\n');
+  for (const [n, args] of [['verify-links.js', []], ['claims.js', []]]) {
+    assert.strictEqual(node(dir, tool(dir, n), args).status, 0, n);
+  }
+  // the plugin's own tools take the same exclusion
+  for (const n of ['verify-links.js', 'check-claims.js']) {
+    const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', n), dir, '--exclude', 'knowledge/sources'], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, n + r.stdout);
+  }
+  // a normal page still reported; a link to a missing file under sources/ too
+  fs.writeFileSync(path.join(dir, 'knowledge', 'a.md'), '# A\n[gone](missing.md)\n[ok](sources/x/page.md)\n[no](sources/x/nope.md)\n');
+  const r = node(dir, tool(dir, 'verify-links.js'));
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /a\.md:2 -> missing\.md/);
+  assert.match(r.stdout, /a\.md:4 -> sources\/x\/nope\.md/);
+  assert.doesNotMatch(r.stdout, /a\.md:3|sources\/x\/page\.md:/);
+});

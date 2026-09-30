@@ -25,6 +25,8 @@ const { parseFrontmatter, parseClaims, findClaimAnomalies } = require('./lib/not
 
 const args = process.argv.slice(2);
 const json = args.includes('--json');
+const EXCLUDE = [];
+for (let i = 0; i < args.length; i++) if (args[i] === '--exclude' && args[i + 1]) EXCLUDE.push(args.splice(i--, 2)[1].replace(/\/+$/, '') + '/');
 const root = path.resolve(args.find((a) => !a.startsWith('--')) || process.cwd());
 // A workspace, or a Joserah Memory (which carries this file as tools/claims.js).
 if (!fs.existsSync(path.join(root, '.joserah', 'config.json')) && !fs.existsSync(path.join(root, '.memory', 'config.json'))) {
@@ -38,6 +40,7 @@ let total = 0;
 const add = (level, rel, line, kind, detail) => findings.push({ level, file: rel, line, kind, detail });
 
 for (const rel of scanWorkspace(root).files) {
+  if (EXCLUDE.some((x) => rel.startsWith(x))) continue;
   const text = fs.readFileSync(path.join(root, rel), 'utf8');
   const { body } = parseFrontmatter(text);
   const offset = text.slice(0, text.length - body.length).split(/\r?\n/).length - 1;

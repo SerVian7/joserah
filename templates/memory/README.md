@@ -21,6 +21,7 @@ Read `AGENTS.md` in full before you write anything. Then, in this order:
 | Path | Holds | Written by |
 |---|---|---|
 | `knowledge/` | the company's record, one file per subject (`wiki/entities/`, `wiki/topics/`, `people/`) | the sweeper, by sweep |
+| `knowledge/sources/` | source material archived verbatim (documentation, exports); never edited, not link- or claim-checked | the sweeper, by sweep |
 | `members/<name>/` | one member's `daily/`, `notes/` and `tasks.md` | that member only |
 | `inbox/` | notes proposed for `knowledge/`, one file each | any member |
 | `questions/` | questions between members, one file each | asker creates, addressee answers |

@@ -14,8 +14,10 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const DIRS = ['knowledge', 'members', 'inbox', 'questions', 'desk'];
+const SOURCES = 'knowledge/sources'; // archived verbatim: never scanned, links into it still checked
 
 function* mdFiles(dir) {
+  if (path.relative(ROOT, dir).split(path.sep).join('/') === SOURCES) return;
   let entries = [];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
