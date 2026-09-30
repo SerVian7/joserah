@@ -34,6 +34,7 @@ const FRESH_ORDER = [
   'prompt (AGENTS.md) current',
   'local verify-links.js current',
   'local secret.js current',
+  'vault index current',
   'no unfilled {{placeholders}}',
   'internal links resolve',
   'typed claims consistent',
@@ -112,4 +113,18 @@ test('adding an entry to the registry is the whole cost of adding a check', () =
   assert.match(src, /require\('\.\/lib\/doctor-checks'\)/);
   // The runner loops over the registry; it does not enumerate checks itself.
   assert.match(src, /for \(const entry of CHECKS\)/);
+});
+
+test('doctor: vault index current warns on a stale index and passes once it is rewritten, counts only', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B', '--language', 'English', '--role', '']);
+  runTool('secret.js', ['--set', 'a.b.pin'], { cwd: dir, input: 'fake-1' });
+  runTool('secret.js', ['--set', 'a.b.user'], { cwd: dir, input: 'fake-2' });
+  fs.writeFileSync(path.join(dir, '.joserah', 'vault-index.md'), '# Vault index\n\n## a\n\n- a.b.pin\n');
+  let r = runTool('doctor.js', [dir]);
+  assert.match(r.stdout, /warn\s+vault index current\s+—\s+the index lists 1 names, the vault holds 2/);
+  assert.doesNotMatch(r.stdout, /fake-/);
+  runTool('secret.js', ['--index'], { cwd: dir });
+  r = runTool('doctor.js', [dir]);
+  assert.match(r.stdout, /ok\s+vault index current\s+—\s+2 names/);
 });

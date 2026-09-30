@@ -115,19 +115,19 @@ test('decidePromptAction', () => {
 
 test('installPrompt writes the file and records version + sha; recordOnly leaves the file alone', (t) => {
   const dir = freshWs(t);
-  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 11) });
+  const src = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 12) });
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 11);
+  assert.strictEqual(cfg.promptVersion, 12);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
-  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 11) });
+  const other = prompt.resolvePromptSource({ configDir: fakeMarketplace(t, 12) });
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 11);
+  assert.strictEqual(cfg.promptVersion, 12);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -260,9 +260,12 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 // ---- the shipped prompt ---------------------------------------------------------
 
-test('prompt v11 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
+test('prompt v12 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 11);
+  assert.strictEqual(prompt.readPromptVersion(text), 12);
+  assert.ok(text.includes('say the name, never the value'), 'rule 3: the name is said, the value never');
+  assert.ok(text.includes('What exists: `.joserah/vault-index.md` (names only); never open `keys/`'), 'rule 3: the index, not keys/');
+  assert.ok(text.includes('--extract` moves it — you never copy it by hand'), 'rule 3: extract, not hand-copying');
   assert.ok(text.includes('goes into the vault at once, without asking'), 'rule 3: the vault');
   assert.ok(text.includes('$(node .joserah/tools/secret.js <name>)'), 'rule 3: embedded use only');
   assert.match(text, /\[measurement\|calculation\|decision\|estimate\]/);

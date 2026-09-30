@@ -55,6 +55,8 @@ refused (`skipped` — an owner-written `CLAUDE.md` is never rewritten; doctor n
 and what `prompt` says. On yes, run it again without `--dry-run`. Migrate is
 additive and idempotent: it never edits prose and never touches an existing `directives.md`.
 
+Once per workspace (below 0.15.0) it also imports an old vault it finds in `keys/` — `vault` in the report: say the counts, and name any file under `vault.kept` as one the owner resolves; never open those files.
+
 `prompt.action`:
 
 - `install` / `record` — done; `AGENTS.md` is current and recorded.

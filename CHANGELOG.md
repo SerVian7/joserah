@@ -9,6 +9,10 @@ any of them.
 
 **Names without values.** `secret.js --index` writes `.joserah/vault-index.md`, the names grouped by scope; every change to the store rewrites it, and it is the one vault file the assistant reads. `secret.js --rename <old> <new>` corrects an imported name without anyone seeing the value.
 
+**A secret standing in a note leaves it.** `secret-scan.js <workspace> --extract` proposes a name per hit (`<scope>.<file>.<field>`) and changes nothing; with `--yes` it stores each value through `secret.js --set` and replaces every whole occurrence in the note with `$(node .joserah/tools/secret.js <name>)`, keeping line endings and never touching `keys/`. A name that already holds a different value is a conflict: the note keeps its text, exit 1. The scan no longer reports such a reference as a finding.
+
+**The words.** Prompt version 12: rule 3 says to name the secret and never the value, that what exists is in `.joserah/vault-index.md`, and that `--extract` moves a stray secret — never a hand copy. Doctor adds `vault index current` (counts only). Run `/joserah:update`.
+
 ## 0.14.0
 
 **No marketplace, no cache, no `claude plugin update`.** Joserah is a git clone linked as `~/.claude/skills/joserah` and loaded in place as `joserah@skills-dir` (README, "Where Joserah runs"). `/joserah:update` is a `git pull` on the clone, the workspace migration, then `/reload-plugins`. The re-copy of 0.13.8–0.13.10, its diagnostics file and stamps, and `tools/install-dev-hook.js` are gone; the briefing keeps the daily "N new commits upstream" line. Doctor's new `plugin loaded from the skills dir` check warns on a copy in the plugin cache.

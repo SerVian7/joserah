@@ -629,6 +629,29 @@ const CHECKS = [
   },
 
   {
+    id: 'vault-index',
+    remedies: [
+      {
+        key: '`vault index current` warn',
+        text: 'Run `node .joserah/tools/secret.js --index`; it rewrites `.joserah/vault-index.md` from the store, names only. If it says the store is not in the standard shape, run `/joserah:update` — the migration imports it. Doctor compares counts only and never reads a value.',
+      },
+    ],
+    // 0.15.0: the index is the one vault file the assistant reads, so it has
+    // to match the store. Names come from `secret.js --list`, never the file.
+    run({ root, pluginDir }) {
+      if (!fs.existsSync(path.join(root, 'keys', 'secrets.json'))) return null;
+      const r = spawnSync(process.execPath, [path.join(pluginDir, 'secret.js'), '--list'], { cwd: root, encoding: 'utf8' });
+      if (r.status !== 0) return warn('vault index current', 'the store could not be listed (not in the standard shape?) — /joserah:update imports it');
+      const stored = r.stdout.split(/\r?\n/).filter(Boolean).length;
+      const idxPath = path.join(root, '.joserah', 'vault-index.md');
+      const listed = fs.existsSync(idxPath)
+        ? fs.readFileSync(idxPath, 'utf8').split(/\r?\n/).filter((l) => l.startsWith('- ')).length : 0;
+      if (listed === stored) return check('vault index current', true, `${stored} names`);
+      return warn('vault index current', `the index lists ${listed} names, the vault holds ${stored} — run node .joserah/tools/secret.js --index`);
+    },
+  },
+
+  {
     id: 'placeholders',
     remedies: [
       { key: 'Unfilled placeholder', text: 'Ask for the value, then substitute it' },

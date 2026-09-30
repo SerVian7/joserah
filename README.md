@@ -141,11 +141,12 @@ own guesses back at you is worse than no knowledge base.
 ├── .gitignore
 ├── .claude/settings.json   permission deny rules — carries the Read() guard on keys/
 ├── projects/           {Owner}/{ProjectName}/ — never tracked; each has its own git
-├── keys/               SENSITIVE — the vault, read only through secret.js
+├── keys/               SENSITIVE — the vault, read only through secret.js (names: .joserah/vault-index.md)
 ├── imports/            source material and the drop folder, verbatim — outside .joserah/, excluded from repo backups
 │
 └── .joserah/
     ├── config.json          workspace marker
+    ├── vault-index.md       the vault's names, no values — written by secret.js
     ├── conventions.md · directives.md · agent.md · learned.md
     ├── tools/               verify-links.js, lib/untouchable.js, secret.js
     ├── desk/                daily/<year>/ · tasks/ · inbox/
