@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.3
+
+**How the assistant was built stays out of the shared memory.** The memory rules now list notes on building the assistant or its tools — versions, rule debates, who proposed which rule — with private life and gossip: they stay in the member's own workspace. How the company works with the assistant is a record; how it was built is not.
+
 ## 0.16.2
 
 **Company pages start from the brand.** The memory's AGENTS.md now says every report, artifact, page or mail about the company is built from `.brand/` (read `REPORTING.md`, start from its template, embed the logo), never an improvised design. Run `--refresh-memory` for a shared memory.

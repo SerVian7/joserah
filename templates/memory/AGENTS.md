@@ -53,8 +53,8 @@ push with the notice.
 - Facts about the company's work: systems, sites, devices, decisions, procedures, contacts' work roles.
 - A load-bearing number is a claim line: `- [measurement|calculation|decision|estimate] <subject> -> <value>`
   with `condition:` (measurements), `date:`, `by: <member>`, `source:`. Unsourced numbers carry no weight.
-- Decisions and plans are marked as such. Nothing that has not happened is written as if it had.
-- Never: private life, opinions about people, gossip, anything the member would not say in a meeting.
+- Decisions and plans are marked as such; nothing that has not happened is written as if it had.
+- Never: private life, opinions about people, gossip, or notes on building the assistant or its tools (versions, rule debates, who proposed what).
 - An idea or decision from one member is a proposal, not the company's decision. What makes it a company
   decision: a dated purchase or operating decision inside that member's own responsibility, with who decided
   and when — that goes into `knowledge/` as `[decision]`. An idea, a wish, a plan not yet acted on, 'let's do
