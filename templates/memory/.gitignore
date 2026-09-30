@@ -1,0 +1,10 @@
+# secrets never travel
+.env
+.env.*
+*.env
+keys/
+# who you are here, on this machine only
+.memory/me
+# OS noise
+.DS_Store
+Thumbs.db

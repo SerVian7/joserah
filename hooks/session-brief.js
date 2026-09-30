@@ -42,20 +42,60 @@ function ownCheckout() {
     return fs.existsSync(path.join(real, '.git')) ? real : null;
   } catch { return null; }
 }
-function commitsBehindLine(checkout, now) {
-  const key = require('crypto').createHash('sha1').update(checkout).digest('hex').slice(0, 12);
+// Once a day per repository; used for the plugin's checkout and for each shared memory.
+function fetchDaily(repo, now) {
+  const key = require('crypto').createHash('sha1').update(repo).digest('hex').slice(0, 12);
   const stamp = path.join(os.tmpdir(), `joserah-fetch-${key}.stamp`);
   let fresh = false;
   try { fresh = now.getTime() - fs.statSync(stamp).mtimeMs < FETCH_INTERVAL_MS; } catch { /* no stamp yet */ }
-  if (!fresh) {
-    // Stamped before the fetch, so an unreachable remote is retried tomorrow,
-    // not on every session start today.
-    try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return null; }
-    spawnSync('git', ['-C', checkout, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 8000 });
-  }
-  const r = spawnSync('git', ['-C', checkout, 'rev-list', '--count', 'HEAD..@{u}'], { encoding: 'utf8', timeout: 8000 });
-  const n = parseInt(r.stdout, 10);
+  if (fresh) return true;
+  // Stamped before the fetch, so an unreachable remote is retried tomorrow,
+  // not on every session start today.
+  try { fs.writeFileSync(stamp, String(now.getTime()), 'utf8'); } catch { return false; }
+  spawnSync('git', ['-C', repo, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 8000 });
+  return true;
+}
+function countCommits(repo, range) {
+  const r = spawnSync('git', ['-C', repo, 'rev-list', '--count', range], { encoding: 'utf8', timeout: 8000 });
+  return parseInt(r.stdout, 10) || 0;
+}
+function commitsBehindLine(checkout, now) {
+  if (!fetchDaily(checkout, now)) return null;
+  const n = countCommits(checkout, 'HEAD..@{u}');
   return n > 0 ? `[update] Joserah has ${n} new commits upstream — run /joserah:update. Tell the owner in one line, in their language.` : null;
+}
+
+// 0.14.0: one block per shared memory the workspace names (config `shared`,
+// clones under .joserah/shared/). Best-effort like the update lines: a memory
+// that cannot be read is named, never a reason for the brief to fail.
+const MEMORY_TASK_CHARS = 600;
+function memoryBlocks(cfg, now) {
+  const out = [];
+  for (const m of Array.isArray(cfg.shared) ? cfg.shared : []) {
+    try {
+      const abs = path.resolve(ROOT, m.path || '');
+      if (!fs.existsSync(path.join(abs, '.memory', 'config.json'))) {
+        out.push(`[memory] ${m.name}: no clone at ${m.path} — /joserah:doctor says what to do.`);
+        continue;
+      }
+      const { detectMember } = require('../templates/memory/tools/detect-member');
+      const me = detectMember(abs);
+      const lines = [`### Shared memory: ${m.name} (${m.path}), you are "${me || '?'}"`];
+      if (!me) lines.push('Member name unknown: ask once and write it into .memory/me there.');
+      if (fetchDaily(abs, now)) {
+        const behind = countCommits(abs, 'HEAD..@{u}');
+        const ahead = countCommits(abs, '@{u}..HEAD');
+        if (behind) lines.push(`${behind} new commit(s) upstream — run \`node tools/sync.js\` there before relying on it.`);
+        if (ahead) lines.push(`${ahead} local commit(s) not pushed — \`node tools/sync.js --push\`.`);
+      }
+      const due = spawnSync(process.execPath, [path.join(abs, 'tools', 'sweep-due.js')], { encoding: 'utf8', timeout: 5000 });
+      if (due.stdout && due.stdout.trim()) lines.push(due.stdout.trim());
+      const tasks = me ? firstNOpenTasks(path.join(abs, 'members', me, 'tasks.md'), MEMORY_TASK_CHARS) : [];
+      if (tasks.length) lines.push(`Your open items (members/${me}/tasks.md):`, ...tasks);
+      out.push(lines.join('\n'));
+    } catch { /* best-effort, see above */ }
+  }
+  return out;
 }
 
 function updateLines(cfg, now) {
@@ -312,6 +352,8 @@ if (dailyText.trim() && !isStub(dailyText, today)) {
 if (staleness) parts.push('\n' + staleness);
 
 for (const line of updateLines(cfg, now)) parts.push('\n' + line);
+
+for (const block of memoryBlocks(cfg, now)) parts.push('\n' + block);
 
 const learned = lastLearnedEntries(path.join(ROOT, '.joserah', 'learned.md'), 3);
 if (learned) parts.push('\n### Recent learnings (.joserah/learned.md)\n' + learned);

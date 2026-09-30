@@ -38,35 +38,45 @@ if (process.argv.includes('--list-checks')) {
   process.exit(0);
 }
 
-const root = findWorkspace(process.argv[2] || process.cwd());
 const checks = [];
+
+// A Joserah Memory (0.14.0) is its own kind of repository: its checks live in
+// lib/memory.js. It is recognised by path before a workspace is looked for,
+// since a memory cloned into a workspace sits inside that workspace.
+const { isMemory, memoryChecks } = require('./lib/memory');
+const target = require('path').resolve(process.argv[2] || process.cwd());
+const memoryRoot = isMemory(target);
+if (memoryRoot) checks.push(...memoryChecks(target));
+const root = memoryRoot ? target : findWorkspace(target);
 
 if (!root) {
   console.log('FAIL  not inside a Joserah workspace (no .joserah/config.json found)');
   process.exit(1);
 }
 
-const cfg = readConfig(root);
+const cfg = memoryRoot ? null : readConfig(root);
 
 // Resolved once, here, because two entries read it (`prompt` and
 // `prompt-source-drift`) and re-resolving the source per check would let the
 // two disagree about which prompt they are talking about.
-const promptSource = resolvePromptSource();
-const prompt = {
-  source: promptSource,
-  st: promptState(root, cfg, promptSource),
-  srcName: promptSource ? (promptSource.kind === 'marketplace' ? 'marketplace clone' : promptSource.kind) : null,
-};
+if (!memoryRoot) {
+  const promptSource = resolvePromptSource();
+  const prompt = {
+    source: promptSource,
+    st: promptState(root, cfg, promptSource),
+    srcName: promptSource ? (promptSource.kind === 'marketplace' ? 'marketplace clone' : promptSource.kind) : null,
+  };
 
-// The one way in for a check. `trust` starts null and is resolved by the trust
-// entry, which the registry's order puts before the settings entry that reads it.
-const ctx = {
-  root, cfg, pluginDir: __dirname, normalizeEol, AGENT_OVERLAY_MARKER, WALK_SKIP_NAMES, prompt, trust: null,
-};
-for (const entry of CHECKS) {
-  const produced = entry.run(ctx);
-  if (!produced) continue;
-  for (const r of [].concat(produced)) checks.push(r);
+  // The one way in for a check. `trust` starts null and is resolved by the trust
+  // entry, which the registry's order puts before the settings entry that reads it.
+  const ctx = {
+    root, cfg, pluginDir: __dirname, normalizeEol, AGENT_OVERLAY_MARKER, WALK_SKIP_NAMES, prompt, trust: null,
+  };
+  for (const entry of CHECKS) {
+    const produced = entry.run(ctx);
+    if (!produced) continue;
+    for (const r of [].concat(produced)) checks.push(r);
+  }
 }
 
 let failed = 0, warned = 0;

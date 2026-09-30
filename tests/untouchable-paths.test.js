@@ -49,18 +49,18 @@ test('no untouchable-path consumer keeps its own list; each requires the library
 const sorted = (a) => [...a].sort();
 test('each consumer set is exactly the set that consumer used to carry', () => {
   assert.deepStrictEqual(sorted(u.LINK_SCAN_SKIP_REL), sorted([
-    'keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', '.joserah/knowledge/raw']));
+    'keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw', '.joserah/knowledge/raw', '.joserah/shared']));
   assert.deepStrictEqual(sorted(u.LINK_SCAN_SKIP_NAMES), sorted([
     '.git', 'node_modules', '.venv', 'site-packages', 'dist', 'build', '.superpowers']));
   assert.deepStrictEqual(sorted(u.MIGRATION_SKIP_REL), sorted([
     'keys', '.joserah/keys', 'projects', 'docker-stack', '.claude', '.joserah/knowledge/raw',
     'imports', 'raw', '.joserah/user', '.joserah/feedback', '.joserah/tools',
-    '.joserah/last-time-inject']));
+    '.joserah/last-time-inject', '.joserah/shared']));
   assert.deepStrictEqual(sorted(u.MIGRATION_SKIP_NAMES), sorted([
     '.git', 'node_modules', '.venv', 'dist', 'build', '.superpowers', 'assets', 'skills-ref']));
   assert.deepStrictEqual(sorted(u.SECRET_SCAN_SKIP_REL), sorted([
     'keys', '.joserah/keys', 'projects', 'docker-stack', 'imports', 'raw',
-    'node_modules', '.git', '.venv', '.superpowers', 'dist', 'build']));
+    'node_modules', '.git', '.venv', '.superpowers', 'dist', 'build', '.joserah/shared']));
   assert.deepStrictEqual(sorted(u.WALK_SKIP_NAMES), sorted([
     '.git', 'node_modules', 'projects', 'docker-stack', 'keys', '.venv', '.superpowers']));
   assert.deepStrictEqual(sorted(u.ARCHIVE_EXCLUDE_ROOT_REL), sorted(['projects', 'docker-stack']));

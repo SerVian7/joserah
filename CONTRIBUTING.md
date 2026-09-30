@@ -20,7 +20,9 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
 3. Before opening a pull request, run:
    - `node tools/scaffold.js --target /tmp/check --owner "A B" --workspace Check --language English --role ""`
    - `node tools/doctor.js /tmp/check` — must exit 0
-   - `grep -rn "{{" templates/` — only the five documented placeholders may appear
+   - `grep -rn "{{" templates/` — only the five documented placeholders may appear, plus the
+     memory kind's own four under `templates/memory/` (`{{COMPANY}}`, `{{MEMBERS}}`, `{{SWEEPER}}`,
+     `{{LANGUAGE}}`)
 
    (These commands assume Git Bash — on Windows run them there, not in
    PowerShell, where `/tmp` and `grep` do not exist.)

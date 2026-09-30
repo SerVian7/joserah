@@ -9,6 +9,14 @@
  *        node scaffold.js --root-shell-only --target DIR
  *        node scaffold.js --identity-only --target DIR [--owner NAME] [--language LANG]
  *                         [--role LINE] [--feedback auto|manual|off] [--github USER]
+ *        node scaffold.js --kind memory --target DIR --company NAME --members a,b
+ *                         --sweeper a [--language LANG]
+ *        node scaffold.js --join-memory <git-url> --target WORKSPACE
+ *
+ * 0.14.0: a Joserah Memory is a company's shared memory in its own git
+ * repository (tools/lib/memory.js). `--kind memory` creates a new one — inside
+ * a workspace at .joserah/shared/<name> it is also named in that workspace's
+ * config; `--join-memory` clones an existing one there and names it.
  *
  * 0.14.0: setup asks only what a newcomer can answer — location, the owner's
  * name, the assistant's name, the language — and passes them on the create
@@ -73,6 +81,9 @@ const GITIGNORE_LINES = [
   '# Conversation records: kept in the workspace, never in a repository backup',
   '.joserah/conversations/',
   '',
+  '# Shared memories: each one is its own git repository',
+  '.joserah/shared/*',
+  '',
   '# scratch directories tools create unbidden',
   '.superpowers/',
   '',
@@ -102,6 +113,22 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+
+// The memory kind is a different repository altogether, not a workspace; it is
+// handled before anything below reads a workspace flag.
+if (args.kind === 'memory' || args['join-memory']) {
+  const memory = require('./lib/memory');
+  try {
+    const out = args['join-memory'] ? memory.joinMemory({ url: args['join-memory'], target: args.target })
+      : memory.scaffoldMemory(args);
+    console.log(JSON.stringify(out));
+    process.exit(0);
+  } catch (e) {
+    if (!e.userError) throw e;
+    console.error(`scaffold: ${e.message}`);
+    process.exit(1);
+  }
+}
 
 // Permission rules — plugins cannot ship these, so the workspace carries them.
 // tools/lib/permission-deny.js is the single source of truth for the set;
@@ -344,7 +371,8 @@ if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
 // is picked by kind and written explicitly as JOSERAH-ROLE.md (see below and
 // in copyTree) — the directory itself is never copied wholesale, so both the
 // collision check and the actual copy skip it by name.
-const COPY_SKIP_DIRS = ['roles'];
+// templates/memory/ is the memory kind's own tree (tools/lib/memory.js), never a workspace's.
+const COPY_SKIP_DIRS = ['roles', 'memory'];
 
 function plannedTemplateFiles(from, to, acc) {
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {

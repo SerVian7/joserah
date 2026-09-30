@@ -674,6 +674,21 @@ const CHECKS = [
   },
 
   {
+    id: 'shared-memories',
+    remedies: [
+      {
+        key: '`shared memory <name>` warn',
+        text: 'The workspace names a shared memory (`shared` in config.json) that is missing or unhealthy. Missing: ask the owner for the repository link and run `node "${CLAUDE_PLUGIN_ROOT}/tools/scaffold.js" --join-memory <url> --target <workspace>` after removing the stale entry, or remove the entry on their yes. Unhealthy: run doctor on the memory\'s own path and act on what it says there.',
+      },
+    ],
+    // 0.14.0: each memory is its own repository under .joserah/shared/; the
+    // workspace checks only that the ones it names are there and healthy.
+    run({ root, cfg }) {
+      return require('./memory').sharedChecks(root, cfg);
+    },
+  },
+
+  {
     id: 'links',
     remedies: [
       { key: 'Broken link', text: 'Find the moved target and repoint the link' },

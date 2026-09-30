@@ -190,6 +190,18 @@ project needs to reach outside data — naming candidates and what each would
 need — but it never configures one on its own initiative; the owner always
 decides.
 
+## Shared memory
+
+A *Joserah Memory* is a company's shared memory in its own git repository: records, a few tools and
+an `AGENTS.md` any assistant can follow, with or without Joserah. Each member's assistant writes
+only in `members/<name>/` and `inbox/`; one sweeper merges the inbox into `knowledge/`, so commits
+never collide. Nothing personal and no secret goes in. Say "this repo is our shared memory: <url>"
+to clone one into `.joserah/shared/<name>/` (setup runs `scaffold.js --join-memory`), or "set up a
+shared memory for <company>" for a new one (`scaffold.js --kind memory`). The session briefing then
+shows, per memory, how far it is behind, whether a sweep is due and your own open items there. Your
+name inside it is your first name, lowercase; `.memory/me` overrides it. A `.brand/` folder in the
+memory holds the company's logo and colours for reports about it.
+
 ## Upgrading
 
 Run `/joserah:update`. Release notes: [CHANGELOG.md](CHANGELOG.md).

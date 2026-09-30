@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when someone asks to install Joserah or set it up — "Install Joserah from <path> and set it up for me", "Joserah'ı kur", "set me up" — to create a new workspace, or to continue, resume or finish getting set up. Only on that request, never because of what a workspace holds or lacks.
+description: Use when someone asks to install Joserah or set it up — "Install Joserah from <path> and set it up for me", "Joserah'ı kur", "set me up" — to create a new workspace, or to continue, resume or finish getting set up; or to join or create a shared memory — "this repo is our shared memory: <git url>", "ortak hafızamız şu repo", "set up a shared memory for <company>". Only on that request, never because of what a workspace holds or lacks.
 ---
 
 # Install and set up Joserah
@@ -113,6 +113,36 @@ Tell the owner, in their language:
 - The drop folder's **absolute path**, `<path>/imports/` — anything dropped there (a CV, a
   project brief) is read from there and never edited; `/joserah:import` takes a larger pile.
 - Next: the short interview below, now or in any later session.
+
+## Shared memory — join one, or create one
+
+A Joserah Memory is a company's shared memory in its own git repository: each member writes only in
+`members/<name>/` and `inbox/`, and one sweeper merges the inbox into `knowledge/`. A member's
+workspace keeps its clone at `.joserah/shared/<name>/`, named in config.json under `shared`, and
+the session briefing then carries one block for it.
+
+**Join** — "this repo is our shared memory: <git url>", "ortak hafızamız şu repo: <url>":
+
+```
+node "<clone>/tools/scaffold.js" --join-memory <git url> --target <workspace>
+```
+
+It clones into `.joserah/shared/<repo name>/`, adds the config entry and the `.joserah/shared/*`
+line to `.gitignore`, and refuses a repository that is not a memory, keeping nothing. Say one line:
+which memory, and that it is in the briefing from the next session. A failed clone is usually
+access: say so plainly.
+
+**Create** — "set up a shared memory for <company>": ask in one line for the members' first names
+and which of them sweeps, then
+
+```
+node "<clone>/tools/scaffold.js" --kind memory --company <Company> --members <a,b,...> \
+  --sweeper <a> --language <LANG> --target <workspace>/.joserah/shared/<company>-memory
+```
+
+It writes the memory, makes its first commit and, at that path, names it in the workspace. To share
+it, the owner creates an empty private repository; on their yes, add it as `origin` and push
+`main`. Its `AGENTS.md` is all any other member's assistant needs.
 
 ## Rules
 

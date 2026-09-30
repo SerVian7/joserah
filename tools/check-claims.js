@@ -26,8 +26,9 @@ const { parseFrontmatter, parseClaims, findClaimAnomalies } = require('./lib/not
 const args = process.argv.slice(2);
 const json = args.includes('--json');
 const root = path.resolve(args.find((a) => !a.startsWith('--')) || process.cwd());
-if (!fs.existsSync(path.join(root, '.joserah', 'config.json'))) {
-  console.error(`check-claims: ${root} is not a Joserah workspace`);
+// A workspace, or a Joserah Memory (which carries this file as tools/claims.js).
+if (!fs.existsSync(path.join(root, '.joserah', 'config.json')) && !fs.existsSync(path.join(root, '.memory', 'config.json'))) {
+  console.error(`check-claims: ${root} is not a Joserah workspace or memory`);
   process.exit(2);
 }
 

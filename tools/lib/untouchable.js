@@ -42,6 +42,9 @@ const CREDENTIALS_REL = [CREDENTIALS_ROOT, '.joserah/keys'];
 // Other repositories checked out inside the workspace. Root-anchored: they
 // carry their own history, or none, and are never this plugin's to walk.
 const FOREIGN_REL = ['projects', 'docker-stack'];
+// Shared memories (0.14.0): each clone under .joserah/shared/ is its own
+// repository with its own tools and doctor; the workspace's scans stay out.
+const SHARED_MEMORY_REL = ['.joserah/shared'];
 
 // Junk at any depth. '.superpowers' is disposable scratch a third-party
 // execution harness leaves behind: regenerated on demand, not the workspace's
@@ -64,7 +67,7 @@ const WORKSPACE_PRIVATE_REL = ['.claude', '.joserah/user', '.joserah/feedback',
 
 // verify-links.js: links inside source material are historical facts, not
 // workspace health; credentials and foreign repos are not ours to check.
-const LINK_SCAN_SKIP_REL = [...CREDENTIALS_REL, ...FOREIGN_REL, ...SOURCE_MATERIAL_REL];
+const LINK_SCAN_SKIP_REL = [...CREDENTIALS_REL, ...FOREIGN_REL, ...SOURCE_MATERIAL_REL, ...SHARED_MEMORY_REL];
 // 'site-packages' is here and nowhere else: a vendored Python tree full of
 // .md files whose links were never about this workspace.
 const LINK_SCAN_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, 'site-packages'];
@@ -74,7 +77,7 @@ const LINK_SCAN_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, 'site-packag
 // writing frontmatter into a credential note was never intended, and its
 // absence was an oversight, not a rule.
 const MIGRATION_SKIP_REL = [...CREDENTIALS_REL, ...FOREIGN_REL, ...SOURCE_MATERIAL_REL,
-  ...WORKSPACE_PRIVATE_REL];
+  ...WORKSPACE_PRIVATE_REL, ...SHARED_MEMORY_REL];
 // Vendored and asset material (0.13.2): third-party skill copies and scraped
 // source texts are not notes, so a migration must not give them headers. A
 // folder holding a LICENSE is skipped for the same reason (workspace-scan.js).
@@ -85,7 +88,7 @@ const MIGRATION_SKIP_NAMES = [...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, ...VENDORED_
 // root-level one — that is how this tool has always behaved. See the comment
 // on SOURCE_MATERIAL_GITIGNORED_REL for why the legacy location is absent.
 const SECRET_SCAN_SKIP_REL = [...CREDENTIALS_REL, ...FOREIGN_REL,
-  ...SOURCE_MATERIAL_GITIGNORED_REL, ...JUNK_NAMES, ...BUILD_OUTPUT_NAMES];
+  ...SOURCE_MATERIAL_GITIGNORED_REL, ...JUNK_NAMES, ...BUILD_OUTPUT_NAMES, ...SHARED_MEMORY_REL];
 
 // Name-matched walks that only count or sample files: doctor's placeholder
 // scan and backup-scope's changed-since count. Bare names at any depth, so a
@@ -161,7 +164,7 @@ module.exports = {
   HIDDEN_KEEP_NAMES, isHiddenForeignDir,
   ALWAYS_IN_SCOPE, scopeFrom, inScope,
   SOURCE_MATERIAL_REL, SOURCE_MATERIAL_GITIGNORED_REL,
-  CREDENTIALS_ROOT, CREDENTIALS_REL, FOREIGN_REL,
+  CREDENTIALS_ROOT, CREDENTIALS_REL, FOREIGN_REL, SHARED_MEMORY_REL,
   JUNK_NAMES, BUILD_OUTPUT_NAMES, WORKSPACE_PRIVATE_REL,
   LINK_SCAN_SKIP_REL, LINK_SCAN_SKIP_NAMES,
   MIGRATION_SKIP_REL, MIGRATION_SKIP_NAMES,
