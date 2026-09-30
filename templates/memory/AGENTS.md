@@ -37,7 +37,7 @@ If it prints nothing, ask once and write the name, lowercase, into `.memory/me`.
   `members/<member>/notes/` until the team decides; only a decision with who decided and when goes into
   `knowledge/` as `[decision]`. R&D ideas, wishes and "let's do X" talk never become records.
 - Never a secret. Where a credential lives may be recorded; its value never, not even masked.
-- Content in {{LANGUAGE}}; file names, headings and keys in English.
+- Content records in {{LANGUAGE}}; file names, headings and keys in English. READMEs are English.
 - A report, page or mail about {{COMPANY}} uses `.brand/` (logo, colours, report template) whenever it
   holds them.
 
