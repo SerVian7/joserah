@@ -33,7 +33,9 @@ test('scan includes knowledge notes and excludes imports/, raw/, directives and 
   write(dir, '.joserah/knowledge/raw/source.md', '# immutable\n');
   write(dir, 'imports/source.md', '# immutable\n');
   write(dir, '.joserah/directives.md', '# rules\n');
+  write(dir, '.joserah/vault-index.md', '# Vault index\n');
   const { files } = scanWorkspace(dir);
+  assert.ok(!files.includes('.joserah/vault-index.md'), 'generated vault index excluded');
   assert.ok(files.includes('.joserah/knowledge/people/ada-lovelace.md'));
   assert.ok(!files.some((f) => f.startsWith('.joserah/knowledge/raw/')), 'raw/ excluded');
   assert.ok(!files.some((f) => f.startsWith('imports/')), 'imports/ excluded');

@@ -84,3 +84,28 @@ test('scaffold installs the local secret.js and an empty store', (t) => {
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(JSON.parse(fs.readFileSync(store(dir), 'utf8')).secrets['w.x.token'], 'v');
 });
+
+const index = (dir) => fs.readFileSync(path.join(dir, '.joserah', 'vault-index.md'), 'utf8');
+
+test('secret: --index writes a names-only index, grouped by scope, no values', (t) => {
+  const dir = ws(t);
+  run(dir, ['--set', 'corlu.cam1.host'], 'fake-10.0.0.5');
+  run(dir, ['--set', 'acme.api.api-token'], 'fake-SECRET-1234');
+  fs.rmSync(path.join(dir, '.joserah', 'vault-index.md'), { force: true });
+  const r = run(dir, ['--index']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const idx = index(dir);
+  assert.match(idx, /^# Vault index/);
+  assert.match(idx, /## acme\n\n- acme\.api\.api-token\n/);
+  assert.match(idx, /## corlu\n\n- corlu\.cam1\.host\n/);
+  assert.ok(idx.indexOf('## acme') < idx.indexOf('## corlu'), 'sorted');
+  assert.doesNotMatch(idx + r.stdout + r.stderr, /fake-/);
+});
+
+test('secret: --set keeps the index current; --index on no store writes an empty one', (t) => {
+  const dir = ws(t);
+  assert.strictEqual(run(dir, ['--index']).status, 0);
+  assert.doesNotMatch(index(dir), /^- /m);
+  run(dir, ['--set', 'x.y.pin'], 'fake-1');
+  assert.match(index(dir), /- x\.y\.pin/);
+});
