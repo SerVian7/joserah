@@ -8,6 +8,13 @@
  * files could not be read. A file that couldn't be read must never be
  * reported as clean: exit 2 wins over exit 0 whenever any file was skipped.
  * Output masks every match: first 4 chars + "…[masked]".
+ *
+ * `--extract` proposes a vault name per hit and changes nothing (exit 1);
+ * `--extract --yes` stores each value through secret.js --set, replaces every
+ * whole occurrence in its file with `$(node .joserah/tools/secret.js <name>)`
+ * (line endings kept; keys/ is never scanned), rewrites the index and prints
+ * counts only. A name that already holds a different value is a conflict: the
+ * note keeps its text, exit 1.
  */
 'use strict';
 const fs = require('fs');
@@ -66,6 +73,8 @@ function isPlaceholder(rawValue) {
   // out keeps these out too. A false negative here costs more than a false
   // positive.
   if (/^(redacted|masked|placeholder|todo|tbd|none|null|empty)$/i.test(v)) return true;
+  // A vault reference left by --extract: `$(node .joserah/tools/secret.js <name>)`.
+  if (/^\$\(/.test(v)) return true;
   return false;
 }
 
@@ -139,6 +148,85 @@ try {
   process.exit(2);
 }
 
+// ---- --extract: a stray secret becomes a vault entry and a name in the text.
+const extract = process.argv.includes('--extract');
+const confirmed = process.argv.includes('--yes');
+const found = [];
+const SECRET_TOOL = path.join(__dirname, 'secret.js');
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
+// Field from what the pattern matched: the key word for `password: …`, the
+// token family otherwise (SPECIFIC's order: key=value, bearer/basic, sk/pk,
+// AWS, Slack, GitHub x2, Google).
+function fieldFor(re, m) {
+  if (re !== SPECIFIC[0][0]) return ['token', 'api-token', 'key', 'token', 'token', 'token', 'api-token'][SPECIFIC.findIndex(([r]) => r === re) - 1];
+  const w = m[1].toLowerCase().replace(/_/g, '-');
+  if (/^(password|passwd|pwd)$/.test(w)) return 'password';
+  if (/token$/.test(w)) return 'token';
+  if (/^api-?key$|^apikey$/.test(w)) return 'api-token';
+  return 'key';
+}
+// scope = the folder under knowledge/ or desk/ (else the first folder, else
+// `notes`), system = the file's stem. Two different values in one file under
+// the same name get -2, -3 on the field.
+const proposals = new Map(); // rel -> Map(value -> name)
+function proposeName(rel, value, field) {
+  const segs = rel.split('/').filter((s) => s !== '.joserah');
+  const scope = (segs[0] === 'knowledge' || segs[0] === 'desk') && segs.length > 2 ? segs[1]
+    : segs.length > 1 ? segs[0] : 'notes';
+  const base = `${slug(scope)}.${slug(path.basename(rel, path.extname(rel)))}.${field}`;
+  const mine = proposals.get(rel) || proposals.set(rel, new Map()).get(rel);
+  if (mine.has(value)) return mine.get(value);
+  const taken = new Set(mine.values());
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+  mine.set(value, name);
+  return name;
+}
+const secretTool = (args, input) => spawnSync(process.execPath, [SECRET_TOOL, ...args], { cwd: root, input, encoding: 'utf8' });
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const DELIM = '\\s"\'`<>()\\[\\]{},;:=';
+
+// Store, then replace. Only counts and names are printed, never a value.
+function runExtract() {
+  const n = { stored: 0, reused: 0, conflicts: 0, files: 0 };
+  const byFile = new Map();
+  const seen = new Set();
+  for (const f of found) {
+    const key = f.rel + '\0' + f.name;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (secretTool(['--has', f.name]).status === 0) {
+      // Compared in memory; the value never leaves this process.
+      if (secretTool([f.name]).stdout !== f.value) {
+        n.conflicts++;
+        console.log(`conflict ${f.name}: exists with a different value — left in ${f.rel}`);
+        continue;
+      }
+      n.reused++;
+    } else {
+      const r = secretTool(['--set', f.name], f.value);
+      if (r.status !== 0) { n.conflicts++; console.log(`conflict ${f.name}: could not store — left in ${f.rel}`); continue; }
+      n.stored++;
+    }
+    (byFile.get(f.rel) || byFile.set(f.rel, []).get(f.rel)).push(f);
+  }
+  for (const [rel, list] of byFile) {
+    const abs = path.join(root, rel);
+    const before = fs.readFileSync(abs, 'utf8');
+    let text = before;
+    // Whole matches: a delimiter (or sentence punctuation, then a delimiter) on both sides.
+    // Longest first, so a value that is part of another found value cannot cut it.
+    for (const f of list.sort((a, b) => b.value.length - a.value.length)) {
+      const whole = new RegExp(`(?<![^${DELIM}])${escapeRe(f.value)}(?=[${DELIM}]|[.!?]?$|[.!?][${DELIM}])`, 'g');
+      text = text.replace(whole, () => `$(node .joserah/tools/secret.js ${f.name})`);
+    }
+    if (text !== before) { fs.writeFileSync(abs, text); n.files++; }
+  }
+  secretTool(['--index']);
+  console.log(`extract: ${n.stored} stored, ${n.reused} reused, ${n.conflicts} conflicts, ${n.files} files changed`);
+  process.exit(n.conflicts ? 1 : 0);
+}
+
 let hits = 0;
 const unreadable = [];
 const missing = [];
@@ -171,7 +259,12 @@ for (const rel of files) {
         }
         hits++;
         const shown = m[0].slice(0, 4) + '…[masked]';
-        console.log(`${rel}:${i + 1}: ${shown}`);
+        if (extract) {
+          const v = value.replace(/^(["'])(.*)\1$/, '$2');
+          const name = proposeName(rel, v, fieldFor(re, m));
+          found.push({ rel, name, value: v });
+          console.log(`${rel}:${i + 1} — ${shown} → proposed name ${name}`);
+        } else console.log(`${rel}:${i + 1}: ${shown}`);
         // A zero-length match would spin forever; none of SPECIFIC's
         // patterns can match empty, but advance defensively anyway.
         if (m[0].length === 0) re.lastIndex++;
@@ -187,7 +280,12 @@ for (const rel of unreadable) {
   console.error(`secret-scan: could not read ${rel} — treating the workspace as unscanned, not clean.`);
 }
 
+if (extract && confirmed && found.length) runExtract();
 if (hits) {
+  if (extract) {
+    console.log(`\n${hits} found. Nothing changed; run again with --yes to move them into the vault under the proposed names.`);
+    process.exit(1);
+  }
   const noun = hits === 1 ? 'string' : 'strings';
   console.log(`\n${hits} credential-shaped ${noun} found. Move them into the vault (.joserah/tools/secret.js --set) before any repository backup.`);
   process.exit(1);

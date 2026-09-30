@@ -280,3 +280,75 @@ test('a tracked file deleted from disk does not make the scan report the workspa
   assert.match(r.stderr, /note\.md/, 'it still says which file it skipped');
   assert.match(r.stderr, /no longer on disk/, 'and why, so a real corruption is still distinguishable');
 });
+
+// ---- 0.15.0: --extract moves a stray secret into the vault ----------------
+function extractWs(t, files) {
+  const dir = path.join(tmpdir(t), 'ws');
+  fs.mkdirSync(path.join(dir, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'config.json'), '{}');
+  for (const [rel, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  }
+  return dir;
+}
+const read = (dir, rel) => fs.readFileSync(path.join(dir, rel), 'utf8');
+const ref = (name) => `$(node .joserah/tools/secret.js ${name})`;
+const vaultNames = (dir) => runTool('secret.js', ['--list'], { cwd: dir }).stdout.trim().split(/\r?\n/).filter(Boolean);
+
+test('--extract without --yes proposes names, changes nothing, never shows the value', (t) => {
+  const note = '.joserah/desk/tasks/now.md';
+  const dir = extractWs(t, { [note]: 'password: k9Tr0uv-fake\n' });
+  const r = runTool('secret-scan.js', [dir, '--extract']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /now\.md:1 — pass…\[masked\] → proposed name tasks\.now\.password/);
+  assert.doesNotMatch(r.stdout + r.stderr, /k9Tr0uv/);
+  assert.strictEqual(read(dir, note), 'password: k9Tr0uv-fake\n');
+  assert.ok(!fs.existsSync(path.join(dir, 'keys', 'secrets.json')));
+});
+
+test('--extract --yes replaces both occurrences of one token, vault holds it once, rescan is clean', (t) => {
+  const note = '.joserah/knowledge/wiki/router.md';
+  const secret = 'sk-' + 'f4k3f4k3'.repeat(3);
+  const dir = extractWs(t, { [note]: `# Router\n\nkey ${secret}\nagain: ${secret}.\n` });
+  const r = runTool('secret-scan.js', [dir, '--extract', '--yes']);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout + r.stderr, /f4k3/);
+  assert.strictEqual(read(dir, note), `# Router\n\nkey ${ref('wiki.router.api-token')}\nagain: ${ref('wiki.router.api-token')}.\n`);
+  assert.deepStrictEqual(vaultNames(dir), ['wiki.router.api-token']);
+  assert.strictEqual(runTool('secret.js', ['wiki.router.api-token'], { cwd: dir }).stdout, secret);
+  assert.match(read(dir, '.joserah/vault-index.md'), /- wiki\.router\.api-token/);
+  assert.strictEqual(runTool('secret-scan.js', [dir]).status, 0, 'the reference left behind is not a finding');
+});
+
+test('--extract replaces whole matches only — a longer token containing the value is left intact', (t) => {
+  const note = '.joserah/desk/tasks/now.md';
+  const dir = extractWs(t, { [note]: 'password: k9Tr0uv-fake\nprose xk9Tr0uv-fakeZ here\n' });
+  assert.strictEqual(runTool('secret-scan.js', [dir, '--extract', '--yes']).status, 0);
+  assert.strictEqual(read(dir, note), `password: ${ref('tasks.now.password')}\nprose xk9Tr0uv-fakeZ here\n`);
+});
+
+test('--extract keeps CRLF, gives two secrets in one note two names, and never touches keys/', (t) => {
+  const keysFile = 'keys/other.json';
+  const dir = extractWs(t, {
+    'note.md': 'password: fake-Pw-1\r\nline two\r\npassword: fake-Pw-2\r\n',
+    [keysFile]: '{"password": "fake-Pw-1"}',
+  });
+  assert.strictEqual(runTool('secret-scan.js', [dir, '--extract', '--yes']).status, 0);
+  assert.strictEqual(read(dir, 'note.md'),
+    `password: ${ref('notes.note.password')}\r\nline two\r\npassword: ${ref('notes.note.password-2')}\r\n`);
+  assert.strictEqual(read(dir, keysFile), '{"password": "fake-Pw-1"}');
+  assert.strictEqual(runTool('secret.js', ['notes.note.password-2'], { cwd: dir }).stdout, 'fake-Pw-2');
+});
+
+test('--extract never overwrites: a name holding a different value is a conflict, the note keeps its text', (t) => {
+  const note = '.joserah/knowledge/wiki/router.md';
+  const dir = extractWs(t, { [note]: 'password: fake-new-9\n' });
+  runTool('secret.js', ['--set', 'wiki.router.password'], { cwd: dir, input: 'fake-old-9' });
+  const r = runTool('secret-scan.js', [dir, '--extract', '--yes']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /conflict wiki\.router\.password/);
+  assert.doesNotMatch(r.stdout + r.stderr, /fake-/);
+  assert.strictEqual(read(dir, note), 'password: fake-new-9\n');
+  assert.strictEqual(runTool('secret.js', ['wiki.router.password'], { cwd: dir }).stdout, 'fake-old-9');
+});
