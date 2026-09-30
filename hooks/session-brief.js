@@ -15,7 +15,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 const { withinBudget } = require('./lib/standing-context');
 
@@ -66,18 +66,25 @@ function commitsBehindLine(checkout, now) {
 }
 
 // 0.13.8: a pulled checkout ahead of the loaded copy is re-copied here, so
-// nothing is left after a `git pull` but the restart. Detached and unref'd —
-// never waits on it — and at most once per checkout and version. `claude` on
-// Windows is an npm `.cmd` shim, which spawn finds only through a shell, so the
-// binary is looked up by hand and the one argument that varies is sanitised.
-function findOnPath(name) {
-  const exts = process.platform === 'win32'
-    ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
-    : [''];
-  for (const dir of (process.env.PATH || process.env.Path || '').split(path.delimiter)) {
+// nothing is left after a `git pull` but the restart. 0.13.10: synchronously —
+// a detached child of this short-lived hook died unseen in the IDE — capped at
+// 25 s, logged, and stamped only on success, so a failure is retried next
+// session. Once per checkout and version: the key is those two, nothing more.
+// `claude` on Windows is an npm `.cmd` shim, which only cmd.exe runs; the one
+// argument that varies is sanitised. The hooks docs name no variable for the
+// Claude executable, so the fallbacks are the usual install places.
+function findClaude() {
+  const win = process.platform === 'win32';
+  const exts = win ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
+  const home = os.homedir();
+  const dirs = (process.env.PATH || process.env.Path || '').split(path.delimiter).filter(Boolean);
+  if (win && process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, 'npm'));
+  dirs.push(path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'));
+  if (!win) dirs.push('/usr/local/bin');
+  for (const dir of dirs) {
     for (const ext of exts) {
-      const p = path.join(dir, name + ext);
-      try { if (dir && fs.statSync(p).isFile()) return p; } catch { /* not here */ }
+      const p = path.join(dir, 'claude' + ext);
+      try { if (fs.statSync(p).isFile()) return p; } catch { /* not here */ }
     }
   }
   return null;
@@ -85,19 +92,41 @@ function findOnPath(name) {
 function recopyLine(checkout) {
   const v = checkout.version;
   const tell = ' Tell the owner in one line, in their language.';
-  const claude = findOnPath('claude');
+  const tmp = os.tmpdir();
+  const diagPath = path.join(tmp, 'joserah-recopy-diag.json');
+  const logPath = path.join(tmp, 'joserah-recopy.log');
+  const claude = findClaude();
   const marketplace = String(checkout.marketplace).replace(/[^A-Za-z0-9._-]/g, '');
-  if (!claude || !marketplace) return `[update] Joserah ${v} is pulled but not loaded — run /joserah:update.${tell}`;
+  const diag = { claudeFound: claude, PATH: process.env.PATH || process.env.Path || '', platform: process.platform,
+    shell: null, exitCode: null, error: null };
+  const writeDiag = () => { try { fs.writeFileSync(diagPath, JSON.stringify(diag, null, 2), 'utf8'); } catch { /* diagnostics only */ } };
+  if (!claude || !marketplace) {
+    writeDiag();
+    return `[update] Joserah ${v} is pulled but not loaded — run /joserah:update (claude not found; see ${diagPath}).${tell}`;
+  }
   const key = require('crypto').createHash('sha1').update(`${checkout.path}\n${v}`).digest('hex').slice(0, 12);
-  const stamp = path.join(os.tmpdir(), `joserah-recopy-${key}.stamp`);
+  const stamp = path.join(tmp, `joserah-recopied-${key}.stamp`);
   if (fs.existsSync(stamp)) return `[update] Joserah ${v} is ready — restart Claude Code to run it.${tell}`;
-  fs.writeFileSync(stamp, v, 'utf8');
-  const shell = /\.(cmd|bat)$/i.test(claude);
-  const child = spawn(shell ? `"${claude}"` : claude, ['plugin', 'update', `joserah@${marketplace}`],
-    { detached: true, stdio: 'ignore', windowsHide: true, shell });
-  child.on('error', () => { /* best-effort; the stamp still says it was tried */ });
-  child.unref();
-  return `[update] Joserah ${v} is being loaded into the plugin cache in the background — restart Claude Code once to run it.${tell}`;
+  const target = `joserah@${marketplace}`;
+  const opts = { encoding: 'utf8', timeout: 25000, windowsHide: true };
+  let r;
+  if (/\.(cmd|bat)$/i.test(claude)) {
+    diag.shell = process.env.ComSpec || 'cmd.exe';
+    r = spawnSync(diag.shell, ['/d', '/s', '/c', `""${claude}" plugin update ${target}"`], { ...opts, windowsVerbatimArguments: true });
+  } else {
+    r = spawnSync(claude, ['plugin', 'update', target], opts);
+  }
+  diag.exitCode = r.status;
+  diag.error = r.error ? String(r.error.message || r.error) : null;
+  writeDiag();
+  try {
+    fs.writeFileSync(logPath, `$ ${claude} plugin update ${target}\nexit: ${r.status}${r.error ? `\nerror: ${diag.error}` : ''}\n\n${r.stdout || ''}${r.stderr || ''}`, 'utf8');
+  } catch { /* the log is a courtesy */ }
+  if (r.status !== 0 || r.error) {
+    return `[update] Joserah ${v} could not be loaded automatically (see ${logPath}) — run /joserah:update.${tell}`;
+  }
+  try { fs.writeFileSync(stamp, v, 'utf8'); } catch { /* retried next session */ }
+  return `[update] Joserah ${v} was loaded into the plugin cache — restart Claude Code once to run it.${tell}`;
 }
 
 function updateLines(cfg, now) {

@@ -959,51 +959,97 @@ function directoryMarketplace(t, version) {
 }
 const LOADED = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
 
-// 0.13.8: the hook re-copies the pulled checkout itself, detached. A fake
-// `claude` on a PATH the test controls records how it was called, so no test
-// can ever run the real `claude plugin update` on the machine running it.
-function fakeClaude(t) {
+// 0.13.8, reworked in 0.13.10: the hook re-copies the pulled checkout itself,
+// synchronously — a detached child of a short-lived hook died unseen in the
+// IDE. A fake `claude` the test controls records how it was called, and every
+// run gets its own temp dir and home, so no test can reach the real `claude`
+// or leave a stamp in the machine's real temp dir.
+function fakeClaude(t, exitCode = 0) {
   const dir = tmpdir(t);
   const log = path.join(dir, 'calls.log');
   if (process.platform === 'win32') {
-    fs.writeFileSync(path.join(dir, 'claude.cmd'), `@echo %*>>"${log}"\r\n`);
+    fs.writeFileSync(path.join(dir, 'claude.cmd'), `@echo %*>>"${log}"\r\n@exit /b ${exitCode}\r\n`);
   } else {
-    fs.writeFileSync(path.join(dir, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\nexit ${exitCode}\n`, { mode: 0o755 });
   }
   return { dir, log };
 }
-function briefWithPath(ws, configDir, pathDir) {
+function isolatedEnv(t, pathDir, home) {
+  const tmp = tmpdir(t);
+  home = home || tmpdir(t);
+  return {
+    tmp,
+    env: { ...process.env, PATH: pathDir, Path: pathDir, TEMP: tmp, TMP: tmp, TMPDIR: tmp,
+      HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming') },
+  };
+}
+function briefIn(ws, configDir, env) {
   const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js')],
-    { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: configDir, PATH: pathDir, Path: pathDir } });
+    { cwd: ws, encoding: 'utf8', env: { ...env, CLAUDE_CONFIG_DIR: configDir } });
   assert.strictEqual(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /DEP0190/, 'no shell-with-args warning');
   return JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
 }
-function waitFor(file, ms = 8000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (fs.existsSync(file) && fs.readFileSync(file, 'utf8').trim()) return fs.readFileSync(file, 'utf8');
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-  }
-  return '';
-}
+const calls = (log) => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split(/\r?\n/).filter(Boolean) : []);
+const recopyStamps = (tmp) => fs.readdirSync(tmp).filter((f) => f.startsWith('joserah-recopied-'));
 
-test('a pulled checkout is re-copied in the background, once per version, then reported ready', (t) => {
+test('a pulled checkout is re-copied at session start, once per version, then reported ready', (t) => {
   const ws = hookWs(t);
   const configDir = directoryMarketplace(t, '99.0.0');
   const claude = fakeClaude(t);
-  const first = briefWithPath(ws, configDir, claude.dir);
-  assert.match(first, /\[update\] Joserah 99\.0\.0 is being loaded into the plugin cache in the background — restart Claude Code once to run it\./);
-  assert.match(waitFor(claude.log), /^plugin update joserah@joserah\s*$/m, 'the re-copy was started with the marketplace name');
+  const { tmp, env } = isolatedEnv(t, claude.dir);
+  const first = briefIn(ws, configDir, env);
+  assert.match(first, /\[update\] Joserah 99\.0\.0 was loaded into the plugin cache — restart Claude Code once to run it\./);
+  assert.deepStrictEqual(calls(claude.log).map((l) => l.trim()), ['plugin update joserah@joserah']);
+  assert.strictEqual(recopyStamps(tmp).length, 1, 'one stamp, keyed by checkout and version');
+  const diag = JSON.parse(fs.readFileSync(path.join(tmp, 'joserah-recopy-diag.json'), 'utf8'));
+  assert.strictEqual(path.dirname(diag.claudeFound), claude.dir);
+  assert.strictEqual(diag.platform, process.platform);
+  assert.ok('PATH' in diag && 'exitCode' in diag);
+  assert.ok(fs.existsSync(path.join(tmp, 'joserah-recopy.log')), 'the run is logged');
 
-  const second = briefWithPath(ws, configDir, claude.dir);
+  const second = briefIn(ws, configDir, env);
   assert.match(second, /\[update\] Joserah 99\.0\.0 is ready — restart Claude Code to run it\./);
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
-  assert.strictEqual(fs.readFileSync(claude.log, 'utf8').trim().split('\n').length, 1, 'at most once per version');
+  assert.strictEqual(calls(claude.log).length, 1, 'at most once per version');
 });
 
-test('with no claude on PATH the brief falls back to the /joserah:update line', (t) => {
-  const ctx = briefWithPath(hookWs(t), directoryMarketplace(t, '99.0.0'), tmpdir(t));
-  assert.match(ctx, /\[update\] Joserah 99\.0\.0 is pulled but not loaded — run \/joserah:update/);
+test('a failed re-copy leaves no stamp, names the log, and is tried again next session', (t) => {
+  const ws = hookWs(t);
+  const configDir = directoryMarketplace(t, '99.0.0');
+  const claude = fakeClaude(t, 1);
+  const { tmp, env } = isolatedEnv(t, claude.dir);
+  const ctx = briefIn(ws, configDir, env);
+  const logPath = path.join(tmp, 'joserah-recopy.log');
+  assert.ok(ctx.includes(`[update] Joserah 99.0.0 could not be loaded automatically (see ${logPath}) — run /joserah:update`), ctx);
+  assert.strictEqual(recopyStamps(tmp).length, 0);
+  briefIn(ws, configDir, env);
+  assert.strictEqual(calls(claude.log).length, 2, 'retried');
+});
+
+test('claude off PATH is found in its usual install place', (t) => {
+  const home = tmpdir(t);
+  const log = path.join(home, 'calls.log');
+  if (process.platform === 'win32') {
+    const npm = path.join(home, 'AppData', 'Roaming', 'npm');
+    fs.mkdirSync(npm, { recursive: true });
+    fs.writeFileSync(path.join(npm, 'claude.cmd'), `@echo %*>>"${log}"\r\n`);
+  } else {
+    const bin = path.join(home, '.local', 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\necho "$@" >> "${log}"\n`, { mode: 0o755 });
+  }
+  const { env } = isolatedEnv(t, tmpdir(t), home);
+  const ctx = briefIn(hookWs(t), directoryMarketplace(t, '99.0.0'), env);
+  assert.match(ctx, /was loaded into the plugin cache/);
+  assert.strictEqual(calls(log).length, 1);
+});
+
+test('with no claude anywhere the brief falls back to the /joserah:update line and names the diag file', (t) => {
+  const { tmp, env } = isolatedEnv(t, tmpdir(t));
+  const ctx = briefIn(hookWs(t), directoryMarketplace(t, '99.0.0'), env);
+  const diagPath = path.join(tmp, 'joserah-recopy-diag.json');
+  assert.ok(ctx.includes(`[update] Joserah 99.0.0 is pulled but not loaded — run /joserah:update (claude not found; see ${diagPath})`), ctx);
+  assert.strictEqual(JSON.parse(fs.readFileSync(diagPath, 'utf8')).claudeFound, null);
   assert.doesNotMatch(ctx, /Updating the plugin is theirs/);
 });
 

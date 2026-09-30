@@ -140,3 +140,22 @@ test('check-update names the directory-marketplace checkout and the marketplace 
   assert.deepStrictEqual(out.checkout, { marketplace: 'mine', path: checkout, version: '9.9.9' });
   assert.strictEqual(JSON.parse(runTool('check-update.js', [dir]).stdout).checkout, null);
 });
+
+// 0.13.10: the developer's checkout — a pull or a commit there re-copies the
+// plugin by itself, so one restart is all that is left. Installed by hand only.
+test('install-dev-hook writes marked post-merge and post-commit hooks, idempotently, and never a foreign one', (t) => {
+  const repo = tmpdir(t);
+  spawnSync('git', ['init', '-q', repo]);
+  const run = () => JSON.parse(runTool('install-dev-hook.js', [repo]).stdout);
+  assert.deepStrictEqual(run(), { 'post-merge': 'created', 'post-commit': 'created' });
+  for (const name of ['post-merge', 'post-commit']) {
+    const text = fs.readFileSync(path.join(repo, '.git', 'hooks', name), 'utf8');
+    assert.match(text, /^#!\/bin\/sh\n# joserah:dev-hook/);
+    assert.match(text, /claude plugin update joserah@joserah/);
+  }
+  assert.deepStrictEqual(run(), { 'post-merge': 'current', 'post-commit': 'current' });
+  fs.writeFileSync(path.join(repo, '.git', 'hooks', 'post-commit'), '#!/bin/sh\necho mine\n');
+  assert.deepStrictEqual(run(), { 'post-merge': 'current', 'post-commit': 'foreign' });
+  assert.strictEqual(fs.readFileSync(path.join(repo, '.git', 'hooks', 'post-commit'), 'utf8'), '#!/bin/sh\necho mine\n');
+  assert.strictEqual(runTool('install-dev-hook.js', [tmpdir(t)]).status, 1, 'not a git checkout');
+});

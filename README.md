@@ -301,6 +301,20 @@ The standing prompt is unchanged, still version 4, so nothing needs
 `/joserah:update`; this is a plugin update and the new hook starts working
 after the restart that follows it.
 
+## Developing Joserah
+
+Working in your own clone of this repository, run once:
+
+```
+node tools/install-dev-hook.js
+```
+
+It writes `.git/hooks/post-merge` and `post-commit` in the clone, each running
+`claude plugin update joserah@<marketplace>`, so a pull or a commit there copies the new version
+into Claude Code's plugin cache by itself and one restart is all that is left. Never installed
+automatically; re-running it is safe, and a hook of the same name that it did not write is left
+alone. Every release still bumps `.claude-plugin/plugin.json` — see CONTRIBUTING.md.
+
 ## Requirements
 
 - Claude Code
@@ -574,3 +588,7 @@ workspace whose own `directives.md` spells out the old signature has to be updat
 ### Upgrading to 0.13.9
 
 **Identity needs no lookup.** The session's workspace block now states the assistant's name, the owner's name and the language whether or not they are set — an unnamed assistant is told "You have no name here: you are simply the assistant" — and the client and hosted role files say "give yours if you have one". A workspace's `JOSERAH-ROLE.md` then differs from its template; `/joserah:update` replaces it (doctor names the file).
+
+### Upgrading to 0.13.10
+
+**The re-copy runs where it can be seen.** 0.13.8 started `claude plugin update` as a detached child of the session-start hook, and in the IDE the cache stayed on the old version. It now runs synchronously (at most 25 s, about 2 s measured), once per clone version, logged to `joserah-recopy.log` in the temp dir; a failure leaves no stamp and is retried next session, with the log named in the briefing. `claude` is also looked for off PATH (`%APPDATA%\npm`, `~/.local/bin`, `~/.claude/local`, `/usr/local/bin`), and every attempt writes `joserah-recopy-diag.json` there. Developers: `node tools/install-dev-hook.js` (see Developing Joserah).
