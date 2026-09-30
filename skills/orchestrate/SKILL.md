@@ -70,6 +70,9 @@ Report: <the exact shape of what comes back>
 What comes back is **a report, not a fact**. Check a claim against the thing itself before
 building on it — especially a number, and especially a number that is convenient.
 
+Asked how a background job is going or when it will finish, ask the worker for a status line —
+what is committed, what remains, how many minutes — and relay it. Never estimate it blind.
+
 Read the removed lines in a delivered diff before the added ones. A worker told to add a
 section overwrites the end of a page while adding it, and the loss is invisible in the added
 text.

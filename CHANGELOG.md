@@ -13,6 +13,8 @@ any of them.
 
 **The owner saves a secret without the assistant seeing it.** With nothing piped in, `secret.js --set <name>` asks for the value in the terminal with echo off. Piped input works as before.
 
+**The words.** Prompt version 13. Rule 3: when the owner wants to save a password, the assistant gives them the one `--set` line to run in their own terminal. Only a secret the assistant already has in front of it goes in through stdin. §2: a commit message carries no AI attribution line. §5: asked how a background job is going, the assistant asks the worker and does not guess (`orchestrate` says the same). Nothing the plugin ships writes an attribution trailer. Run `/joserah:update`.
+
 ## 0.15.0
 
 **One vault format, imported in one pass.** `keys/secrets.json` in the standard shape, filled and read only through `secret.js`, is the vault in every workspace. `secret.js --import <file> [--prefix <scope>] [--delete]` brings in any old vault — JSON of any nesting (`corlu → cam1 → user` becomes `corlu.cam1.user`) or a `.env` — listing names, never values, and never overwriting: a name that exists with a different value is a listed conflict, exit 1. `/joserah:update` runs it once per workspace (`migratedTo` below 0.15.0) on every JSON or `.env` file in `keys/`, and on a `secrets.json` in a foreign shape (moved to `secrets.json.imported-<date>`, then imported into a fresh store; `secret.js` now refuses to work on such a store rather than listing nothing). A clean source is renamed `<name>.imported-<date>`, never deleted; the migrate report carries counts only. A module's own `.env` is never imported. `docs/migrations/0.15.0.md`.

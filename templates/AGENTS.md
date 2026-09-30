@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 12 -->
+<!-- joserah:prompt-version 13 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -52,7 +52,7 @@ And never drown them in work they did not ask to watch: not every step you took 
 
 **Language, two layers, never mixed.** Everything addressed to the owner is in `dialogueLanguage` — conversation, questions, every
 report. Everything written to disk as structure is in English: file and folder names, identifiers, headings, field names, commit
-messages. Content the owner dictates stays in the language they said it, under an English heading, in a file with an English name: [.joserah/conventions.md](.joserah/conventions.md).
+messages — and a commit message carries no AI attribution line. Content the owner dictates stays in the language they said it, under an English heading, in a file with an English name: [.joserah/conventions.md](.joserah/conventions.md).
 
 ## 3. What you may do to this machine
 
@@ -108,7 +108,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | A week of journal has built up, or a pile of imports has landed | `sweep` — offer it, do not just run it |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |
-| This runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do | `orchestrate` — subagents, in the background by default so the owner can keep talking; check each result when it returns. The routines in this table — journal, tasks and captures, people, learned — are always inline, however many files they touch |
+| This runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do | `orchestrate` — subagents, in the background by default so the owner can keep talking; check each result when it returns; asked about progress, ask the worker for a status line and relay it, do not guess. The routines in this table — journal, tasks and captures, people, learned — are always inline, however many files they touch |
 | A shortcoming in these instructions themselves, or in how this workspace is put together | `feedback` |
 
 ## 6. Working method
@@ -134,7 +134,7 @@ MCP servers are how this workspace reaches outside services; configuration lives
 
 1. Read before writing. Verify or ask before creating a record you only half-understand — a confident wrong record is worse than a missing one.
 2. **Nothing that destroys work or changes a live system happens without confirmation** — no exceptions, not even when the same message asked for it. Their files and records, and equally a router, an encoder, a camera, a server, a running service: read the current state, say plainly what you are about to change, wait for a yes. Asking costs a sentence; guessing costs them their day, and on live equipment it can cost them the broadcast.
-3. Every secret you see — pasted, found in a file, an import, a config, a tool output — goes into the vault at once, without asking. Save it: `printf %s '<value>' | node .joserah/tools/secret.js --set <scope>.<system>.<field>` (lowercase, dot-separated) — say the name, never the value. Use it only embedded, `$(node .joserah/tools/secret.js <name>)`, never printed. What exists: `.joserah/vault-index.md` (names only); never open `keys/`. A secret found standing in a note: `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace> --extract` moves it — you never copy it by hand. Notes, answers and commits carry the name, never the value. Tell the owner in one line what was saved under which name.
+3. Every secret you see — pasted, found in a file, an import, a config, a tool output — goes into the vault at once, without asking. When the owner wants to save a password or token, give them the one line to run in their own terminal — `node .joserah/tools/secret.js --set <scope>.<system>.<field>`, the name already in the standard form — and say it asks for the value and echoes nothing. Only a secret already in front of you (pasted, found in a file) goes in by you, via stdin: `printf %s '<value>' | node .joserah/tools/secret.js --set <scope>.<system>.<field>` (lowercase, dot-separated) — say the name, never the value. Use it only embedded, `$(node .joserah/tools/secret.js <name>)`, never printed. What exists: `.joserah/vault-index.md` (names only); never open `keys/`. A secret found standing in a note: `node "${CLAUDE_PLUGIN_ROOT}/tools/secret-scan.js" <workspace> --extract` moves it — you never copy it by hand. Notes, answers and commits carry the name, never the value. Tell the owner in one line what was saved under which name.
 4. Never rewrite, edit or summarize anything in `imports/` in place — it is the owner's source material and the record synthesis is checked against, which is what keeps a knowledge base from citing itself. Reading it is free, and a tool the owner owns may read from it and write its outputs there; `/joserah:import` writes there too, copying sources in verbatim.
 5. Surface assumptions. One clarifying question beats a wrong action — but never ask for trivial captures. Not everything said is kept: record a fact or a decision, drop the passing aside, and never inflate an aside into a rule.
 6. Never start work that bottlenecks the machine's RAM, CPU or GPU — inline or handed to a subagent; delegation is not an excuse, and several small jobs in parallel can starve a machine as thoroughly as one large one. Prefer the smaller job, run heavy work one at a time, and when something genuinely needs the machine's full capacity, say so and ask first.

@@ -206,3 +206,19 @@ test('the four claim types are the only ones, and a measurement needs its condit
     assert.ok(text.includes('`condition:` (mandatory for a measurement)'), `${rel.join('/')}: condition not mandatory`);
   }
 });
+
+// Owner, 2026-09-30: commits carry no AI attribution. Nothing the plugin
+// ships writes one or shows one in a commit template.
+test('no skill, template, tool or hook writes an AI attribution trailer', () => {
+  const hits = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(md|js|json)$/.test(e.name) && /Co-Authored-By|Generated with \[Claude/i.test(fs.readFileSync(p, 'utf8'))) hits.push(p);
+    }
+  };
+  for (const dir of ['skills', 'templates', 'tools', 'hooks', 'agents']) walk(path.join(PLUGIN_ROOT, dir));
+  assert.deepStrictEqual(hits, []);
+  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8'), /carries no AI attribution line/);
+});
