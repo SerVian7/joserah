@@ -131,6 +131,10 @@ node -e "const f=require('fs'),p=process.argv[1],{stampKey}=require(process.argv
 Stamp **only after** the checks are clean. A stamp on a half-finished sweep silently narrows the
 next one to a window that never covered the damage.
 
+**Tool proposals.** From the R&D records and journal merged in this sweep, list tool proposals in
+`.joserah/desk/tools-proposed.md` — one line each: system, what it would do, which records back it.
+**Record first, script later**: a proposal becomes a script only on the owner's yes.
+
 ## 6. What the owner is told
 
 Three numbers, the cost and one list, in their language, in a few lines:

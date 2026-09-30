@@ -3,7 +3,7 @@
  * secret.js — how a script under tools/<system>/ gets a secret without ever holding one.
  *   const { getSecret } = require('../lib/secret');
  *   const pw = await getSecret('PEPLINK_PASSWORD', '<company>.peplink.password');
- * Order: the environment variable; else the vault of the Joserah workspace this memory sits in
+ * Order: the environment variable; else this memory's own vault (tools/secret.js, when keys/secrets.json exists); else the vault of the Joserah workspace this memory sits in
  * (<ws>/.joserah/shared/<name>/ -> <ws>/.joserah/tools/secret.js <vaultName>); else, in a terminal,
  * a prompt with echo off; else an error. Async because of the prompt. The value goes back to the
  * caller only: never printed, logged or written. Node built-ins only.
@@ -30,6 +30,11 @@ function prompt(question) {
 
 async function getSecret(envName, vaultName) {
   if (process.env[envName]) return process.env[envName];
+  const own = path.resolve(__dirname, '..', 'secret.js');
+  if (fs.existsSync(path.resolve(__dirname, '..', '..', 'keys', 'secrets.json'))) {
+    const r = spawnSync(process.execPath, [own, vaultName], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout) return r.stdout;
+  }
   const tool = workspaceVault(path.resolve(__dirname, '..', '..'));
   if (tool) {
     const r = spawnSync(process.execPath, [tool, vaultName], { encoding: 'utf8' });

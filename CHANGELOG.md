@@ -3,6 +3,14 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.15.5
+
+**Tool proposals from both sweeps.** The ordinary workspace sweep now lists tool proposals in `.joserah/desk/tools-proposed.md` from the R&D records and journal it merged, as the memory sweep does: one line each (system, what it would do, which records back it). Record first, script later; a proposal becomes a script only on the owner's yes.
+
+**The memory carries its own vault and sweep check.** A memory now ships `tools/secret.js` (its own `keys/` vault, gitignored; names-only index in `.memory/vault-index.md`) and `getSecret` looks there first, then in the Joserah workspace vault, then prompts. `tools/sweep.js --before/--after` guards that every inbox claim line reached `knowledge/` verbatim and stamps the sweep only when none is missing. Run `--refresh-memory` to pick both up.
+
+**verify-links counts wikilinks.** The memory's `verify-links.js` now checks `[[wikilinks]]` against note titles the way the plugin's does, so doctor and the memory report the same broken links.
+
 ## 0.15.4
 
 **Record first, script later.** What was verified against a system (endpoints, login flow, parameters, traps, what the API cannot do, date and condition) enters the shared memory as a record, never as a script an assistant wrote. At every sweep the sweeper lists tool proposals from the accumulated R&D records in `desk/tools-proposed.md`; a final sweep compiles the agreed ones into `tools/<system>/`, built from a recorded, verified procedure and holding no secret. Node by default, PowerShell only where the host is Windows-only.

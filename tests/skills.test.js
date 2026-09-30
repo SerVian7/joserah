@@ -222,3 +222,9 @@ test('no skill, template, tool or hook writes an AI attribution trailer', () => 
   assert.deepStrictEqual(hits, []);
   assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8'), /never a `Co-Authored-By` trailer/);
 });
+
+test('sweep: tool proposals come out of the ordinary sweep too, script only on the owner\'s yes', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'sweep', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.ok(text.includes('list tool proposals in `.joserah/desk/tools-proposed.md`'));
+  assert.ok(text.includes("a proposal becomes a script only on the owner's yes"));
+});

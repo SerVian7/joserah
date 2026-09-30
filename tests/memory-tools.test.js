@@ -158,3 +158,69 @@ test('sync --push: a non-sweeper push also carries a refreshed AGENTS.md, README
   const up = g(bare, 'show', '--stat', '--format=', 'main').stdout;
   assert.match(up, /tools\/sync\.js/); assert.match(up, /AGENTS\.md/); assert.match(up, /members\/bora\/note\.md/);
 });
+
+// ---- 0.15.5: the memory's own vault, sweep check, wikilinks ----
+const secretIn = (dir, args, input) => spawnSync(process.execPath, [tool(dir, 'secret.js'), ...args], { cwd: dir, encoding: 'utf8', input: input ?? '' });
+
+test('vault: set, get, has, list, index, remove in the memory, flat store, names only in the index', (t) => {
+  const dir = memory(t);
+  assert.strictEqual(secretIn(dir, ['--set', 'acme.peplink.password'], 's3cret\n').status, 0);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'keys', 'secrets.json'), 'utf8')), { 'acme.peplink.password': 's3cret' });
+  assert.strictEqual(secretIn(dir, ['acme.peplink.password']).stdout, 's3cret');
+  assert.strictEqual(secretIn(dir, ['--has', 'acme.peplink.password']).status, 0);
+  assert.strictEqual(secretIn(dir, ['--has', 'acme.nope']).status, 2);
+  assert.strictEqual(secretIn(dir, ['--set', 'BadName'], 'x').status, 1);
+  assert.strictEqual(secretIn(dir, ['--list']).stdout.trim(), 'acme.peplink.password');
+  secretIn(dir, ['--index']);
+  const idx = fs.readFileSync(path.join(dir, '.memory', 'vault-index.md'), 'utf8');
+  assert.ok(idx.includes('acme.peplink.password') && !idx.includes('s3cret'));
+  assert.strictEqual(secretIn(dir, ['--remove', 'acme.peplink.password']).status, 0);
+  assert.strictEqual(secretIn(dir, ['acme.peplink.password']).status, 2);
+  assert.ok(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8').split('\n').includes('keys/*'));
+  assert.ok(fs.existsSync(path.join(dir, 'keys', 'AGENTS.md')));
+});
+
+test('getSecret: the memory vault comes before the workspace vault', async (t) => {
+  const ws = tmpdir(t);
+  fs.mkdirSync(path.join(ws, '.joserah', 'tools'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.joserah', 'tools', 'secret.js'), "process.stdout.write('from-workspace')");
+  const dir = path.join(ws, '.joserah', 'shared', 'acme-memory');
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  const r = runTool('scaffold.js', ['--kind', 'memory', '--company', 'Acme', '--members', 'Ada', '--sweeper', 'ada', '--language', 'English', '--target', dir], { env: GIT_ENV });
+  assert.strictEqual(r.status, 0, r.stderr);
+  const { getSecret } = require(path.join(dir, 'tools', 'lib', 'secret.js'));
+  delete process.env.ACME_PW;
+  assert.strictEqual(await getSecret('ACME_PW', 'acme.x.password'), 'from-workspace');
+  secretIn(dir, ['--set', 'acme.x.password'], 'from-memory');
+  assert.strictEqual(await getSecret('ACME_PW', 'acme.x.password'), 'from-memory');
+});
+
+test('sweep.js: --before counts the inbox, --after names every claim line that did not reach knowledge/', (t) => {
+  const dir = memory(t);
+  const c = (s) => `- [decision] ${s} -> yes\n  date: 2026-09-30 · by: ada\n`;
+  fs.writeFileSync(path.join(dir, 'inbox', 'a.md'), '# A\n' + c('alpha') + c('beta'));
+  fs.writeFileSync(path.join(dir, 'inbox', 'b.md'), '# B\n' + c('gamma'));
+  const sw = (a) => node(dir, tool(dir, 'sweep.js'), [a]);
+  assert.match(sw('--before').stdout, /3/);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, '.memory', 'sweep-state.json'), 'utf8')).count, 3);
+  fs.writeFileSync(path.join(dir, 'knowledge', 'k.md'), '# K\n' + c('alpha').replace(' -> ', '   ->  ') + '~~' + '\n' + c('beta'));
+  fs.rmSync(path.join(dir, 'inbox', 'a.md')); fs.rmSync(path.join(dir, 'inbox', 'b.md'));
+  let r = sw('--after');
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /claims: 2\/3 carried — 1 missing:/);
+  assert.match(r.stdout, /gamma/);
+  fs.appendFileSync(path.join(dir, 'knowledge', 'k.md'), '\n' + c('gamma'));
+  r = sw('--after');
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /claims: 3\/3 carried/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, '.memory', 'config.json'), 'utf8')).lastSweep);
+});
+
+test('tools: verify-links reports a dangling wikilink and resolves titled ones', (t) => {
+  const dir = memory(t);
+  fs.writeFileSync(path.join(dir, 'knowledge', 'a.md'), '# Alpha Note\n[[nowhere]] [[alpha note]] [[Alpha Note|the a]] `[[code]]`\n');
+  const r = node(dir, tool(dir, 'verify-links.js'));
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /knowledge\/a\.md:2 -> \[\[nowhere\]\]/);
+  assert.strictEqual((r.stdout.match(/\[\[/g) || []).length, 1);
+});

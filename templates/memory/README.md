@@ -3,6 +3,7 @@
 This memory was created with Joserah, but Joserah is not required: anyone with git and Node can work here —
 the rules are in `AGENTS.md`, the tools in `tools/`.
 Scripts under `tools/<system>/` are verified procedures; they never contain a secret, they ask for it or take it from your vault.
+The memory carries its own vault (names only ever leave the machine) and its own sweep check, so no plugin is needed for either.
 
 {{COMPANY}}'s shared memory: what the company knows about its own work, kept as plain files in one
 git repository. To join, clone it, open the folder with your AI assistant, and say "read AGENTS.md and

@@ -15,7 +15,7 @@ test('memory AGENTS.md: the pull checks, early push, the decision criterion, the
     'It also checks links and claim lines and prints one line — say it to the member in one line, with the sweep-due line if any.',
     'Push as soon as you wrote something worth sharing — an inbox note, a question, a decision — and at the end of the session; do not wait for the end of the day.',
     "What makes it a company decision: a dated purchase or operating decision inside that member's own responsibility, with who decided and when — that goes into `knowledge/` as `[decision]`.",
-    'a claim line travels as it is, never rewritten, summarised or dropped; `node tools/claims.js --count <inbox files>` before and `node tools/claims.js` after must agree.',
+    'a claim line travels as it is, never rewritten, summarised or dropped.',
     'Sweep is due when `inbox/` holds 5 or more files or 7 days have passed since the last sweep, whichever comes first.',
   ]) assert.ok(text.includes(sentence), `missing: ${sentence}`);
   assert.strictEqual(text.split('Joserah is not required').length - 1, 1, 'said once');
@@ -34,4 +34,15 @@ test('memory AGENTS.md: verified procedures live as scripts that hold no secret'
   assert.ok(text.includes("`desk/tools-proposed.md`"));
   assert.ok(text.includes("Every member uses the same secret names; `tools/<system>/README.md` lists them."));
   assert.ok(read('README.md').includes('they never contain a secret, they ask for it or take it from your vault.'));
+});
+
+test('memory AGENTS.md and README: own vault and sweep check', () => {
+  const a = read('AGENTS.md');
+  for (const s of [
+    'node tools/sweep.js --before',
+    'node tools/sweep.js --after',
+    'A sweep with missing lines is not finished',
+    '5. `keys/` is never opened by an assistant; what exists is in `.memory/vault-index.md`; a secret is saved by the member with `node tools/secret.js --set <name>` in their own terminal, or lives in their Joserah vault.',
+  ]) assert.ok(a.includes(s), `missing: ${s}`);
+  assert.ok(read('README.md').includes('The memory carries its own vault (names only ever leave the machine) and its own sweep check, so no plugin is needed for either.'));
 });
