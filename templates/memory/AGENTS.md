@@ -26,7 +26,7 @@ You write only in `members/<member>/`, `inbox/` and `questions/`:
 - A note for the shared record → `inbox/<date>-<member>-<slug>.md`.
 - A question for another member → `questions/` (§4).
 
-Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8).
+Never: `knowledge/` (the sweeper's, §6), another member's folder, `keys/` (§8). Every change to the shared record — a fix to `knowledge/` included — goes in as an `inbox/` note; the sweeper writes it.
 
 ## 3. Sharing and pushing
 
@@ -54,7 +54,7 @@ push with the notice.
 - A load-bearing number is a claim line: `- [measurement|calculation|decision|estimate] <subject> -> <value>`
   with `condition:` (measurements), `date:`, `by: <member>`, `source:`. Unsourced numbers carry no weight.
 - Decisions and plans are marked as such; nothing that has not happened is written as if it had.
-- Never: private life, opinions about people, gossip, or notes on building the assistant or its tools (versions, rule debates, who proposed what).
+- Never: private life, opinions about people, gossip, or notes on building the assistant or its tools (versions, rule debates, who proposed what). Nothing assistant-internal at all: at most a changelog of its major releases.
 - An idea or decision from one member is a proposal, not the company's decision. What makes it a company
   decision: a dated purchase or operating decision inside that member's own responsibility, with who decided
   and when — that goes into `knowledge/` as `[decision]`. An idea, a wish, a plan not yet acted on, 'let's do
@@ -69,7 +69,7 @@ push with the notice.
   Windows-only.
 - Content records in {{LANGUAGE}}; file names, headings and keys in English. READMEs are English.
 - Every report, artifact, page or mail about {{COMPANY}} is built from `.brand/`: read `.brand/REPORTING.md` first,
-  start from its template (`report.html`, `changelog.html`), embed its logo; never an improvised design.
+  start from its template (`report.html`, `changelog.html`), embed its logo; never an improvised design. No made-up brand element either. The company Wrap (end-of-day report) is built from this memory with every member's data, goes to no one by default and, when needed, to the whole team; how to make a Tracker and a Wrap without an assistant: `knowledge/wiki/topics/tracker-and-wrap.md`.
 
 ## 6. `knowledge/` is read-only for you
 
