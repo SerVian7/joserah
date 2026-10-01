@@ -727,7 +727,32 @@ const CHECKS = [
     // broken links it never looked for.
     run({ root, pluginDir }) {
       const links = spawnSync('node', [path.join(pluginDir, 'verify-links.js'), root], { encoding: 'utf8' });
-      return check('internal links resolve', links.status === 0, (links.stdout || '').trim().split('\n')[0]);
+      const out = (links.stdout || '').trim();
+      if (links.status === 0) return check('internal links resolve', true, out.split('\n')[0]);
+      // 2026-10-01: projects/ is never tracked, so on a machine the workspace
+      // was restored to, a note's link into it is legitimately dead. Those
+      // breaks are a warn; a break to anything else fails as before. Done here
+      // by parsing the checker's output because verify-links.js is copied into
+      // every workspace and doctor fails a workspace whose copy differs.
+      const rows = out.split(/\r?\n/).filter((l) => /^ {2}\S/.test(l));
+      if (!/^BROKEN LINKS/.test(out) || !rows.length) {
+        return check('internal links resolve', false, out.split('\n')[0]);
+      }
+      const projectsDir = path.resolve(root, 'projects');
+      let soft = 0;
+      for (const row of rows) {
+        const m = row.trim().match(/^(.+?):\d+ → (.+)$/);
+        if (!m || /^\[\[/.test(m[2]) || /\(backslash separators/.test(m[2])) continue;
+        let t = m[2].trim().replace(/^<|>$/g, '').split('#')[0];
+        try { t = decodeURIComponent(t); } catch { /* literal % — use the raw text */ }
+        if (!t) continue;
+        const rel = path.relative(projectsDir, path.resolve(root, path.dirname(m[1]), t));
+        if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) soft++;
+      }
+      const hard = rows.length - soft;
+      if (hard > 0) return check('internal links resolve', false, `BROKEN LINKS (${hard}):`);
+      return warn('internal links resolve',
+        `${soft} link(s) into projects/ point at folders absent on this machine — projects are never tracked, so this is expected after a restore`);
     },
   },
 

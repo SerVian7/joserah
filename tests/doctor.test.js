@@ -707,3 +707,26 @@ test('no marketplace clone at all says nothing at all', (t) => {
   assert.ok(!/marketplace clone diverged/.test(r.stdout), r.stdout);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
+
+// 2026-10-01: projects/ is never tracked, so after the workspace is restored on
+// another machine a note's link into it is legitimately dead. That is a warn;
+// a dead link to anything else is still a failure.
+test('doctor warns, not fails, on broken links into projects/', (t) => {
+  const dir = freshWs(t);
+  fs.mkdirSync(path.join(dir, '.joserah', 'knowledge', 'wiki'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'wiki', 'p.md'),
+    '# P\n\nSee [status](../../../projects/X/Y/docs/status.md) and [two](../../../projects/X/Y/docs/tasks.md).\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /internal links resolve.*2 link\(s\) into projects\//);
+});
+
+test('doctor still fails on a broken link to a missing knowledge file', (t) => {
+  const dir = freshWs(t);
+  fs.mkdirSync(path.join(dir, '.joserah', 'knowledge', 'wiki'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.joserah', 'knowledge', 'wiki', 'p.md'),
+    '# P\n\n[gone](missing.md) and [proj](../../../projects/X/Y/docs/status.md)\n');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /FAIL\s+internal links resolve|internal links resolve/);
+});

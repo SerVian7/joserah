@@ -48,6 +48,10 @@ The changed set comes from the tool the backup skill already uses for the same q
 node "${CLAUDE_PLUGIN_ROOT}/tools/backup-scope.js" <workspace-root> --changed-since <lastSweep-ISO>
 ```
 
+In a workspace that is its own git repository it counts from version-control history — files
+committed after the stamp, plus what is uncommitted now — never from file times, which a copy to
+another machine resets on every file. Outside a repository it falls back to file times.
+
 ## 2. The pass, per page
 
 **Tidy** — link sections to one shape; duplicate entries merged; a missing page link written or

@@ -210,6 +210,44 @@ function checkHistory(root) {
 
 // --------------------------------------------------------- --changed-since
 
+// Same scope / skip rules as the walk, applied to a root-relative path.
+function pathCounts(rel, scope, skip) {
+  const parts = rel.split('/').filter(Boolean);
+  if (!parts.length) return false;
+  for (let i = 0; i < parts.length; i++) {
+    if (!inScope(parts.slice(0, i + 1).join('/'), scope)) return false;
+    if (i < parts.length - 1 && (skip.has(parts[i]) || isHiddenForeignDir(parts[i]))) return false;
+  }
+  return true;
+}
+
+// Number of distinct in-scope paths changed per git, or null when git cannot
+// answer (no repository of its own, git missing, a command failing).
+function changedFromGit(root, iso, scope, skip) {
+  if (!isOwnRepoRoot(root)) return null;
+  const opts = { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 };
+  const base = ['-C', root, '-c', 'core.quotepath=off'];
+  const hasHead = spawnSync('git', [...base, 'rev-parse', '--verify', '-q', 'HEAD'], opts);
+  const paths = new Set();
+  if (hasHead.status === 0) {
+    const log = spawnSync('git', [...base, 'log', `--since=${iso}`, '--name-only', '--pretty=format:'], opts);
+    if (log.status !== 0) return null;
+    for (const l of log.stdout.split(/\r?\n/)) if (l) paths.add(l);
+  }
+  const st = spawnSync('git', [...base, 'status', '--porcelain', '-z', '--untracked-files=all'], opts);
+  if (st.status !== 0) return null;
+  const ent = st.stdout.split('\0');
+  for (let i = 0; i < ent.length; i++) {
+    const e = ent[i];
+    if (e.length < 4) continue;
+    paths.add(e.slice(3));
+    if (/[RC]/.test(e.slice(0, 2))) i++; // the next entry is the rename's old name
+  }
+  let n = 0;
+  for (const p of paths) if (pathCounts(p, scope, skip)) n++;
+  return n;
+}
+
 function changedSince(root, iso) {
   const since = new Date(iso).getTime();
   if (!Number.isFinite(since)) die(`"${iso}" is not a date this tool can read (use an ISO-8601 instant)`);
@@ -226,6 +264,13 @@ function changedSince(root, iso) {
       .replace(/^﻿/, ''));
   } catch { cfg = {}; }
   const scope = scopeFrom(cfg);
+  // 2026-10-01: a workspace copied or cloned to another machine has a fresh
+  // mtime on every file, so the mtime walk below counted nearly all of it as
+  // changed. When the root is its own git work tree, count from history
+  // instead: paths touched by commits after the instant (committer date) plus
+  // paths uncommitted now. Any git failure falls through to the mtime walk.
+  const fromGit = changedFromGit(root, iso, scope, skip);
+  if (fromGit !== null) { console.log(String(fromGit)); process.exit(0); }
   let n = 0;
   (function walk(dir, rel) {
     let entries;

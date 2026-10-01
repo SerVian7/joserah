@@ -101,6 +101,7 @@ test('--check history cannot pass when it could not run', (t) => {
 
 test('--changed-since counts files touched after the instant and skips the junk trees', (t) => {
   const dir = repoWs(t);
+  commitAt(dir, '2000-01-01T00:00:00Z', 'baseline'); // history is what counts in a git repo
   const since = new Date().toISOString();
   fs.writeFileSync(path.join(dir, '.joserah', 'learned.md'),
     fs.readFileSync(path.join(dir, '.joserah', 'learned.md'), 'utf8') + '\n');
@@ -123,6 +124,7 @@ test('--changed-since skips exactly WALK_SKIP_NAMES — the narrowing that added
   assert.ok(u.WALK_SKIP_NAMES.includes('.venv') && u.WALK_SKIP_NAMES.includes('.superpowers'),
     'the narrowing is in the library');
   const dir = repoWs(t);
+  commitAt(dir, '2000-01-01T00:00:00Z', 'baseline'); // history is what counts in a git repo
   const since = new Date().toISOString();
   for (const name of u.WALK_SKIP_NAMES) {
     fs.mkdirSync(path.join(dir, name, 'deep'), { recursive: true });
@@ -153,6 +155,7 @@ test('--changed-since ignores hidden tool directories and out-of-scope root entr
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   cfg.scope = ['notes'];
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  commitAt(dir, '2000-01-01T00:00:00Z', 'baseline'); // history is what counts in a git repo
   const old = Date.now() - 3600000;
   (function backdate(d) {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -171,4 +174,41 @@ test('--changed-since ignores hidden tool directories and out-of-scope root entr
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(Number(r.stdout.trim()), 2,
     'only notes/c.txt and the inbox note are the workspace');
+});
+
+// 2026-10-01: a copied or cloned workspace has fresh mtimes on every file, so
+// the mtime walk counted nearly everything as changed. Inside a git work tree
+// the count comes from history (commits after the instant + uncommitted).
+function commitAt(dir, when, msg) {
+  git(dir, 'add', '-A');
+  return spawnSync('git', ['-C', dir, 'commit', '-q', '-m', msg], {
+    encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
+  });
+}
+
+test('--changed-since in a git repo counts history, not fresh mtimes', (t) => {
+  const dir = repoWs(t);
+  const c1 = commitAt(dir, '2026-01-01T10:00:00Z', 'old');
+  assert.strictEqual(c1.status, 0, c1.stderr);
+  const since = '2026-06-01T00:00:00Z';
+  // every file has a fresh mtime, yet nothing changed since the instant
+  assert.strictEqual(runTool('backup-scope.js', [dir, '--changed-since', since]).stdout.trim(), '0');
+  // a later commit touching one file
+  fs.appendFileSync(path.join(dir, '.joserah', 'learned.md'), '\nx\n');
+  assert.strictEqual(commitAt(dir, '2026-07-01T10:00:00Z', 'new').status, 0);
+  assert.strictEqual(runTool('backup-scope.js', [dir, '--changed-since', since]).stdout.trim(), '1');
+  // an uncommitted edit to another file and an untracked one count too; the same path is counted once
+  fs.appendFileSync(path.join(dir, '.joserah', 'learned.md'), 'y\n');
+  fs.appendFileSync(path.join(dir, '.joserah', 'desk', 'tasks', 'now.md'), '\nz\n');
+  fs.writeFileSync(path.join(dir, 'fresh.md'), 'n\n');
+  assert.strictEqual(runTool('backup-scope.js', [dir, '--changed-since', since]).stdout.trim(), '3');
+});
+
+test('--changed-since in a non-git folder still uses mtimes', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w']);
+  const since = new Date(Date.now() + 60000).toISOString();
+  assert.strictEqual(runTool('backup-scope.js', [dir, '--changed-since', since]).stdout.trim(), '0');
+  fs.utimesSync(path.join(dir, '.joserah', 'learned.md'), new Date(Date.now() + 120000), new Date(Date.now() + 120000));
+  assert.strictEqual(runTool('backup-scope.js', [dir, '--changed-since', since]).stdout.trim(), '1');
 });
