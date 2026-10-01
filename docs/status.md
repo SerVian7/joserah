@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 86f19bf · 2026-10-01 14:40 +0300 · 0.16.5: orchestrate — manager agent per wave
+Last change: 9deacec · 2026-10-01 14:51 +0300 · 0.16.6: briefing — open shared-memory questions from the remote
 
 - Released: 0.16.6 on main, 632 tests (`node --test tests/*.test.js`), prompt v18.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
