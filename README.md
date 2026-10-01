@@ -76,7 +76,7 @@ becomes a one-line rule in `.joserah/learned.md` that every later session reads.
 
 **A Daily Tracker.** The assistant keeps a small live page of your day — what is running, what waits
 on you, what is done, what is planned — without being asked and without nagging, and ends every reply
-with its link. Set `"dailyTracker": false` in `.joserah/config.json` to turn it off. Price research
+with its link. Set `"dailyTracker": false` in `.joserah/config.json` to turn it off. Set `"sharedMemoryAutoPush": true` there to have shared-memory pushes done without asking (default off; the assistant still asks when something is genuinely problematic). Price research
 reads `research.trustedSources` there, a list of the shops you trust.
 
 **Numbers that keep their source.** A fact that decisions rest on is written as a claim line,

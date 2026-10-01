@@ -131,7 +131,7 @@ It prints the files it changed, or `up to date`, and never touches `knowledge/`,
 `inbox/`, `questions/`, `.memory/` or `.brand/`. When files changed, run `node tools/sync.js --push`
 inside that memory and show the owner its push notice (`Push notice — shared memory <name> (<url>)`); the refreshed
 files lie outside the owner's own folder, so on their yes run it again with `--yes`. A template refresh waits for that
-yes like any shared-memory push.
+yes like any shared-memory push (with `sharedMemoryAutoPush` true in config, run it with `--yes` at once and report the file list in one line).
 
 ## 6. Verify and report
 

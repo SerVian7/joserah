@@ -775,6 +775,20 @@ test('dailyTracker: false removes the Daily Tracker line from the main session',
   assert.match(JSON.parse(on.stdout).hookSpecificOutput.additionalContext, /Daily Tracker: on/, 'only false turns it off');
 });
 
+test('sharedMemoryAutoPush: true adds the auto-push line to the main session; off by default (owner, 2026-10-01)', (t) => {
+  const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx(), /Shared-memory pushes: automatic/, 'absent key keeps the standing behaviour');
+  cfg.sharedMemoryAutoPush = false;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  assert.doesNotMatch(ctx(), /Shared-memory pushes: automatic/);
+  cfg.sharedMemoryAutoPush = true;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  assert.match(ctx(), /Shared-memory pushes: automatic — push a joined shared memory without waiting for a yes and report the push notice's file list in one line; ask first only when something is genuinely problematic/);
+});
+
 test('an unknown or absent argument still means SessionStart', (t) => {
   const dir = hookWs(t);
   for (const args of [[], ['SubagentStop'], ['--whatever']]) {

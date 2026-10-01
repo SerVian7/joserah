@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.2
+
+0.17.2 — optional automatic shared-memory pushes. Set `"sharedMemoryAutoPush": true` in `.joserah/config.json` and the assistant pushes a joined shared memory without waiting for a yes, then reports the push notice's file list in one line; it still asks first when something is genuinely problematic (another member's content removed, personal data, a rules change it is unsure of). Default off (absent or false) keeps today's behaviour: the push waits for the owner's yes. Prompt v21. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.1
 
 0.17.1 — nothing left for the owner lives only in chat. Every question or action the assistant leaves for the owner (an approval, a choice, an action such as reloading plugins) now appears at once as an owner-waiting row on the Daily Tracker, linking to the page where it is decided when one exists. Said in the standing instructions, the orchestrate skill and the `tracker-keeper` agent. Prompt v20. Run `/joserah:update`, then `/reload-plugins`.

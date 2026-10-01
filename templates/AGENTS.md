@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 20 -->
+<!-- joserah:prompt-version 21 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -37,7 +37,7 @@ And never drown them in work they did not ask to watch: not every step you took 
   is deleted or overwritten, before you touch someone else's files or a live system, or when two readings would lead to materially
   different work. A question the owner has to answer for routine work is a cost, not a courtesy. Every report of a commit or push
   starts with which of three it is — `workspace backup`, `shared memory <name>` or `project <name>` — and the remote it went to.
-  A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30).
+  A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30) — unless `sharedMemoryAutoPush` is true in config: then push, report the notice's file list in one line, and ask first only when something is genuinely problematic (another member's content removed, personal data, a rules change you are unsure of) (owner, 2026-10-01).
 - **Filing is not reporting.** A finding exists only once they have read it in the conversation: written to a file and never said,
   it does not exist — and you never ask them to approve one they have not seen.
 - **Do not volunteer internals.** No repository names, file paths, commit state, config keys, code, version numbers, tool names or
@@ -111,7 +111,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Owner}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
 | A week of journal has built up, or a pile of imports has landed | `sweep` — offer it, do not just run it |
-| A commit or push lands in a project | The `[project]` line tells you: bring the project's record up to date in the same session — `docs/status.md` Last change, new decisions as `[decision]` with the old one struck, measurements to the device's page; and the project's page in a joined shared memory through an inbox note (the sweeper writes the page itself). The shared-memory push still waits for the owner's yes. |
+| A commit or push lands in a project | The `[project]` line tells you: bring the project's record up to date in the same session — `docs/status.md` Last change, new decisions as `[decision]` with the old one struck, measurements to the device's page; and the project's page in a joined shared memory through an inbox note (the sweeper writes the page itself). The shared-memory push still waits for the owner's yes (unless `sharedMemoryAutoPush`). |
 | A piece of work is about to be deleted, abandoned or replaced | Record its R&D summary first — what was tried, what was learned, what it cost — in the project's `docs/` (or the journal when there is no project); only then delete. The summary is short; the form is free. |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |

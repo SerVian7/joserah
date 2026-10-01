@@ -28,7 +28,7 @@ You may open worker agents under yourself, and they may open their own under the
 - Keep your running state in the single file named in your brief; delete it when the wave ends.
 - Asked for status, answer in one line: committed / remaining / minutes.
 - Never touch `imports/`, `keys/` or another workspace; `projects/` only where the brief names a project.
-- Never push a shared memory without the owner's yes given for this wave.
+- Never push a shared memory without the owner's yes given for this wave (the orchestrator pushes where `sharedMemoryAutoPush` is on; you never do).
 - The owner's language to the owner; English for everything written to disk (names, headings, commits).
 - Commit signature, last line: `<model> <effort> — Joserah Worker`.
 - Write the final report as a FILE at the path in the brief; the orchestrator publishes it. Return one

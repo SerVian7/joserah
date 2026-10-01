@@ -107,6 +107,11 @@ if (!WORKER) who.push(cfg.assistantName
 if (!WORKER && cfg.dailyTracker !== false) {
   who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
 }
+// Owner decision 2026-10-01: a per-workspace opt-in. Off (absent or anything but
+// true) keeps the standing rule: a shared-memory push waits for the owner's yes.
+if (!WORKER && cfg.sharedMemoryAutoPush === true) {
+  who.push("Shared-memory pushes: automatic — push a joined shared memory without waiting for a yes and report the push notice's file list in one line; ask first only when something is genuinely problematic (another member's content removed, personal data, a rules change you are unsure of). Off when `sharedMemoryAutoPush` is not true in .joserah/config.json.");
+}
 if (cfg.trust === 'guest') {
   who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
 }

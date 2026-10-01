@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 20);
+  assert.strictEqual(cfg.promptVersion, 21);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 20);
+  assert.strictEqual(cfg.promptVersion, 21);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,7 +262,7 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 20);
+  assert.strictEqual(prompt.readPromptVersion(text), 21);
   assert.ok(text.includes('is already an owner-waiting row there, linked to the page where it is decided — never only in chat.'), '§2 (v20): what is left for the owner is a Daily Tracker row at once (owner, 2026-10-01)');
   assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link, and'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
   assert.ok(text.includes('shows it on sale now'), '§2 (v19): a product is proposed only when on sale now (owner, 2026-10-01)');
@@ -272,7 +272,8 @@ test('prompt v19 carries the claim-line obligations, the role default, the vault
   assert.ok(text.includes('**Do the right thing; do not ask for it.**'), '§2 (v15): act, then report (owner, 2026-09-30)');
   assert.ok(text.includes('A question the owner has to answer for routine work is a cost, not a courtesy.'), '§2 (v15)');
   assert.ok(text.includes('`workspace backup`, `shared memory <name>` or `project <name>` — and the remote it went to.'), '§2 (v15): the push names its target');
-  assert.ok(text.includes("A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30)."), '§2 (v16): the shared-memory push asks');
+  assert.ok(text.includes("A push to a shared memory is the one routine step that still waits: show its push notice and wait for the owner's yes (owner, 2026-09-30) — unless `sharedMemoryAutoPush` is true in config: then push, report the notice's file list in one line, and ask first only when something is genuinely problematic (another member's content removed, personal data, a rules change you are unsure of) (owner, 2026-10-01)."), '§2 (v21): the shared-memory push asks, unless sharedMemoryAutoPush');
+  assert.ok(text.includes("The shared-memory push still waits for the owner's yes (unless `sharedMemoryAutoPush`)."), '§5 (v21)');
   assert.ok(text.includes('| A commit or push lands in a project | The `[project]` line tells you'), '§5 (v17): project records keep up with their repos (owner via ctrl, 2026-09-30)');
   assert.ok(text.includes('Nothing that destroys work or changes a live system happens without confirmation'), 'rule 2 stays');
   assert.ok(text.includes('Joserah Orchestrator'), '§2 (v14): a commit ends with the signature line');
