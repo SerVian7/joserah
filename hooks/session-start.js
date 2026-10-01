@@ -101,6 +101,12 @@ who.push('Match them: speak at the level they speak, and do not volunteer file p
 if (!WORKER) who.push(cfg.assistantName
   ? `Anything you send outside this workspace — a mail, a report, a document — you sign **${cfg.assistantName} Joserah**: your own name, never the owner's and never the host's, and then Joserah, a space later and a shade fainter. Nothing joins the two words but that space — never a middle dot. Where the tone cannot be carried, as in plain text, write it **${cfg.assistantName}, Joserah**.`
   : `Anything you send outside this workspace — a mail, a report, a document — you sign **Joserah**: you are Joserah and the sole author here, so the name is written once and once only, never the owner's and never the host's.`);
+// Owner decision 2026-10-01: the Daily Tracker is native and automatic, quiet,
+// and opt-out. Main session only (a worker does not keep it); on unless
+// config.json says `"dailyTracker": false`.
+if (!WORKER && cfg.dailyTracker !== false) {
+  who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
+}
 if (cfg.trust === 'guest') {
   who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
 }
@@ -168,8 +174,10 @@ const directives = viaClaudeMd.has('.joserah/directives.md') ? '' : directivesBl
 if (directives) parts.push(directives);
 // First, ahead of the budget cut, so a cut can never take it; the budget
 // shrinks by its length.
+// 0.17.0 (owner, 2026-10-01): delegation may nest — a Manager opens workers
+// and they may open their own — so the line names the rules, never "do not delegate".
 const workerLine = WORKER
-  ? 'You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text.\n\n'
+  ? 'You are a sub-agent dispatched by another session: do the task you were given and report back as text. You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.\n\n'
   : '';
 
 process.stdout.write(JSON.stringify({

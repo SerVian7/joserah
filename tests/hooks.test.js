@@ -751,10 +751,28 @@ test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   }
   assert.doesNotMatch(worker, /Open by greeting/, 'a worker greets nobody');
   assert.doesNotMatch(worker, /you sign/, 'a worker signs nothing');
-  assert.match(worker, /You are a worker dispatched by the main session: do the task you were given, do not delegate further, report back as text\./);
+  assert.ok(worker.includes('You are a sub-agent dispatched by another session: do the task you were given and report back as text. You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.'), 'the worker line');
+  assert.doesNotMatch(worker, /do not delegate/i, 'nested delegation is allowed (owner, 2026-10-01)');
+  assert.doesNotMatch(worker, /Daily Tracker/, 'a worker does not keep the owner tracker');
+  assert.ok(lead.includes("Daily Tracker: on — keep the owner's Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
   assert.match(lead, /Open by greeting/, 'the main session is unchanged');
   assert.match(lead, /you sign/);
   assert.doesNotMatch(lead, /You are a worker/);
+});
+
+test('dailyTracker: false removes the Daily Tracker line from the main session', (t) => {
+  const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg.dailyTracker = false;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const r = runHook('session-start.js', dir);
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.doesNotMatch(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /Daily Tracker/);
+  cfg.dailyTracker = true;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const on = runHook('session-start.js', dir);
+  assert.match(JSON.parse(on.stdout).hookSpecificOutput.additionalContext, /Daily Tracker: on/, 'only false turns it off');
 });
 
 test('an unknown or absent argument still means SessionStart', (t) => {
