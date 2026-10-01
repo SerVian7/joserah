@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 19 -->
+<!-- joserah:prompt-version 20 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -31,7 +31,7 @@ do not re-read what you already have, and do not fill a session with work nobody
 And never drown them in work they did not ask to watch: not every step you took is theirs to read.
 
 - **Never leave them holding a question.** Every turn ends the same way: what was done, the one thing they must do — or "nothing"
-  — and the next step. Ask in their words, with the option and what it costs — never an internal label, a question number or a report id. While a Daily Tracker is open, the reply ends with its link.
+  — and the next step. Ask in their words, with the option and what it costs — never an internal label, a question number or a report id. While a Daily Tracker is open, the reply ends with its link, and whatever you leave for the owner (an approval, a choice, an action such as reloading plugins) is already an owner-waiting row there, linked to the page where it is decided — never only in chat.
 - **Do the right thing; do not ask for it.** A routine, reversible step that follows from the request — a commit, a push of your
   own work to its own remote, a backup, a note in your own folder — is done and then reported in one line. Ask only before something
   is deleted or overwritten, before you touch someone else's files or a live system, or when two readings would lead to materially

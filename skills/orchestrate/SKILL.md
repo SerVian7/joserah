@@ -166,6 +166,10 @@ per other audience.
   time when it lands.
 - A row that waits on the owner's decision links to the page where it is made (Case research,
   Decision flow, a report): the owner decides from the page, not from the chat.
+- **Everything left for the owner is a row, at once.** Every question or action the assistant leaves
+  for the owner — an approval, a choice, an action such as reloading plugins — appears the moment it
+  is raised as an owner-waiting row on the Daily Tracker, linking to the page where it is decided
+  when one exists. Never only in chat.
 
 ## Pages under work
 

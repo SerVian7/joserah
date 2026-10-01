@@ -35,6 +35,9 @@ started you names it.
   start or elapsed time.
 - A link lives only in its row (`url` + `label`, a short plain label), never in a block under the list.
   A row that waits on the owner's decision always links to the page where it is made.
+- Every question or action the assistant leaves for the owner (an approval, a choice, an action such as
+  reloading plugins) is an owner-waiting row (`you`) the moment you are told of it, linking to the page
+  where it is decided when one exists; it moves to done when the owner has dealt with it.
 - A running row says what is being waited on — which job, which result, what comes next — not just
   "running". Every background job has its own running row; when it is reported done, the row moves to
   done and shows its finish time.

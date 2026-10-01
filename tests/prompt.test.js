@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 19);
+  assert.strictEqual(cfg.promptVersion, 20);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 19);
+  assert.strictEqual(cfg.promptVersion, 20);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,8 +262,9 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 19);
-  assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link.'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
+  assert.strictEqual(prompt.readPromptVersion(text), 20);
+  assert.ok(text.includes('is already an owner-waiting row there, linked to the page where it is decided — never only in chat.'), '§2 (v20): what is left for the owner is a Daily Tracker row at once (owner, 2026-10-01)');
+  assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link, and'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
   assert.ok(text.includes('shows it on sale now'), '§2 (v19): a product is proposed only when on sale now (owner, 2026-10-01)');
   assert.ok(text.includes('only recorded brand assets, a missing brand decision left out and listed'), '§2 (v19): brand elements never improvised (owner, 2026-10-01)');
   assert.ok(text.includes('also goes into its base — template, keeper, updater — in the same turn, unasked'), '§5 (v19): a shape correction reaches the base (owner, 2026-10-01)');

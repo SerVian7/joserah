@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.1
+
+0.17.1 — nothing left for the owner lives only in chat. Every question or action the assistant leaves for the owner (an approval, a choice, an action such as reloading plugins) now appears at once as an owner-waiting row on the Daily Tracker, linking to the page where it is decided when one exists. Said in the standing instructions, the orchestrate skill and the `tracker-keeper` agent. Prompt v20. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.0
 
 **A Daily Tracker, native and quiet.** Owner, 2026-10-01. The assistant now keeps the owner's Daily Tracker — the day's live page — without being asked and without nagging: it never asks about it or announces it, and every reply ends with its link. It is on by default; `"dailyTracker": false` in `.joserah/config.json` turns it off. A new `tools/tracker.js` builds the page (`init <dir> --title "<Owner> · Daily Tracker" --lang en|tr`, then `<dir>` after each change to `rows.json`): rows.json is the full inventory, groups run running and waiting on the owner → done → plans, every row is stamped once and the stamp is kept, links live in their rows, and only the list and the updated stamp ever change. The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`; no footer, no elapsed time. A new `tracker-keeper` agent keeps one page from one-line updates. Every background job gets a running row saying what is awaited.
