@@ -81,12 +81,55 @@ function ago(ms, tr) {
   return `${n} ${['minute', 'hour', 'day'][unit]}${n === 1 ? '' : 's'} ago`;
 }
 const isTurkish = (language) => /^(tr|turk|türk)/i.test(String(language || ''));
-function syncSentences(repo, company, language, now) {
+// 0.16.6 (owner, 2026-10-01): the open questions addressed to the member, read
+// from the REMOTE tip (@{u}) right after the fetch, so they show before any
+// pull. Same file shape as the memory's tools/sync.js: questions/*.md with
+// frontmatter to/status, then "## Question". Two git calls, bounded; any error
+// is no questions, and the old sentences stand.
+const MAX_QUESTION_FILES = 200;
+function openQuestionsAtRemote(repo, me) {
+  if (!me) return [];
+  try {
+    const ls = spawnSync('git', ['-C', repo, 'ls-tree', '@{u}', 'questions/'], { encoding: 'utf8', timeout: 2000 });
+    const blobs = (ls.stdout || '').split('\n').map((l) => /^\d+ blob ([0-9a-f]+)\t(.+\.md)$/.exec(l)).filter(Boolean)
+      .slice(-MAX_QUESTION_FILES).map((m) => m[1]);
+    if (!blobs.length) return [];
+    const cat = spawnSync('git', ['-C', repo, 'cat-file', '--batch'], { input: blobs.join('\n') + '\n', timeout: 2000, maxBuffer: 8 << 20 });
+    const buf = cat.stdout || Buffer.alloc(0);
+    const out = [];
+    // --batch output: "<sha> blob <size>\n<content>\n" per object; sizes are bytes.
+    for (let i = 0; i < buf.length;) {
+      const nl = buf.indexOf(10, i);
+      if (nl < 0) break;
+      const size = Number((/ blob (\d+)$/.exec(buf.toString('utf8', i, nl)) || [])[1]);
+      if (!Number.isFinite(size)) break;
+      const text = buf.toString('utf8', nl + 1, nl + 1 + size).replace(/\r/g, '');
+      i = nl + 1 + size + 1;
+      const head = (/^---\n([\s\S]*?)\n---/.exec(text) || [])[1] || '';
+      const fm = (k) => ((new RegExp('^' + k + ':[ \\t]*(.*)$', 'm').exec(head) || [])[1] || '').trim();
+      const q = (/## Question\s+([^\n]+)/.exec(text) || [])[1];
+      if (q && fm('to') === me && fm('status') === 'open') { const t = q.trim(); out.push(t.length > 80 ? t.slice(0, 79) + '…' : t); }
+    }
+    return out;
+  } catch { return []; }
+}
+const MAX_QUESTIONS_SHOWN = 3;
+function questionsPart(qs, tr) {
+  const list = qs.slice(0, MAX_QUESTIONS_SHOWN).map((q) => `“${q}”`).join(', ') + (qs.length > MAX_QUESTIONS_SHOWN ? ' …' : '');
+  return tr ? `size ${qs.length} açık soru: ${list}` : `${qs.length} open question${qs.length === 1 ? '' : 's'} for you: ${list}`;
+}
+function syncSentences(repo, company, language, now, me) {
   const tr = isTurkish(language);
   const behind = countCommits(repo, 'HEAD..@{u}');
   const ahead = countCommits(repo, '@{u}..HEAD');
+  const qs = openQuestionsAtRemote(repo, me);
   const out = [];
-  if (behind) {
+  if (behind && qs.length) {
+    out.push((tr
+      ? `${company} ortak hafızası: ${behind} yeni commit · ${questionsPart(qs, tr)}. Oturum başında çekilecek.`
+      : `The ${company} shared memory: ${behind} new commit${behind === 1 ? '' : 's'} · ${questionsPart(qs, tr)}. It will be pulled at session start.`)
+      + ' [run `node tools/sync.js` there first]');
+  } else if (behind) {
     const log = spawnSync('git', ['-C', repo, 'log', '-1', '--format=%an|%ct|%s', '@{u}'], { encoding: 'utf8', timeout: 8000 });
     const [an = '?', ct = '0', ...rest] = (log.stdout || '').trim().split('|');
     const age = ago(now.getTime() - Number(ct) * 1000, tr);
@@ -101,6 +144,7 @@ function syncSentences(repo, company, language, now) {
       : `The ${company} shared memory has ${ahead} unpushed commit${ahead === 1 ? '' : 's'} of yours — sync --push for the push notice.`);
   }
   if (!behind && !ahead) out.push(tr ? `${company} ortak hafızası güncel.` : `The ${company} shared memory is up to date.`);
+  if (!behind && qs.length) out.push(tr ? `${company} ortak hafızası: ${questionsPart(qs, tr)}.` : `The ${company} shared memory: ${questionsPart(qs, tr)}.`);
   return out;
 }
 function memoryBlocks(cfg, now) {
@@ -116,11 +160,13 @@ function memoryBlocks(cfg, now) {
       const me = detectMember(abs);
       const lines = [`### Shared memory: ${m.name} (${m.path}), you are "${me || '?'}"`];
       if (!me) lines.push('Member name unknown: ask once and write it into .memory/me there.');
-      if (fetchDaily(abs, now)) {
-        let company = m.name;
-        try { company = JSON.parse(fs.readFileSync(path.join(abs, '.memory', 'config.json'), 'utf8')).company || m.name; } catch { /* the name will do */ }
-        lines.push(...syncSentences(abs, company, cfg.dialogueLanguage, now));
-      }
+      // 0.16.6: fetched on every session start, not once a day — a question left
+      // this morning must show this afternoon. Read-only (never a merge), no
+      // credential prompt, capped at 3 s; a failed fetch leaves the last refs.
+      spawnSync('git', ['-C', abs, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 3000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+      let company = m.name;
+      try { company = JSON.parse(fs.readFileSync(path.join(abs, '.memory', 'config.json'), 'utf8')).company || m.name; } catch { /* the name will do */ }
+      lines.push(...syncSentences(abs, company, cfg.dialogueLanguage, now, me));
       const due = spawnSync(process.execPath, [path.join(abs, 'tools', 'sweep-due.js')], { encoding: 'utf8', timeout: 5000 });
       if (due.stdout && due.stdout.trim()) lines.push(due.stdout.trim());
       const tasks = me ? firstNOpenTasks(path.join(abs, 'members', me, 'tasks.md'), MEMORY_TASK_CHARS) : [];

@@ -334,6 +334,45 @@ test('A6: in Turkish, ahead says the unpushed commits and the push notice', (t) 
   assert.deepStrictEqual(syncLines(brief(ws)), ["Acme ortak hafızasında gönderilmemiş 2 commit'in var — push bildirimi için sync --push."]);
 });
 
+// 0.16.6: open questions for the member are read from the remote tip at session start,
+// before any pull — the member sees them in the brief, not six hours later after a sync.
+function pushQuestion(clone, file, from, to, status, question) {
+  fs.mkdirSync(path.join(clone, 'questions'), { recursive: true });
+  fs.writeFileSync(path.join(clone, 'questions', file),
+    `---
+from: ${from}
+to: ${to}
+date: 2026-10-01
+status: ${status}
+---
+
+## Question
+
+${question}
+`);
+}
+
+test('A6: behind, the open questions for the member come from the remote tip, unpulled', (t) => {
+  const { base, bare, ws, mem } = joinedTr(t);
+  const other = path.join(base, 'other');
+  git(base, 'clone', '-q', bare, other);
+  pushQuestion(other, '2026-10-01-ada-bora-encoder.md', 'ada', 'bora', 'open', 'Which encoder goes to Veliefendi?');
+  pushQuestion(other, '2026-10-01-ada-bora-old.md', 'ada', 'bora', 'answered', 'Already answered');
+  pushQuestion(other, '2026-10-01-bora-ada-x.md', 'bora', 'ada', 'open', 'Not for bora');
+  git(other, 'add', '.'); git(other, 'commit', '-q', '-m', 'ada: questions'); git(other, 'push', '-q');
+  const lines = syncLines(brief(ws));
+  assert.strictEqual(lines.length, 1, lines.join('\n'));
+  assert.match(lines[0], /^Acme ortak hafızası: 1 yeni commit · size 1 açık soru: “Which encoder goes to Veliefendi\?”\. Oturum başında çekilecek\./);
+  assert.ok(!fs.existsSync(path.join(mem, 'questions', '2026-10-01-ada-bora-encoder.md')), 'read from the remote, never merged');
+});
+
+test('A6: level, an open question for the member is its own line', (t) => {
+  const { ws, mem } = joinedTr(t);
+  pushQuestion(mem, '2026-10-01-ada-bora-q.md', 'ada', 'bora', 'open', 'Rack space?');
+  git(mem, 'add', '.'); git(mem, 'commit', '-q', '-m', 'q'); git(mem, 'push', '-q');
+  assert.deepStrictEqual(syncLines(brief(ws)), ['Acme ortak hafızası güncel.', 'Acme ortak hafızası: size 1 açık soru: “Rack space?”.']);
+});
+
 test('A6: a workspace with no shared memory has no memory block', (t) => {
   assert.doesNotMatch(brief(workspace(t)), /Shared memory/);
 });

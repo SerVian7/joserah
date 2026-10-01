@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.6
+
+0.16.6 — session briefing lists open shared-memory questions for the member from the remote tip. Owner, 2026-10-01. At session start each joined shared memory is fetched (every session, not once a day; read-only, never a merge, capped at 3 s) and the questions under `questions/` addressed to the member with `status: open` are read from the remote tip, so they show before any pull: `Zenger ortak hafızası: 6 yeni commit · size 2 açık soru: “…”, “…”. Oturum başında çekilecek.` A level memory says them on a line of its own. Any error leaves the old line.
+
 ## 0.16.5
 
 orchestrate: a manager agent per wave (sub-agents of a sub-agent), status line relay, cap in the brief. When a wave has several independent folders or stages, the orchestrator may brief one manager at heavy tier that briefs its own workers, keeps its running state in one file it deletes at the end, and answers status with one line. The manager writes the report file; the orchestrator still publishes it and reports to the owner.
