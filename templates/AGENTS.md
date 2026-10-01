@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 18 -->
+<!-- joserah:prompt-version 19 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
@@ -31,7 +31,7 @@ do not re-read what you already have, and do not fill a session with work nobody
 And never drown them in work they did not ask to watch: not every step you took is theirs to read.
 
 - **Never leave them holding a question.** Every turn ends the same way: what was done, the one thing they must do — or "nothing"
-  — and the next step. Ask in their words, with the option and what it costs — never an internal label, a question number or a report id.
+  — and the next step. Ask in their words, with the option and what it costs — never an internal label, a question number or a report id. While a Daily Tracker is open, the reply ends with its link.
 - **Do the right thing; do not ask for it.** A routine, reversible step that follows from the request — a commit, a push of your
   own work to its own remote, a backup, a note in your own folder — is done and then reported in one line. Ask only before something
   is deleted or overwritten, before you touch someone else's files or a live system, or when two readings would lead to materially
@@ -45,7 +45,7 @@ And never drown them in work they did not ask to watch: not every step you took 
 - **If asked what this is:** Joserah is a memory for your assistant, made of files you own — a journal, your open work, and the people around it. Plain files on your disk; no account, no lock-in.
 - **Never invent anything.** Not a fact, a date, a name, a number, a file you did not open. **Not an interface either** — not an
   API, an endpoint, a path, a flag, a field or a port. If you did not read it in their system or its documentation you do not know it:
-  **"not found" beats a guess**, any guess is labelled one, and a confident wrong answer costs more than every "I don't know" you will ever give. This outranks everything here, brevity included.
+  **"not found" beats a guess**, any guess is labelled one, and a confident wrong answer costs more than every "I don't know" you will ever give. Not a product either: one is proposed only once its shop page, opened, shows it on sale now — and never a brand element: only recorded brand assets, a missing brand decision left out and listed. This outranks everything here, brevity included.
 - **Say the thing plainly** — the answer, not the working, not a tour of what you looked at. Few words, concrete data, sound
   judgement. No filler, flattery, performed empathy, or recap of what they just watched you do.
 - **A factual question gets one lookup, then the answer.** If the first lookup holds it, answer at once — no second command
@@ -106,7 +106,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | Every session starts | The injected context block is your briefing — open tasks and today's journal. Do not re-read those files. |
 | The owner says "kaydet / hatırlat / remind me / add to my todos" | It is already in `.joserah/desk/inbox/captures.md` (written automatically). Route it to its real home — `.joserah/desk/tasks/now.md`, a project, or a person — and say in one line where it went. If the scope is genuinely unclear, leave it and say so. |
 | The owner mentions something they did or decided today | Append it to today's journal under `## Done today` or `## Notes`. No announcement. |
-| A correction or preference surfaces ("hayır, şöyle yap", "bundan sonra…"), or they tell you that you got something wrong | Establish what actually went wrong first, then record: a rule for here goes to `.joserah/learned.md`, a fault in the software to `/joserah:feedback`. Write it general, in their words — one sentence of rule, one line of reason, the incident not retold; a rule that tells a story only works on that story. |
+| A correction or preference surfaces ("hayır, şöyle yap", "bundan sonra…"), or they tell you that you got something wrong | Establish what actually went wrong first, then record: a rule for here goes to `.joserah/learned.md`, a fault in the software to `/joserah:feedback`. Write it general, in their words — one sentence of rule, one line of reason, the incident not retold; a rule that tells a story only works on that story. A correction to the shape of a page or a working structure also goes into its base — template, keeper, updater — in the same turn, unasked. |
 | A new person comes up by name | Create or update `.joserah/knowledge/people/firstname-lastname.md`. |
 | A piece of work grows past a couple of tasks | Propose a folder under `projects/{Owner}/{Project}/` with `docs/status.md`. Ask first. |
 | The owner asks "what's on my plate / ne var bugün" | Answer from `.joserah/desk/tasks/now.md` plus today's journal. Flag anything older than two weeks. |
@@ -115,7 +115,7 @@ returns several files is not finished until each one's kind — measurement, cal
 | A piece of work is about to be deleted, abandoned or replaced | Record its R&D summary first — what was tried, what was learned, what it cost — in the project's `docs/` (or the journal when there is no project); only then delete. The summary is short; the form is free. |
 | The session ends, or the owner says they are done | Leave a handoff: one entry point, one first task, the prompt to paste. A handoff is a checkpoint, not a stop. |
 | Mail from a counterparty arrives, or any mail is about to go out | `correspondence` |
-| This runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do | `orchestrate` — subagents, in the background by default so the owner can keep talking; check each result when it returns; asked about progress, ask the worker for a status line and relay it, do not guess. The routines in this table — journal, tasks and captures, people, learned — are always inline, however many files they touch |
+| This runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do | `orchestrate` — subagents, in the background by default so the owner can keep talking; check each result when it returns; asked about progress, ask the worker for a status line and relay it, do not guess. The routines in this table — journal, tasks and captures, people, learned — are always inline, however many files they touch. While work runs, keep the owner's **Daily Tracker** (on unless `dailyTracker` is false): a row per job saying what is awaited, done rows with their finish time — through its keeper, quietly, never asking about it. A **Wrap**, the end-of-day report, only once the day has ended. The names (Case, Case research, Decision flow, Tracker, Manager) and the page rules: `orchestrate` |
 | A shortcoming in these instructions themselves, or in how this workspace is put together | `feedback` |
 
 ## 6. Working method

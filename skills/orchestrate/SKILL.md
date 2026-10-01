@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, or carrying out a written plan.
+description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, or carrying out a written plan. Also when a page is to be made or kept for the owner — a Tracker, the Daily Tracker, a Wrap, a Case research or a Decision flow — or a product or price is researched.
 ---
 
 # Orchestrating the work
@@ -46,15 +46,24 @@ sequence. Rule 6 (the machine's capacity) still bounds how many run at once.
 
 ### A manager for a wave
 
-When a wave has several independent folders or stages, brief **one manager** for it at heavy
-tier instead of every worker yourself. The manager plans the wave, briefs its own workers from
-the same template — each with the worker line, so they do not delegate — checks their diffs
-(removed lines first), and returns one report.
+When a wave has several independent folders or stages, brief **one Manager** for it at heavy
+tier instead of every worker yourself (the `manager` agent). The Manager plans the wave, briefs
+its own workers from the same template, checks their diffs (removed lines first), and returns
+one report.
 
 A wave with one folder or one stage gets no manager: the layer costs a full agent's opening and the owner's waiting time, and the orchestrator briefs the workers itself. The manager is for width, never for ceremony.
 
 - Its brief carries the manager line and the cap: how many workers at once. Rule 6 bounds the
-  manager's workers as it bounds yours.
+  manager's workers as it bounds yours: as many in parallel as the machine comfortably allows,
+  heavy jobs one at a time, never two workers on one folder or one file.
+- Workers run at medium tier by default; heavy only where the work genuinely needs judgement
+  (deciding what is private, merging rules, choosing between designs).
+- Delegation may nest: a worker may open sub-agents of its own under these same rules (owner,
+  2026-10-01).
+- **Checkpoint.** Every long job appends one line per finished unit to a progress file its brief
+  names, and on start reads it and skips what is done. An interrupt stops every background
+  agent; a stopped worker is restarted from its checkpoint and continues exactly where it stopped.
+- Every page the wave feeds has a keeper (see "Pages under work").
 - It keeps its running state in one file the brief names, and deletes that file at the end.
 - Asked for status, ask the manager for one status line — committed, remaining, minutes — and
   relay it. Never estimate it blind.
@@ -71,8 +80,11 @@ any of the four returns something that has to be redone.
 - Name the files it may write and the folders it may not touch. A worker that edits outside
   its brief has done damage, not work.
 - Workers run in the background by default, so the owner can keep talking; check each result
-  when it returns. The template carries the no-further-delegation line, so a worker that never
-  loaded this skill still knows it.
+  when it returns. The template carries the worker line, so a worker that never loaded this
+  skill still knows the rules it delegates under.
+- Cite a recorded rule by reference (its title or file), never a paraphrase of it: a narrowed
+  restatement narrows the work. A correction applies to the instance it was about unless the
+  owner gives it a wider scope.
 - Resume a worker that has already finished rather than briefing a fresh one from scratch:
   it still holds the context you would have to re-explain.
 
@@ -81,8 +93,9 @@ The template a brief is written from:
 ```
 Job: <the one deliverable>
 Rules: <what it must not break; the files it may write, the folders it may not touch>
-  You are a worker: do not delegate further. Sign a commit `<model> <effort> — Joserah Worker`.
-  (For a manager instead: You are a manager: you may brief workers (max N at once, one folder each); workers may not delegate.)
+  You are a worker: you may open sub-agents of your own under these same rules. Sign a commit `<model> <effort> — Joserah Worker`.
+  (For a manager instead: You are a manager: you may brief workers (max N at once, one folder each).)
+  Checkpoint: <progress file> — one line per finished unit; on start, read it and skip what is done.
 Verified by: <the command or check that proves it>
 Report: <the exact shape of what comes back>
 ```
@@ -112,10 +125,95 @@ its conclusion in two or three lines plus the link, never the link alone.
   hedging.
 - Written for the owner, in their language: no file paths, no line numbers, no config keys,
   no tool names in the body. A short "source documents" appendix at the end if needed.
-- It carries the logo and the brand. It is not boring and it is not long.
+- It carries the recorded logo and brand (see "Pages under work"). It is not boring and it is not long.
 - A report that has been published is kept current: anything that changes after it is written into
   it before the turn ends, and the handoff names the report and its last update time. A stale
   report is worse than none. A Stop hook reminds when changes follow the last publish.
+
+## Working structures
+
+These names are used as they are — in speech, on pages and in records — whatever language the
+owner speaks:
+
+| Name | What it is |
+|---|---|
+| **Case** | One subject being decided — a purchase, a vendor, a design — with its options. |
+| **Case research** | The page holding every option of one Case, each fact with its source and status, things already on hand included. |
+| **Decision flow** | The page holding only what is being decided in that Case: what was chosen, in the order it was decided, and what is still open. |
+| **Tracker** | A wave's live status page. |
+| **Daily Tracker** | The owner's own day page: the active work of the day, kept by the assistant. |
+| **Wrap** | The end-of-day report. Made only once the day has ended, or the owner says it has; never for an unfinished day. While the day runs, the Daily Tracker is the live page. |
+| **Manager** | The agent that runs a wide wave (above). |
+
+## Trackers
+
+**The Daily Tracker is native.** It is on unless `.joserah/config.json` says `"dailyTracker": false`.
+When the first piece of work of the day starts, the assistant opens it without being asked and keeps
+it through a keeper (the `tracker-keeper` agent) — quietly: it never asks about it, never announces
+it, never interrupts for it. Every reply to the owner ends with its link, a short plain label with the
+URL embedded. At most three Trackers are open at once: the Daily Tracker and, only when needed, one
+per other audience.
+
+- Built with `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js"`: `init <dir> --title "<Owner> · Daily Tracker" --lang <en|tr>`
+  once, then `<dir>` after every change to `<dir>/rows.json`. `rows.json` is the full inventory of
+  rows (`state`, `title`, `small`, `url`, `label`, `time`); the page is rebuilt from it.
+- Groups in this order: running and waiting on the owner → done → plans. One line per row; every
+  row carries a time, stamped once and kept; a done row shows when it finished.
+- The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
+  no footer, no start or elapsed time. The page itself is fixed; updates touch rows only.
+- **Running work is visible.** Every background job gets a running row when it is launched, saying
+  what is awaited — which job, which result, what comes next — and moves to done with its finish
+  time when it lands.
+- A row that waits on the owner's decision links to the page where it is made (Case research,
+  Decision flow, a report): the owner decides from the page, not from the chat.
+
+## Pages under work
+
+- **A keeper per page.** Every page that work feeds has a keeper agent while the work runs.
+  Workers send each verified finding to it the moment it lands, and the keeper adds it to the page
+  and to its job log at once — the page grows during the work, never only at the end.
+- **A job log under the title.** Directly under the page title, one expandable line, closed by
+  default: `running · N` while anything runs, `done · log` after (in the page's language). It lists
+  the page's jobs with state and time; a job is added when it starts, and the line stays as a log.
+  `<details><summary>running · 2</summary><ul><li>…</li></ul></details>` is enough.
+- Process status is never a content section of the page.
+- A link lives in the row or card it belongs to, never in a link block under the list. Links are
+  plain text with the URL embedded behind a short label, never buttons and never bare URLs.
+- No model or tool names on any page: a recommendation box is headed "Recommendation", in the
+  page's language, never "<model> recommendation".
+- **Brand: only recorded assets.** Only the brand's recorded files are used — the logo as it was
+  delivered. No wordmark is typeset in a chosen font and no logo variant is made up. A brand decision
+  that does not exist yet is left out of the page and listed for the owner as an open decision.
+- A correction to a page's shape is carried into its base — the template, the keeper, the updater —
+  in the same turn, unasked. A change the owner marks as for this one page stays local.
+
+## Decision pages
+
+A Case is decided on two linked pages: its Case research and its Decision flow.
+
+- One topic per pair. A different decision gets its own pair, and the topic pages link to it in one line.
+- The Decision flow carries only what is being decided. What is already on hand is at most one line
+  there, linking to the Case research, which holds every on-hand item.
+- Options are grouped under clear headings, the groups visibly separated, and a selected card sits
+  directly under its own group.
+- An option moves from the research to the flow only on the owner's word.
+
+## Research
+
+- **A product is proposed only when it is on sale now.** As an option, a likely choice, or on any
+  page — only after its shop product page has been opened and shows it in stock with a price. A
+  search snippet or a listing without stock does not count. An item found not on sale leaves the
+  choice (the Case research may keep it, marked not on sale), and an unverified item is never
+  decorated with images or details.
+- **Trusted sources.** `research.trustedSources` in `.joserah/config.json` lists the shops and sites
+  the owner trusts. They stand on equal footing — none of them is the gateway — and the list is
+  open: other established local shops count too. A marketplace's third-party seller is flagged as
+  such, never presented as the shop. A web price stays unverified until the owner confirms it; the
+  owner's own screenshot overrides it at once.
+- **Fetch fallback order.** The shop's product page directly; then the runtime's browser or reader
+  tool, where it has one; then the shop's own search or listing page, to reach the product page;
+  then a price aggregator, only to reach the shop's page. Every price research ends with a
+  `Blocked sources:` line naming what opened through none of them, or `none`.
 
 ## One voice
 
