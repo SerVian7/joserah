@@ -413,10 +413,13 @@ test('questions: sync lists open and answered counts, the push notice carries th
     `---\nfrom: ${from}\nto: ${to}\ndate: 2026-09-30\nstatus: ${status}\n---\n## Question\nWhich port does the encoder use?\n`);
   q('2026-09-30-ada-bora-port.md', 'ada', 'bora', 'open');
   q('2026-09-30-bora-ada-key.md', 'bora', 'ada', 'answered');
+  // no space after the frontmatter colon still reads the whole value
+  fs.writeFileSync(path.join(dir, 'questions', '2026-09-30-ada-bora-nospace.md'),
+    '---\nfrom:ada\nto:bora\nstatus:open\n---\n## Question\nNo-space key?\n');
   git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'ada: 2026-09-30'); git(dir, 'push', '-q');
   fs.writeFileSync(path.join(dir, '.memory', 'me'), 'bora\n');
   const s = node(dir, path.join(dir, 'tools', 'sync.js'));
-  assert.match(s.stdout, /Questions for bora: 1 open\n  questions\/2026-09-30-ada-bora-port\.md - Which port/);
+  assert.match(s.stdout, /Questions for bora: 2 open\n  questions\/2026-09-30-ada-bora-nospace\.md - No-space key\?\n  questions\/2026-09-30-ada-bora-port\.md - Which port/);
   assert.match(s.stdout, /Answers to your questions: 1\n  questions\/2026-09-30-bora-ada-key\.md/);
   q('2026-09-30-ada-bora-port.md', 'ada', 'bora', 'answered');
   fs.appendFileSync(path.join(dir, 'questions', '2026-09-30-ada-bora-port.md'), '## Answer\n9000\n');

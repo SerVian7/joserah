@@ -62,7 +62,7 @@ function questions(me) {
   for (const f of fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.md')) : []) {
     const text = fs.readFileSync(path.join(dir, f), 'utf8').replace(/\r/g, '');
     const head = (/^---\n([\s\S]*?)\n---/.exec(text) || [])[1] || '';
-    const fm = (k) => ((new RegExp('^' + k + ':\s*(.+)$', 'm').exec(head) || [])[1] || '').trim();
+    const fm = (k) => ((new RegExp('^' + k + ':[ \\t]*(.+)$', 'm').exec(head) || [])[1] || '').trim();
     const line = `  questions/${f} - ${((/## Question\s+([^\n]+)/.exec(text) || [])[1] || f).slice(0, 80)}`;
     if (fm('to') === me && fm('status') === 'open') open.push(line);
     if (fm('from') === me && fm('status') === 'answered') answered.push(line);

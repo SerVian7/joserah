@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.7
+
+0.16.7 — shared-memory sync: frontmatter keys accept no space after the colon. `to:serkan` was read as "erkan" in the Questions list of `tools/sync.js` (a regex escape slip), so the question never showed for its addressee; `to:x`, `to: x` and `to:  x` now all read "x". Run `/joserah:update` in a joined shared memory to get the fixed tool.
+
 ## 0.16.6
 
 0.16.6 — session briefing lists open shared-memory questions for the member from the remote tip. Owner, 2026-10-01. At session start each joined shared memory is fetched (every session, not once a day; read-only, never a merge, capped at 3 s) and the questions under `questions/` addressed to the member with `status: open` are read from the remote tip, so they show before any pull: `Zenger ortak hafızası: 6 yeni commit · size 2 açık soru: “…”, “…”. Oturum başında çekilecek.` A level memory says them on a line of its own. Any error leaves the old line.
