@@ -44,6 +44,21 @@ Independent pieces go to separate workers at once, in parallel, each with its ow
 shared file between them; only steps that depend on each other's output go to one worker in
 sequence. Rule 6 (the machine's capacity) still bounds how many run at once.
 
+### A manager for a wave
+
+When a wave has several independent folders or stages, brief **one manager** for it at heavy
+tier instead of every worker yourself. The manager plans the wave, briefs its own workers from
+the same template — each with the worker line, so they do not delegate — checks their diffs
+(removed lines first), and returns one report.
+
+- Its brief carries the manager line and the cap: how many workers at once. Rule 6 bounds the
+  manager's workers as it bounds yours.
+- It keeps its running state in one file the brief names, and deletes that file at the end.
+- Asked for status, ask the manager for one status line — committed, remaining, minutes — and
+  relay it. Never estimate it blind.
+- The final report to the owner and the publish step stay with you: the manager writes the
+  report file, you publish it.
+
 ## Briefing
 
 A brief is four things and nothing else: the job, the rules it must not break, how it will
@@ -65,6 +80,7 @@ The template a brief is written from:
 Job: <the one deliverable>
 Rules: <what it must not break; the files it may write, the folders it may not touch>
   You are a worker: do not delegate further. Sign a commit `<model> <effort> — Joserah Worker`.
+  (For a manager instead: You are a manager: you may brief workers (max N at once, one folder each); workers may not delegate.)
 Verified by: <the command or check that proves it>
 Report: <the exact shape of what comes back>
 ```

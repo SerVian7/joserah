@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.5
+
+orchestrate: a manager agent per wave (sub-agents of a sub-agent), status line relay, cap in the brief. When a wave has several independent folders or stages, the orchestrator may brief one manager at heavy tier that briefs its own workers, keeps its running state in one file it deletes at the end, and answers status with one line. The manager writes the report file; the orchestrator still publishes it and reports to the owner.
+
 ## 0.16.4
 
 sweep.js counts a struck line as carried. The after-check no longer reports a claim missing when it arrived plain and now stands struck in knowledge (or the reverse). Run `--refresh-memory` for a shared memory.
