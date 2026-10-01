@@ -51,6 +51,8 @@ tier instead of every worker yourself. The manager plans the wave, briefs its ow
 the same template — each with the worker line, so they do not delegate — checks their diffs
 (removed lines first), and returns one report.
 
+A wave with one folder or one stage gets no manager: the layer costs a full agent's opening and the owner's waiting time, and the orchestrator briefs the workers itself. The manager is for width, never for ceremony.
+
 - Its brief carries the manager line and the cap: how many workers at once. Rule 6 bounds the
   manager's workers as it bounds yours.
 - It keeps its running state in one file the brief names, and deletes that file at the end.

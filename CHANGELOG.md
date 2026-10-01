@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.8
+
+0.16.8 — orchestrate: a manager only when the wave is wide; one folder or stage gets none. A wave with a single folder or a single stage is now briefed by the orchestrator directly, because the manager layer costs a full agent's opening and the owner's waiting time. Run `/joserah:update` to get the changed skill.
+
 ## 0.16.7
 
 0.16.7 — shared-memory sync: frontmatter keys accept no space after the colon. `to:serkan` was read as "erkan" in the Questions list of `tools/sync.js` (a regex escape slip), so the question never showed for its addressee; `to:x`, `to: x` and `to:  x` now all read "x". Run `/joserah:update` in a joined shared memory to get the fixed tool.
