@@ -161,6 +161,9 @@ per other audience.
   row carries a time, stamped once and kept; a done row shows when it finished.
 - The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
   no footer, no start or elapsed time. The page itself is fixed; updates touch rows only.
+- **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other
+  rows; separate jobs are never merged into one row; an update changes the existing row instead of
+  adding a repeating one (the updater refuses two rows with the same title).
 - **Running work is visible.** Every background job gets a running row when it is launched, saying
   what is awaited — which job, which result, what comes next — and moves to done with its finish
   time when it lands.

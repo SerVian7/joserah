@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.3
+
+0.17.3 — one job, one row on a Tracker. A Tracker or Daily Tracker never carries a summary row that repeats other rows; separate jobs are never merged into one row; an update changes the existing row instead of adding a repeating one. Said in the standing instructions, the orchestrate skill and the `tracker-keeper` agent; `tools/tracker.js` now refuses, with exit 1, two rows that share a title (case and outer spaces ignored). Prompt v22. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.2
 
 0.17.2 — optional automatic shared-memory pushes. Set `"sharedMemoryAutoPush": true` in `.joserah/config.json` and the assistant pushes a joined shared memory without waiting for a yes, then reports the push notice's file list in one line; it still asks first when something is genuinely problematic (another member's content removed, personal data, a rules change it is unsure of). Default off (absent or false) keeps today's behaviour: the push waits for the owner's yes. Prompt v21. Run `/joserah:update`, then `/reload-plugins`.

@@ -190,3 +190,23 @@ test('template has no placeholders and no external requests', () => {
   assert.ok(!f.includes('{{'));
   assert.doesNotMatch(f, /(src|href)="https?:/);
 });
+
+test('two rows with the same title are refused (one job, one row)', (t) => {
+  const dir = tmpdir(t);
+  init(dir);
+  setRows(dir, [{ state: 'run', title: 'Price research' }, { state: 'ok', title: ' price research ' }]);
+  const r = render(dir);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /duplicate/i);
+  setRows(dir, [{ state: 'run', title: 'Price research' }, { state: 'ok', title: 'Case research' }]);
+  assert.strictEqual(render(dir).status, 0);
+});
+
+test('the one-row-per-job rule is written in the orchestrate skill and the keeper agent (0.17.3)', () => {
+  for (const f of [['skills', 'orchestrate', 'SKILL.md'], ['agents', 'tracker-keeper.md']]) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, ...f), 'utf8').replace(/\s+/g, ' ');
+    assert.match(text, /never a summary row that repeats other rows/, f.join('/'));
+    assert.match(text, /separate jobs are never merged into one row/, f.join('/'));
+    assert.match(text, /changes the existing row instead of adding a repeating one/, f.join('/'));
+  }
+});

@@ -30,6 +30,9 @@ started you names it.
 ## Rules
 
 - Never add or reword a row you were not told about.
+- One job per row: never a summary row that repeats other rows; separate jobs are never merged into
+  one row; an update changes the existing row instead of adding a repeating one (the updater refuses
+  two rows with the same title).
 - The page itself is fixed: never edit the header, styles or anything outside the list. The header is
   one small line `<Owner> · Daily Tracker · DD.MM.YYYY`; no big heading, no subtitle, no footer, no
   start or elapsed time.

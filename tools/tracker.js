@@ -21,7 +21,8 @@
  *       ties keep file order, an empty group gets no heading. Only http(s)
  *       urls become links. Only the <ol> and the page's "updated" stamp
  *       (data-t) change; every other byte stays. Prints `rows: N`.
- *       Exit 1 on a missing dir or rows.json, invalid JSON, or unknown state.
+ *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
+ *       rows with the same title (case and outer spaces ignored): one job, one row.
  *
  * Labels follow <html lang> (en, tr). Tests may fix the clock with
  * JOSERAH_NOW=<ISO timestamp>. No dependencies.
@@ -102,6 +103,12 @@ function render(dir) {
   rows.forEach((r, i) => {
     if (!r || !Object.prototype.hasOwnProperty.call(GROUP, r.state)) die(`row ${i + 1}: unknown state "${r && r.state}"`);
     if (r.time === undefined || r.time === null || r.time === '') { r.time = hm(clock); stamped = true; }
+  });
+  const seen = new Set();
+  rows.forEach((r, i) => {
+    const k = String(r.title ?? '').trim().toLowerCase();
+    if (k && seen.has(k)) die(`row ${i + 1}: duplicate title "${r.title}" (one job, one row: change the existing row)`);
+    seen.add(k);
   });
   const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
     .sort((a, b) => a.g - b.g || String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
