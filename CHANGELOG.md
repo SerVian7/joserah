@@ -3,6 +3,24 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.0
+
+**A Daily Tracker, native and quiet.** Owner, 2026-10-01. The assistant now keeps the owner's Daily Tracker — the day's live page — without being asked and without nagging: it never asks about it or announces it, and every reply ends with its link. It is on by default; `"dailyTracker": false` in `.joserah/config.json` turns it off. A new `tools/tracker.js` builds the page (`init <dir> --title "<Owner> · Daily Tracker" --lang en|tr`, then `<dir>` after each change to `rows.json`): rows.json is the full inventory, groups run running and waiting on the owner → done → plans, every row is stamped once and the stamp is kept, links live in their rows, and only the list and the updated stamp ever change. The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`; no footer, no elapsed time. A new `tracker-keeper` agent keeps one page from one-line updates. Every background job gets a running row saying what is awaited.
+
+**Working structures have names.** Case, Case research, Decision flow, Tracker, Daily Tracker, Wrap and Manager are defined in the orchestrate skill and used as they are. A Wrap (the end-of-day report) is made only once the day has ended.
+
+**Pages under work.** A keeper per page; workers send each verified finding to it at once; a closed-by-default job log directly under the page title ("running · N" / "done · log"), kept as a log; process status is never a content section; links live in their rows; no model or tool names on any page. Decision pages: one topic per Case research and Decision flow pair, the flow carries only what is decided, options grouped under clear headings with the selected card under its group. A correction to a page's shape goes into its base — template, keeper, updater — in the same turn.
+
+**Research and brand.** A product is proposed only after its shop page, opened, shows it on sale now; an unverified item is never decorated. Trusted sources are a list in `research.trustedSources` (config), all on equal footing and open to other established shops; a marketplace's third-party seller is flagged. Price research follows a fetch fallback order and ends with a `Blocked sources:` line. Only recorded brand assets are used; a missing brand decision is left out and listed.
+
+**Delegation may nest.** The sub-agent start line no longer says "do not delegate": a sub-agent may open its own under the same rules (a brief each, never two on one folder or file, a checkpoint file for long work). A `manager` agent ships: workers at medium tier by default, parallel within the machine's capacity, a checkpoint per long job and restart from it, a keeper for every page the wave feeds.
+
+**Shared memory.** Nothing assistant-internal goes in (at most a changelog of major releases); every change to the shared record goes through `inbox/`; the company Wrap is built from the memory with every member's data and goes to no one by default, to the whole team when needed. A new memory carries `knowledge/wiki/topics/tracker-and-wrap.md`, the how-to for members without an assistant. Run `--refresh-memory` for the rules; the how-to reaches an existing memory when its sweeper adds it.
+
+**Sweep and doctor.** The sweep's changed-since count comes from version-control history, not file times, so a workspace moved to another machine no longer counts as all-changed. Doctor warns, instead of failing, on links into `projects/` folders absent on this machine.
+
+Prompt v19. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.16.9
 
 0.16.9 — a published report is kept current: Stop-hook reminder when changes follow the last report publish. A new Stop hook reads the session transcript: once a report-like artifact (title or description says Rapor, Report, Gün Sonu, Takip or Status) has been published, any file edit, other artifact publish or workspace file changed after it holds the turn open once with one line in the owner's language, "Yayınlanan rapor güncel mi? Son yayın HH:MM, sonrasında N değişiklik." The orchestrate skill says the same as a rule. Run `/reload-plugins` to get the hook.
