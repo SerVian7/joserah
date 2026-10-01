@@ -113,6 +113,9 @@ its conclusion in two or three lines plus the link, never the link alone.
 - Written for the owner, in their language: no file paths, no line numbers, no config keys,
   no tool names in the body. A short "source documents" appendix at the end if needed.
 - It carries the logo and the brand. It is not boring and it is not long.
+- A report that has been published is kept current: anything that changes after it is written into
+  it before the turn ends, and the handoff names the report and its last update time. A stale
+  report is worse than none. A Stop hook reminds when changes follow the last publish.
 
 ## One voice
 

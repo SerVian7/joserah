@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.16.9
+
+0.16.9 — a published report is kept current: Stop-hook reminder when changes follow the last report publish. A new Stop hook reads the session transcript: once a report-like artifact (title or description says Rapor, Report, Gün Sonu, Takip or Status) has been published, any file edit, other artifact publish or workspace file changed after it holds the turn open once with one line in the owner's language, "Yayınlanan rapor güncel mi? Son yayın HH:MM, sonrasında N değişiklik." The orchestrate skill says the same as a rule. Run `/reload-plugins` to get the hook.
+
 ## 0.16.8
 
 0.16.8 — orchestrate: a manager only when the wave is wide; one folder or stage gets none. A wave with a single folder or a single stage is now briefed by the orchestrator directly, because the manager layer costs a full agent's opening and the owner's waiting time. Run `/joserah:update` to get the changed skill.
