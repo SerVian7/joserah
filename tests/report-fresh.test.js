@@ -109,3 +109,12 @@ test('the report-freshness hook is registered on Stop', () => {
   assert.ok((hooks.hooks.Stop || []).some((e) => e.hooks.some((h) =>
     h.command === 'node "${CLAUDE_PLUGIN_ROOT}/hooks/report-fresh.js"' && h.shell === 'bash')));
 });
+
+test('a report filed under a past day is closed; later changes do not make it stale', () => {
+  const r = () => 'Gün Sonu';
+  const past = 'desk/artifacts/2000-01-01/wrap/index.html';
+  assert.strictEqual(staleReport([call(0, 'Artifact', { file_path: past }), call(1, 'Edit', { file_path: 'a.md' })], r), null);
+  const d = new Date(), today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const now = `desk/artifacts/${today}/wrap/index.html`;
+  assert.ok(staleReport([call(0, 'Artifact', { file_path: now }), call(1, 'Edit', { file_path: 'a.md' })], r));
+});

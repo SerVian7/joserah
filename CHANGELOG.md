@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.8
+
+0.17.8 — the stale-report reminder skips a report filed under a past day's folder; a closed day's Wrap is not made stale by the next day's work. Owner, 2026-10-03.
+
 ## 0.17.7
 
 0.17.7 — a reusable Case research page. Owner, 2026-10-02.

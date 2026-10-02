@@ -81,7 +81,11 @@ function staleReport(calls, titleOf = htmlTitle, changed = []) {
     [title(c.input.file_path), c.input.title, c.input.description, c.input.label].join(' ')))
     .map((c) => c.input.file_path));
   let worst = null;
+  // a report filed under a past day's folder (…/YYYY-MM-DD/…) belongs to a closed day: later changes are not its
+  const d = new Date(), today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   for (const file of reports) {
+    const day = /(\d{4}-\d{2}-\d{2})[\\/]/.exec(String(file).replace(/\\/g, '/') + '/');
+    if (day && day[1] < today) continue;
     const at = Math.max(...pubs.filter((c) => c.input.file_path === file).map((c) => c.at));
     const files = new Set(); // each changed file or other page counts once
     for (const c of calls) {
