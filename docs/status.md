@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 1355970 · 2026-10-02 17:49 +0300 · 0.17.5: pages stand on their own, no recommendation for its own sake, agent-working row added in the same turn
+Last change: e075706 · 2026-10-02 21:10 +0300 · 0.17.7: Case research page (tools/case.js, templates/case), update-section rule
 
 - Released: 0.17.7 on main, 668 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
