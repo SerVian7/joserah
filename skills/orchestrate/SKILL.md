@@ -210,6 +210,8 @@ per other audience.
 
 A Case is decided on two linked pages: its Case research and its Decision flow.
 
+- A Case research is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/case.js"` (`init <dir> --title … --lang <en|tr>`, then edit `cases.json` and `render <dir>`); brand, logo and images come from the data and sit beside `index.html`.
+- A page's update section stays open and is a short summary, latest first, one line per item, with links.
 - One topic per pair. A different decision gets its own pair, and the topic pages link to it in one line.
 - The Decision flow carries only what is being decided. What is already on hand is at most one line
   there, linking to the Case research, which holds every on-hand item.

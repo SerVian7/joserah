@@ -3,6 +3,15 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.7
+
+0.17.7 — a reusable Case research page. Owner, 2026-10-02.
+
+- **`case.js`.** `init <dir> --title … --lang <en|tr>` and `render <dir>` build a Case research page from `cases.json`: one case card at a time, groups newest first (the first open on load, one open at a time, a closed group hides everything in it), status dot with its reason, specs in a closed expandable, source links. Brand-neutral: logo, accent colour, labels and language come from the data; images and logo are separate files beside the page.
+- **Update section rule.** A page's update section stays open and is a short summary, latest first, one line per item, with links.
+
+The orchestrate skill. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.6
 
 0.17.6 — inline by default, no keeper agents, lighter pages. Owner, 2026-10-02.
