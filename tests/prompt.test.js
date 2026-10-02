@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 24);
+  assert.strictEqual(cfg.promptVersion, 25);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 24);
+  assert.strictEqual(cfg.promptVersion, 25);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,7 +262,7 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 24);
+  assert.strictEqual(prompt.readPromptVersion(text), 25);
   assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
   assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
   assert.ok(text.includes("the verdict is \"none fits — we don't choose\" plus the one question that would change it"), '§5 (v24): no recommendation for its own sake (owner, 2026-10-02)');
@@ -276,7 +276,7 @@ test('prompt v19 carries the claim-line obligations, the role default, the vault
   assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link, and'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
   assert.ok(text.includes('shows it on sale now'), '§2 (v19): a product is proposed only when on sale now (owner, 2026-10-01)');
   assert.ok(text.includes('only recorded brand assets, a missing brand decision left out and listed'), '§2 (v19): brand elements never improvised (owner, 2026-10-01)');
-  assert.ok(text.includes('also goes into its base — template, keeper, updater — in the same turn, unasked'), '§5 (v19): a shape correction reaches the base (owner, 2026-10-01)');
+  assert.ok(text.includes('also goes into its base — template, updater — in the same turn, unasked'), '§5 (v19): a shape correction reaches the base (owner, 2026-10-01)');
   assert.ok(text.includes('A **Wrap**, the end-of-day report, only once the day has ended.'), '§5 (v19): Wrap only at day end (owner, 2026-10-01)');
   assert.ok(text.includes('**Do the right thing; do not ask for it.**'), '§2 (v15): act, then report (owner, 2026-09-30)');
   assert.ok(text.includes('A question the owner has to answer for routine work is a cost, not a courtesy.'), '§2 (v15)');

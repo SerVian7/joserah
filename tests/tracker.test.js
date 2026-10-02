@@ -43,14 +43,15 @@ test('init refuses an existing page unless --force', (t) => {
   assert.doesNotMatch(page(dir), /mine/);
 });
 
-test('init --logo embeds a data URI image; --lang tr is stored on the page', (t) => {
+test('init --logo writes the logo as a separate file; --lang tr is stored on the page', (t) => {
   const dir = tmpdir(t);
   const logo = path.join(dir, 'l.svg');
   fs.writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>');
   const out = path.join(dir, 'out');
   const r = init(out, ['--logo', logo, '--lang', 'tr']);
   assert.strictEqual(r.status, 0, r.stderr);
-  assert.match(page(out), /<img[^>]+src="data:image\/svg\+xml;base64,/);
+  assert.match(page(out), /<img[^>]+src="logo.svg"/);
+  assert.ok(fs.existsSync(path.join(out, 'logo.svg')));
   assert.match(page(out), /<html lang="tr"/);
 });
 
@@ -96,7 +97,7 @@ test('groups: agent working, owner, waiting, done, plans; headings; empty group 
   assert.doesNotMatch(page(dir), /class="hd">Plans/);
 });
 
-test('chronological inside a group, ties keep file order, removed row disappears', (t) => {
+test('chronological inside a group (done: newest first), ties keep file order, removed row disappears', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -107,7 +108,7 @@ test('chronological inside a group, ties keep file order, removed row disappears
   ]);
   render(dir);
   const order = (page(dir).match(/<b>(\w+)<\/b>/g) || []).map((s) => s.slice(3, -4));
-  assert.deepStrictEqual(order, ['tieA', 'tieB', 'gone', 'late']);
+  assert.deepStrictEqual(order, ['late', 'gone', 'tieA', 'tieB']);
   setRows(dir, [{ state: 'ok', title: 'late', time: '10:00' }]);
   const r = render(dir);
   assert.match(r.stdout, /rows: 1/);
@@ -202,8 +203,8 @@ test('two rows with the same title are refused (one job, one row)', (t) => {
   assert.strictEqual(render(dir).status, 0);
 });
 
-test('the one-row-per-job rule is written in the orchestrate skill and the keeper agent (0.17.3)', () => {
-  for (const f of [['skills', 'orchestrate', 'SKILL.md'], ['agents', 'tracker-keeper.md']]) {
+test('the one-row-per-job rule is written in the orchestrate skill (0.17.3)', () => {
+  for (const f of [['skills', 'orchestrate', 'SKILL.md']]) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, ...f), 'utf8').replace(/\s+/g, ' ');
     assert.match(text, /never a summary row that repeats other rows/, f.join('/'));
     assert.match(text, /separate jobs are never merged into one row/, f.join('/'));
@@ -211,9 +212,9 @@ test('the one-row-per-job rule is written in the orchestrate skill and the keepe
   }
 });
 
-test('0.17.4: explicit states, next step on open rows, new-day opening and evaluations on pages are written in the skill and the keeper', () => {
+test('0.17.4: explicit states, next step on open rows, new-day opening and evaluations on pages are written in the skill', () => {
   const read = (...f) => fs.readFileSync(path.join(PLUGIN_ROOT, ...f), 'utf8').replace(/\s+/g, ' ');
-  for (const f of [['skills', 'orchestrate', 'SKILL.md'], ['agents', 'tracker-keeper.md']]) {
+  for (const f of [['skills', 'orchestrate', 'SKILL.md']]) {
     const text = read(...f);
     for (const w of ['agent working (only while a background agent is on it', 'waiting (on someone outside, no AI working)', 'ends with the next step and where it happens']) {
       assert.ok(text.includes(w), `${f.join('/')}: ${w}`);
@@ -221,5 +222,18 @@ test('0.17.4: explicit states, next step on open rows, new-day opening and evalu
   }
   const skill = read('skills', 'orchestrate', 'SKILL.md');
   for (const w of ['first message of a new day', '.frozen', 'a missing price never blocks the evaluation', 'marked recommendation']) assert.ok(skill.includes(w), w);
-  assert.ok(read('agents', 'tracker-keeper.md').includes('open rows carried over, marked with the day'));
+  assert.ok(skill.includes('open rows carried over, marked with the day'));
+});
+
+test('row upserts by title and done rows sort newest first', (t) => {
+  const dir = tmpdir(t);
+  init(dir);
+  const row = (a, now) => runTool('tracker.js', ['row', dir, ...a], { env: { JOSERAH_NOW: now } });
+  assert.strictEqual(row(['--title', 'A', '--state', 'ok'], '2026-10-01T09:00:00').status, 0);
+  assert.strictEqual(row(['--title', 'B', '--state', 'ok'], '2026-10-01T10:00:00').status, 0);
+  assert.strictEqual(row(['--title', ' a ', '--state', 'ok', '--small', 'again'], '2026-10-01T11:00:00').status, 0);
+  const rows = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
+  assert.strictEqual(rows.length, 2);
+  const p = page(dir);
+  assert.ok(p.indexOf('<b>a</b>') < p.indexOf('<b>B</b>'));
 });

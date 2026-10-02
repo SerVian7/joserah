@@ -40,9 +40,11 @@ with the tier it was actually placed at — `Heavy:`, `Medium:`, `Simple:`, or t
 where the runtime writes one there itself. Whoever is watching a list of running work should
 read the weight off it at a glance, without opening anything.
 
-Independent pieces go to separate workers at once, in parallel, each with its own files and no
-shared file between them; only steps that depend on each other's output go to one worker in
-sequence. Rule 6 (the machine's capacity) still bounds how many run at once.
+**Default inline.** An agent is for heavy reading only — web research, multi-file code, sweeps —
+on the cheapest model that fits. Related jobs go to one agent, not several; an agent is resumed by
+message on the same topic instead of a fresh brief. Truly independent pieces may run in parallel,
+each with its own files; rule 6 (the machine's capacity) bounds how many. Near ~300k of context the
+main session leaves a handoff and a new chat continues.
 
 ### A manager for a wave
 
@@ -63,7 +65,6 @@ A wave with one folder or one stage gets no manager: the layer costs a full agen
 - **Checkpoint.** Every long job appends one line per finished unit to a progress file its brief
   names, and on start reads it and skips what is done. An interrupt stops every background
   agent; a stopped worker is restarted from its checkpoint and continues exactly where it stopped.
-- Every page the wave feeds has a keeper (see "Pages under work").
 - It keeps its running state in one file the brief names, and deletes that file at the end.
 - Asked for status, ask the manager for one status line — committed, remaining, minutes — and
   relay it. Never estimate it blind.
@@ -149,14 +150,17 @@ owner speaks:
 
 **The Daily Tracker is native.** It is on unless `.joserah/config.json` says `"dailyTracker": false`.
 When the first piece of work of the day starts, the assistant opens it without being asked and keeps
-it through a keeper (the `tracker-keeper` agent) — quietly: it never asks about it, never announces
+it inline — quietly: it never asks about it, never announces
 it, never interrupts for it. Every reply to the owner ends with its link, a short plain label with the
 URL embedded. At most three Trackers are open at once: the Daily Tracker and, only when needed, one
 per other audience.
 
 - Built with `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js"`: `init <dir> --title "<Owner> · Daily Tracker" --lang <en|tr>`
-  once, then `<dir>` after every change to `<dir>/rows.json`. `rows.json` is the full inventory of
-  rows (`state`, `title`, `small`, `url`, `label`, `time`); the page is rebuilt from it.
+  once, then `row <dir> --title … --state … [--small … --url … --label …]` upserts one row by title
+  and re-renders; the page is never re-read, only republished (logo files sit beside `index.html`
+  and go with it). `rows.json` is the full inventory (`state`, `title`, `small`, `url`, `label`, `time`).
+- Done rows sort newest first; repeated work on the same page or topic updates its one existing row (its time moves, so it rises) instead of adding a new one.
+- **Row text is a short, meaningful summary** — what happened and the result, not process words.
 - Groups in this order: running and waiting on the owner → done → plans. One line per row; every
   row carries a time, stamped once and kept; a done row shows when it finished.
 - The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
@@ -188,14 +192,10 @@ per other audience.
 
 ## Pages under work
 
-- **A keeper per page.** Every page that work feeds has a keeper agent while the work runs.
-  Workers send each verified finding to it the moment it lands, and the keeper adds it to the page
-  and to its job log at once — the page grows during the work, never only at the end.
-- **A job log under the title.** Directly under the page title, one expandable line, closed by
-  default: `running · N` while anything runs, `done · log` after (in the page's language). It lists
-  the page's jobs with state and time; a job is added when it starts, and the line stays as a log.
-  `<details><summary>running · 2</summary><ul><li>…</li></ul></details>` is enough.
-- Process status is never a content section of the page.
+- **Pages are kept inline** by the main session: change the page's data file, re-render with its
+  script, publish; the page is never re-read. Bulky assets (images) sit in separate files.
+- **Pages carry content only:** no intro or instruction text, no legend, no log of finished work.
+  Every group on a page folds, one open at a time; a closed group hides everything in it, the selected item's card included.
 - A link lives in the row or card it belongs to, never in a link block under the list. Links are
   plain text with the URL embedded behind a short label, never buttons and never bare URLs.
 - No model or tool names on any page: a recommendation box is headed "Recommendation", in the
@@ -203,7 +203,7 @@ per other audience.
 - **Brand: only recorded assets.** Only the brand's recorded files are used — the logo as it was
   delivered. No wordmark is typeset in a chosen font and no logo variant is made up. A brand decision
   that does not exist yet is left out of the page and listed for the owner as an open decision.
-- A correction to a page's shape is carried into its base — the template, the keeper, the updater —
+- A correction to a page's shape is carried into its base — the template, the updater —
   in the same turn, unasked. A change the owner marks as for this one page stays local.
 
 ## Decision pages
@@ -279,5 +279,5 @@ machine and accounts to whoever maintains the workspace), never to whoever is ne
 
 ## When not to run this at all
 
-A single small edit whose shape is clear gets done directly.
+Anything that is not heavy reading is done inline.
 Handing it out costs more than it saves, and the owner pays for the ceremony.

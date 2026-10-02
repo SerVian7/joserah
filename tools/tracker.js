@@ -7,8 +7,15 @@
  *       Writes <dir>/index.html from templates/tracker/index.html (one small
  *       header line "<title> · <date>", date defaults to today) and
  *       <dir>/rows.json as [] if absent. Refuses, exit 1, if index.html exists
- *       unless --force. --logo embeds the file as a data: URI image; without
- *       it the page has no logo and no wordmark.
+ *       unless --force. --logo copies the file next to index.html as logo.png|svg
+ *       and references it by relative path (the page stays small; publish the
+ *       file with it); without it the page has no logo and no wordmark.
+ *
+ *   node tools/tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan
+ *                         [--small "<text>"] [--url <http(s)>] [--label "<text>"]
+ *       Upserts ONE row by title (case and outer spaces ignored) into rows.json
+ *       and re-renders; nothing has to be read first. A changed row loses its
+ *       `time` and is re-stamped now; small/url/label not given are cleared.
  *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
@@ -20,7 +27,7 @@
  *       with the current local HH:MM and that stamp is written back to
  *       rows.json; a row with `time` keeps it. Groups, in this order: agent
  *       working (run), owner (you), waiting (wait), done (ok), plans (plan);
- *       chronological inside a group, ties keep file order, an empty group gets no heading. Only http(s)
+ *       chronological inside a group (done: newest first), ties keep file order, an empty group gets no heading. Only http(s)
  *       urls become links. Only the <ol> and the page's "updated" stamp
  *       (data-t) change; every other byte stays. Prints `rows: N`.
  *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
@@ -50,7 +57,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -69,11 +76,13 @@ function init(dir, opt) {
   let logo = '';
   if (opt.logo) {
     const ext = path.extname(opt.logo).toLowerCase();
-    const mime = { '.png': 'image/png', '.svg': 'image/svg+xml' }[ext];
-    if (!mime) die('--logo must be a .png or .svg file');
+    if (!['.png', '.svg'].includes(ext)) die('--logo must be a .png or .svg file');
     let buf;
     try { buf = fs.readFileSync(opt.logo); } catch (e) { die(`cannot read logo ${opt.logo}`); }
-    logo = `<img alt="" src="data:${mime};base64,${buf.toString('base64')}">`;
+    const name = `logo${ext}`;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, name), buf);
+    logo = `<img alt="" src="${name}">`;
   }
   const tpl = fs.readFileSync(path.join(__dirname, '..', 'templates', 'tracker', 'index.html'), 'utf8');
   const line = `${opt.title} · ${date}`;
@@ -113,7 +122,7 @@ function render(dir) {
     seen.add(k);
   });
   const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
-    .sort((a, b) => a.g - b.g || String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
+    .sort((a, b) => a.g - b.g || (a.g === GROUP.ok ? -1 : 1) * String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
   const out = [];
   sorted.forEach(({ r, g }, k) => {
     if (k === 0 || g !== sorted[k - 1].g) out.push(`<li class="hd">${L.groups[g]}</li>`);
@@ -130,7 +139,27 @@ function render(dir) {
   console.log(`rows: ${rows.length}`);
 }
 
+function upsert(dir, opt) {
+  if (!dir || !opt.title || !opt.state) die('usage: tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan [--small t] [--url u] [--label t]');
+  if (!Object.prototype.hasOwnProperty.call(GROUP, opt.state)) die(`unknown state "${opt.state}"`);
+  const rowsPath = path.join(dir, 'rows.json');
+  if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found (run init first)`);
+  let rows;
+  try { rows = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch (e) { die(`rows.json is not valid JSON: ${e.message}`); }
+  if (!Array.isArray(rows)) die('rows.json must be an array');
+  const key = (t) => String(t ?? '').trim().toLowerCase();
+  const row = { state: opt.state, title: opt.title };
+  if (opt.small) row.small = opt.small;
+  if (opt.url) row.url = opt.url;
+  if (opt.label) row.label = opt.label;
+  const i = rows.findIndex((r) => r && key(r.title) === key(opt.title));
+  if (i >= 0) rows[i] = row; else rows.push(row);
+  fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');
+  render(dir);
+}
+
 const { pos, opt } = parseArgs(process.argv.slice(2));
 if (pos[0] === 'init') init(pos[1], opt);
+else if (pos[0] === 'row') upsert(pos[1], opt);
 else if (pos.length === 1) render(pos[0]);
-else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js <dir>');
+else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js <dir>');

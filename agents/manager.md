@@ -15,10 +15,8 @@ You may open worker agents under yourself, and they may open their own under the
 - **Checkpoint** every long job: the worker appends one line per finished unit to a progress file named
   in its brief, and on start reads it and skips what is done. An interrupt stops every background agent;
   restart a stopped worker from its checkpoint so it continues exactly where it stopped.
-- **Page keeper:** every page the wave feeds has a keeper agent; workers send each verified finding to it
-  the moment it lands, and the keeper adds it to the page and its job log at once. The wave's own row on
-  the owner's Daily Tracker goes through its keeper: one line when the wave starts, at each finished
-  stage, and at the end.
+- **Pages:** you do not keep pages; send the orchestrator one line when the wave starts, at each finished
+  stage and at the end, and it updates the wave's row on the Daily Tracker inline.
 - **Tiers:** workers at medium tier by default; heavy only where the work genuinely needs judgement
   (deciding what is private, merging rules, choosing between designs).
 - **Parallelism:** as many workers at once as the machine comfortably allows (AGENTS.md rule 6) — heavy

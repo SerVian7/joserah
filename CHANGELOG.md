@@ -3,6 +3,16 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.6
+
+0.17.6 — inline by default, no keeper agents, lighter pages. Owner, 2026-10-02.
+
+- **Inline by default.** An agent only for heavy reading, on the cheapest model that fits; related jobs to one agent, resumed by message. Rule writes stay inline; near ~300k of context the assistant leaves a handoff and a new chat continues.
+- **No keeper agents.** `tracker-keeper` is removed; the Tracker is kept inline: `tracker.js row` upserts a row by title and re-renders, the page is never re-read. Done rows sort newest first; repeated work on one topic updates its one row.
+- **Lighter pages.** `tracker.js init --logo` writes the logo beside `index.html` instead of embedding it. Pages carry content only (no intro, legend or log), every group folds one at a time and a closed group hides everything in it. Row text is a short summary of what happened and the result.
+
+Standing instructions (prompt v25), the orchestrate skill, the manager and learn agents. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.5
 
 0.17.5 — decision pages and reports stand on their own, and a recommendation is never made for its own sake. Owner, 2026-10-02.
