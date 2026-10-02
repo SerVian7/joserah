@@ -1139,3 +1139,47 @@ test('sweep: a week without one gives the line, in the owner\'s language', (t) =
   setCfg(dir, (c) => { c.dialogueLanguage = 'tr'; c.lastSweep = new Date(Date.now() - 9 * 864e5).toISOString(); });
   assert.match(brief(dir), /\[sweep\] Süpürme vakti: 9 gün, 0 günlük not birikti — istersen başlatayım\./);
 });
+
+// ---- 0.17.4: a new day opens a new Daily Tracker -----------------------------
+// Owner, 2026-10-02: the first message of a new day opens that day's Daily
+// Tracker unasked and freezes yesterday's. The briefing flags it cheaply: an
+// earlier day's Daily Tracker with an open row and no `.frozen` marker.
+function dailyTrackerOn(dir, day, rows, extra = []) {
+  const d = path.join(dir, '.joserah', 'desk', 'artifacts', day, 'daily-tracker');
+  fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, 'index.html'), '<html><body>Owner · Daily Tracker · x</body></html>');
+  fs.writeFileSync(path.join(d, 'rows.json'), JSON.stringify(rows));
+  for (const f of extra) fs.writeFileSync(path.join(d, f), '');
+  return d;
+}
+const yesterday = () => localIso(Date.now() - 864e5);
+
+test('new day: an earlier Daily Tracker with an open row gives one line, once a day', (t) => {
+  const dir = hookWs(t);
+  dailyTrackerOn(dir, yesterday(), [{ state: 'ok', title: 'a' }, { state: 'run', title: 'b' }]);
+  assert.match(brief(dir), /\[new day\] .*Daily Tracker.*freeze/s);
+  assert.doesNotMatch(brief(dir), /\[new day\]/, 'the second session of the day is not told again');
+});
+
+test('new day: no line when the earlier tracker is frozen, fully done, off, or today\'s', (t) => {
+  let dir = hookWs(t);
+  dailyTrackerOn(dir, yesterday(), [{ state: 'run', title: 'b' }], ['.frozen']);
+  assert.doesNotMatch(brief(dir), /\[new day\]/, 'frozen');
+  dir = hookWs(t);
+  dailyTrackerOn(dir, yesterday(), [{ state: 'ok', title: 'a' }]);
+  assert.doesNotMatch(brief(dir), /\[new day\]/, 'nothing open');
+  dir = hookWs(t);
+  dailyTrackerOn(dir, yesterday(), [{ state: 'run', title: 'b' }]);
+  setCfg(dir, (c) => { c.dailyTracker = false; });
+  assert.doesNotMatch(brief(dir), /\[new day\]/, 'dailyTracker false');
+  dir = hookWs(t);
+  dailyTrackerOn(dir, localIso(Date.now()), [{ state: 'run', title: 'b' }]);
+  assert.doesNotMatch(brief(dir), /\[new day\]/, 'today is not a new day');
+});
+
+test('new day: the line is in the owner\'s language', (t) => {
+  const dir = hookWs(t);
+  setCfg(dir, (c) => { c.dialogueLanguage = 'Turkish'; });
+  dailyTrackerOn(dir, yesterday(), [{ state: 'you', title: 'b' }]);
+  assert.match(brief(dir), /\[new day\] Yeni gün/);
+});

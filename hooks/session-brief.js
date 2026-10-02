@@ -416,6 +416,36 @@ function sweepLine(root, cfg, now) {
     : `[sweep] Time for a sweep: ${plural(s.days, 'day')}, ${plural(s.journalDays, 'day')} of notes piled up — I can start it if you like.`;
 }
 
+// 0.17.4: a new day opens a new Daily Tracker. Cheap flag: an earlier day's
+// Daily Tracker (a folder under desk/artifacts/<day>/ whose rows.json has a row
+// that is not done and whose index.html says "Daily Tracker") with no `.frozen`
+// marker; once a day. Freezing it = writing the marker.
+function newDayLine(root, cfg, now) {
+  if (cfg.dailyTracker === false) return null;
+  const today = isoDate(now);
+  const base = path.join(root, '.joserah', 'desk', 'artifacts');
+  let days;
+  try { days = fs.readdirSync(base).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < today).sort().slice(-2); } catch (e) { return null; }
+  for (const day of days.reverse()) {
+    let subs;
+    try { subs = fs.readdirSync(path.join(base, day), { withFileTypes: true }).filter((e) => e.isDirectory()); } catch (e) { continue; }
+    for (const e of subs) {
+      const d = path.join(base, day, e.name);
+      if (fs.existsSync(path.join(d, '.frozen'))) continue;
+      try {
+        if (!/Daily Tracker/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) continue;
+        const rows = JSON.parse(fs.readFileSync(path.join(d, 'rows.json'), 'utf8'));
+        if (!Array.isArray(rows) || !rows.some((r) => r && r.state !== 'ok')) continue;
+      } catch (err) { continue; }
+      if (!firstTodayFor('newday', today)) return null;
+      return isTurkish(cfg.dialogueLanguage)
+        ? `[new day] Yeni gün: ${day} tarihli Daily Tracker hâlâ açık — bugünün Daily Tracker'ını sormadan aç (açık satırlar ${day} işaretiyle taşınır), dünkü sayfayı dondur (klasörüne .frozen koy) ve dünün Wrap'ini şimdi yap.`
+        : `[new day] New day: the Daily Tracker of ${day} is still open — open today's Daily Tracker unasked (open rows carried over, marked ${day}), freeze that page (put a .frozen file in its folder) and make that day's Wrap now.`;
+    }
+  }
+  return null;
+}
+
 const now = new Date();
 const today = isoDate(now);
 const cfg = readConfig(ROOT) || {};
@@ -423,6 +453,7 @@ const cfg = readConfig(ROOT) || {};
 // hook itself creates never counts as "changed since last backup".
 const staleness = backupStalenessLine(ROOT, cfg, now);
 const sweep = sweepLine(ROOT, cfg, now);
+const newDay = newDayLine(ROOT, cfg, now);
 const dailyPath = ensureDailyStub(today);
 
 // This is layer 6 — what happens to be true of this moment and of no other. It
@@ -448,6 +479,7 @@ if (dailyText.trim() && !isStub(dailyText, today)) {
 // the lines that exist to be acted on; the learnings are always on file.
 if (staleness) parts.push('\n' + staleness);
 if (sweep) parts.push('\n' + sweep);
+if (newDay) parts.push('\n' + newDay);
 
 for (const line of updateLines(cfg, now)) parts.push('\n' + line);
 

@@ -13,12 +13,14 @@
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
  *       {match?, state, title, small?, url?, label?, time?}, state one of
- *       run | you | wait | plan | ok. The <ol> is rebuilt from it, so a row
+ *       run (a background agent is working on it right now) | you (the owner's
+ *       decision or action) | wait (waiting on someone outside, no AI working) |
+ *       ok (done) | plan. The <ol> is rebuilt from it, so a row
  *       removed from the file disappears. A row without `time` is stamped once
  *       with the current local HH:MM and that stamp is written back to
- *       rows.json; a row with `time` keeps it. Groups: running + yours (run,
- *       you), done (ok), plans (wait, plan); chronological inside a group,
- *       ties keep file order, an empty group gets no heading. Only http(s)
+ *       rows.json; a row with `time` keeps it. Groups, in this order: agent
+ *       working (run), owner (you), waiting (wait), done (ok), plans (plan);
+ *       chronological inside a group, ties keep file order, an empty group gets no heading. Only http(s)
  *       urls become links. Only the <ol> and the page's "updated" stamp
  *       (data-t) change; every other byte stays. Prints `rows: N`.
  *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
@@ -32,10 +34,10 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { run: 'Running', you: 'Yours', wait: 'Queued', plan: 'Plan', ok: 'Done', groups: ['Running', 'Done', 'Plans'], link: 'page', upd: 'updated' },
-  tr: { run: 'Sürüyor', you: 'Sizde', wait: 'Sırada', plan: 'Plan', ok: 'Bitti', groups: ['Sürenler', 'Bitenler', 'Planlar'], link: 'sayfa', upd: 'güncelleme' },
+  en: { run: 'Agent working', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', upd: 'updated' },
+  tr: { run: 'Ajan çalışıyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', upd: 'güncelleme' },
 };
-const GROUP = { run: 0, you: 0, ok: 1, wait: 2, plan: 2 };
+const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 
 const die = (msg) => { console.error(`tracker: ${msg}`); process.exit(1); };
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());

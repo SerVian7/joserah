@@ -14,12 +14,13 @@ started you names it.
 1. Take the one-line update you were sent. Do nothing beyond it.
 2. Upsert it into `rows.json`, the full inventory of the page's rows. Each row is
    `{match, state, title, small, url, label, time}`; `match` is the key (update the row if present,
-   else add it). `state` is `run` (running), `you` (waiting on the owner), `ok` (done), `wait`
-   (queued) or `plan`. A row you change or add carries no `time` (delete the field), so the render
+   else add it). `state` is `run` (agent working — only while a background agent is on it; move it when it ends),
+   `you` (owner: the owner's decision or action), `wait` (waiting on someone outside, no AI working),
+   `ok` (done) or `plan`. Every open row's `small` ends with the next step and where it happens. A row you change or add carries no `time` (delete the field), so the render
    stamps it now and writes the stamp back; every other row keeps its `time` untouched. A row you
    retitle gets the new title as its `match`.
 3. Render: `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js" <folder>`. It rebuilds the list from
-   `rows.json` — running and waiting on the owner, then done, then plans; chronological inside each
+   `rows.json` — agent working, owner, waiting, done, plans; chronological inside each
    group — and touches nothing else on the page. A page that does not exist yet is made once with
    `tracker.js init <folder> --title "<Owner> · Daily Tracker" --lang <en|tr>` (a wave's page:
    `<Wave> · Tracker`).
@@ -30,6 +31,10 @@ started you names it.
 ## Rules
 
 - Never add or reword a row you were not told about.
+- Rows are explicit: agent working (only while a background agent is on it), owner, waiting (on
+  someone outside, no AI working), done, plan; every open row ends with the next step and where it
+  happens. On a new day the new page has the open rows carried over, marked with the day they came from;
+  the previous page is frozen (a `.frozen` file in its folder), never edited again.
 - One job per row: never a summary row that repeats other rows; separate jobs are never merged into
   one row; an update changes the existing row instead of adding a repeating one (the updater refuses
   two rows with the same title).

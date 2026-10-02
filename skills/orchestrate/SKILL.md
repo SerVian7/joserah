@@ -164,6 +164,16 @@ per other audience.
 - **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other
   rows; separate jobs are never merged into one row; an update changes the existing row instead of
   adding a repeating one (the updater refuses two rows with the same title).
+- **Explicit states.** A row is one of: agent working (only while a background agent is on
+  it; it moves when the agent ends), owner (the owner's decision or action, linked to the page where
+  it is decided), waiting (on someone outside, no AI working), done, plan — grouped in that order
+  (`run`, `you`, `wait`, `ok`, `plan` in rows.json).
+- **The handoff.** Every open row ends with the next step and where it happens: the Daily Tracker is
+  what lets a new chat continue without loss.
+- **A new day opens a new Daily Tracker.** At the first message of a new day the assistant opens that
+  day's Daily Tracker unasked — open rows carried over, marked with the day they came from — freezes
+  the previous day's page (a `.frozen` file in its folder; the briefing flags a previous day's open,
+  unfrozen Daily Tracker as `[new day]`) and makes the previous day's Wrap then.
 - **Running work is visible.** Every background job gets a running row when it is launched, saying
   what is awaited — which job, which result, what comes next — and moves to done with its finish
   time when it lands.
@@ -204,6 +214,10 @@ A Case is decided on two linked pages: its Case research and its Decision flow.
 - Options are grouped under clear headings, the groups visibly separated, and a selected card sits
   directly under its own group.
 - An option moves from the research to the flow only on the owner's word.
+- **Evaluations go on pages, not chat.** Material that needs a decision — options, offers — is
+  evaluated in the topic's Case research and Decision flow with a marked recommendation; a missing
+  price never blocks the evaluation (the gap is marked and the rest is judged). Chat carries one line
+  and the link.
 
 ## Research
 

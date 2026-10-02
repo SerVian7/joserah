@@ -76,7 +76,7 @@ test('a row with time keeps it untouched', (t) => {
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].time, '03:30');
 });
 
-test('groups: running+owner, done, plans; headings; empty group has none', (t) => {
+test('groups: agent working, owner, waiting, done, plans; headings; empty group has none', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -89,7 +89,7 @@ test('groups: running+owner, done, plans; headings; empty group has none', (t) =
   render(dir);
   const items = lis(dir).map((l) => l.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
   assert.deepStrictEqual(items.map((s) => s.split(' ')[0]),
-    ['Running', 'Yours', 'Running', 'Done', 'Done', 'Plans', 'Plan', 'Queued']);
+    ['Agent', 'Agent', 'Owner', 'Owner', 'Waiting', 'Waiting', 'Done', 'Done', 'Plans', 'Plan']);
   setRows(dir, [{ state: 'ok', title: 'D', time: '08:00' }]);
   render(dir);
   assert.strictEqual(lis(dir).filter((l) => l.includes('class="hd"')).length, 1);
@@ -168,7 +168,7 @@ test('tr labels', (t) => {
   ]);
   render(dir);
   const p = page(dir);
-  for (const w of ['Sürenler', 'Bitenler', 'Planlar', 'Sürüyor', 'Bitti', 'Sırada', 'Sizde', 'Plan', '>sayfa<']) assert.ok(p.includes(w), w);
+  for (const w of ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar', 'Bitti', 'Plan', '>sayfa<']) assert.ok(p.includes(w), w);
 });
 
 test('errors: missing dir, bad JSON, unknown state', (t) => {
@@ -209,4 +209,17 @@ test('the one-row-per-job rule is written in the orchestrate skill and the keepe
     assert.match(text, /separate jobs are never merged into one row/, f.join('/'));
     assert.match(text, /changes the existing row instead of adding a repeating one/, f.join('/'));
   }
+});
+
+test('0.17.4: explicit states, next step on open rows, new-day opening and evaluations on pages are written in the skill and the keeper', () => {
+  const read = (...f) => fs.readFileSync(path.join(PLUGIN_ROOT, ...f), 'utf8').replace(/\s+/g, ' ');
+  for (const f of [['skills', 'orchestrate', 'SKILL.md'], ['agents', 'tracker-keeper.md']]) {
+    const text = read(...f);
+    for (const w of ['agent working (only while a background agent is on it', 'waiting (on someone outside, no AI working)', 'ends with the next step and where it happens']) {
+      assert.ok(text.includes(w), `${f.join('/')}: ${w}`);
+    }
+  }
+  const skill = read('skills', 'orchestrate', 'SKILL.md');
+  for (const w of ['first message of a new day', '.frozen', 'a missing price never blocks the evaluation', 'marked recommendation']) assert.ok(skill.includes(w), w);
+  assert.ok(read('agents', 'tracker-keeper.md').includes('open rows carried over, marked with the day'));
 });

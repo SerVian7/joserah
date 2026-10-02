@@ -3,6 +3,16 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.4
+
+0.17.4 — the Daily Tracker is a handoff, and a new day opens a new one. Owner, 2026-10-02: "Sürüyor ne demek? AI'lar mı çalışıyor? … Daily Tracker'da ne yapmaya çalıştığımı algıla … yeni chat'e geçeceğim, bu tarz şeyler sayesinde kayıp yaşamayız."
+
+- **Explicit states.** A row is agent working (only while a background agent is actually on it; it moves when the agent ends), owner (the owner's decision or action, linked to the page where it is decided), waiting (on someone outside, no AI working), done, or plan. `tools/tracker.js` groups the page in that order (`run`, `you`, `wait`, `ok`, `plan`; the state names in rows.json are unchanged, the labels and the groups are new). Every open row ends with the next step and where it happens, so a new chat can continue without loss.
+- **A new day opens a new Daily Tracker unasked.** At the first message of a new day the assistant opens that day's Daily Tracker (open rows carried over, marked with the day they came from), freezes the previous day's page (a `.frozen` file in its folder) and makes the previous day's Wrap then. The session briefing carries a once-a-day `[new day]` line while a previous day's Daily Tracker is still open and not frozen (off with `"dailyTracker": false`).
+- **Evaluations go on pages, not chat.** Material that needs a decision (options, offers) is evaluated in the topic's Case research and Decision flow with a marked recommendation; a missing price never blocks the evaluation; chat carries one line and the link.
+
+Said in the standing instructions (prompt v23), the orchestrate skill and the `tracker-keeper` agent. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.3
 
 0.17.3 — one job, one row on a Tracker. A Tracker or Daily Tracker never carries a summary row that repeats other rows; separate jobs are never merged into one row; an update changes the existing row instead of adding a repeating one. Said in the standing instructions, the orchestrate skill and the `tracker-keeper` agent; `tools/tracker.js` now refuses, with exit 1, two rows that share a title (case and outer spaces ignored). Prompt v22. Run `/joserah:update`, then `/reload-plugins`.
