@@ -3,6 +3,16 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.5
+
+0.17.5 — decision pages and reports stand on their own, and a recommendation is never made for its own sake. Owner, 2026-10-02.
+
+- **Pages stand on their own.** The assistant assumes the owner reads neither chat nor agent output: each page or report says in plain words where its material came from and who is who, leaves no name or code unexplained, is short, and keeps details only in expandables that are closed by default.
+- **No recommendation for its own sake.** When no option meets the need, the verdict is "none fits — we don't choose" plus the one question that would change it; a recommendation never praises specs beyond the need.
+- **The agent-working row is added at once.** The assistant adds the agent-working row to the Daily Tracker in the same turn it starts an agent — never later — and moves it when the agent ends.
+
+Said in the standing instructions (prompt v24), the orchestrate skill and the `tracker-keeper` agent. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.4
 
 0.17.4 — the Daily Tracker is a handoff, and a new day opens a new one. Owner, 2026-10-02: "Sürüyor ne demek? AI'lar mı çalışıyor? … Daily Tracker'da ne yapmaya çalıştığımı algıla … yeni chat'e geçeceğim, bu tarz şeyler sayesinde kayıp yaşamayız."

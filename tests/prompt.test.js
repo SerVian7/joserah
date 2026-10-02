@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 23);
+  assert.strictEqual(cfg.promptVersion, 24);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 23);
+  assert.strictEqual(cfg.promptVersion, 24);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,10 +262,13 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 23);
+  assert.strictEqual(prompt.readPromptVersion(text), 24);
+  assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
+  assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
+  assert.ok(text.includes("the verdict is \"none fits — we don't choose\" plus the one question that would change it"), '§5 (v24): no recommendation for its own sake (owner, 2026-10-02)');
   assert.ok(text.includes("The first message of a new day opens that day's Daily Tracker unasked"), '§5 (v23): a new day opens a new Daily Tracker (owner, 2026-10-02)');
   assert.ok(text.includes("freezes the previous day's page and makes that day's Wrap then"), '§5 (v23): the previous day is frozen and wrapped');
-  assert.ok(text.includes('agent working (only while a background agent is on it), owner, waiting (on someone outside, no AI working), done, plan'), '§5 (v23): explicit Daily Tracker states (owner, 2026-10-02)');
+  assert.ok(text.includes('only while a background agent is on it, and moved when it ends), owner, waiting (on someone outside, no AI working), done, plan'), '§5 (v23): explicit Daily Tracker states (owner, 2026-10-02)');
   assert.ok(text.includes('the Daily Tracker is the handoff that lets a new chat continue without loss'), '§5 (v23): open rows end with the next step');
   assert.ok(text.includes('a missing price never blocks the evaluation'), '§5 (v23): evaluations go on pages, not chat (owner, 2026-10-02)');
   assert.ok(text.includes('never a summary row that repeats other rows, never two jobs merged into one row, and an update changes the existing row instead of adding a repeating one'), '§5 (v22): one job per Tracker row (owner, 2026-10-01)');

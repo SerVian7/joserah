@@ -168,6 +168,8 @@ per other audience.
   it; it moves when the agent ends), owner (the owner's decision or action, linked to the page where
   it is decided), waiting (on someone outside, no AI working), done, plan — grouped in that order
   (`run`, `you`, `wait`, `ok`, `plan` in rows.json).
+- **The agent-working row is added in the same turn the agent is started** — never later — and moved
+  when the agent ends.
 - **The handoff.** Every open row ends with the next step and where it happens: the Daily Tracker is
   what lets a new chat continue without loss.
 - **A new day opens a new Daily Tracker.** At the first message of a new day the assistant opens that
@@ -218,6 +220,13 @@ A Case is decided on two linked pages: its Case research and its Decision flow.
   evaluated in the topic's Case research and Decision flow with a marked recommendation; a missing
   price never blocks the evaluation (the gap is marked and the rest is judged). Chat carries one line
   and the link.
+- **A page stands on its own.** Assume the owner reads neither the chat nor the agent's output. Every
+  page and report says in plain words where its material came from (which sources, which offers, who
+  was asked) and who is who; no name or code is left unexplained. It is short, and details go only in
+  expandables that are closed by default.
+- **No recommendation for its own sake.** When no option meets the need, the verdict is "none fits —
+  we don't choose", with the one question that would change it. A recommendation never praises specs
+  beyond the need.
 
 ## Research
 

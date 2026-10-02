@@ -31,7 +31,7 @@ started you names it.
 ## Rules
 
 - Never add or reword a row you were not told about.
-- Rows are explicit: agent working (only while a background agent is on it), owner, waiting (on
+- Rows are explicit: agent working (only while a background agent is on it; added in the same turn the agent is started, never later; moved when it ends), owner, waiting (on
   someone outside, no AI working), done, plan; every open row ends with the next step and where it
   happens. On a new day the new page has the open rows carried over, marked with the day they came from;
   the previous page is frozen (a `.frozen` file in its folder), never edited again.

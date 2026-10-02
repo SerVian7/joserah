@@ -5,9 +5,9 @@ type: status
 
 # Joserah — status
 
-Last change: b10efe1 · 2026-10-02 17:33 +0300 · 0.17.4: Daily Tracker as handoff — explicit row states, a new day opens a new one, evaluations on pages
+Last change: b185530 · 2026-10-02 17:33 +0300 · docs: status — 0.17.4
 
-- Released: 0.17.4 on main, 668 tests (`node --test tests/*.test.js`), prompt v23.
+- Released: 0.17.5 on main, 668 tests (`node --test tests/*.test.js`), prompt v24.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
 - Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
@@ -17,6 +17,8 @@ Last change: b10efe1 · 2026-10-02 17:33 +0300 · 0.17.4: Daily Tracker as hando
 - 0.17.1 (prompt v20): whatever is left for the owner is an owner-waiting row on the Daily Tracker at once.
 - 0.17.2 (prompt v21): optional `sharedMemoryAutoPush` config key; off by default.
 - 0.17.3 (prompt v22): one job per Tracker row; `tools/tracker.js` refuses duplicate titles.
+- 0.17.4 (prompt v23): Daily Tracker as handoff; explicit row states; a new day opens a new one.
+- 0.17.5 (prompt v24): decision pages stand on their own; no recommendation for its own sake; agent-working row added in the same turn.
 
 ## Decisions
 
