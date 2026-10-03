@@ -77,7 +77,7 @@ test('a row with time keeps it untouched', (t) => {
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].time, '03:30');
 });
 
-test('groups: agent working, owner, waiting, done, plans; headings; empty group has none', (t) => {
+test('groups: agent working, owner, done in the list; waiting and plans as closed groups at the top; empty group has none', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -90,11 +90,21 @@ test('groups: agent working, owner, waiting, done, plans; headings; empty group 
   render(dir);
   const items = lis(dir).map((l) => l.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
   assert.deepStrictEqual(items.map((s) => s.split(' ')[0]),
-    ['Agent', 'Agent', 'Owner', 'Owner', 'Waiting', 'Waiting', 'Done', 'Done', 'Plans', 'Plan']);
-  setRows(dir, [{ state: 'ok', title: 'D', time: '08:00' }]);
+    ['Agent', 'Agent', 'Owner', 'Owner', 'Done', 'Done']);
+  const html = page(dir);
+  const folds = html.match(/<section class="folds">([\s\S]*?)<\/section>/);
+  assert.ok(folds, 'folds section present');
+  assert.ok(html.indexOf('<section class="folds">') < html.indexOf('<ol>'), 'folds sit above the list');
+  assert.deepStrictEqual((folds[1].match(/<summary>[^<]*/g) || []).map((s) => s.replace('<summary>', '').trim()), ['Waiting 1', 'Plans 1']);
+  assert.doesNotMatch(folds[1], /<details[^>]*\bopen/);
+  assert.match(folds[1], /<b>W<\/b>[\s\S]*<b>P<\/b>/);
+  render(dir);
+  assert.strictEqual((page(dir).match(/<section class="folds">/g) || []).length, 1);
+  setRows(dir, [{ state: 'ok', title: 'D', time: '08:00' }, { state: 'plan', title: 'P', time: '08:00' }]);
   render(dir);
   assert.strictEqual(lis(dir).filter((l) => l.includes('class="hd"')).length, 1);
-  assert.doesNotMatch(page(dir), /class="hd">Plans/);
+  assert.doesNotMatch(page(dir), /<summary>Waiting/);
+  assert.match(page(dir), /<summary>Plans 1/);
 });
 
 test('chronological inside a group (done: newest first), ties keep file order, removed row disappears', (t) => {

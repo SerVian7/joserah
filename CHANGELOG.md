@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.9
+
+0.17.9 — Daily Tracker: waiting and plans sit at the top as closed groups, the list carries agent working, owner and done; pages are never put in front of the owner — the link is given, publishes are batched to one per reply. Owner, 2026-10-03.
+
 ## 0.17.8
 
 0.17.8 — the stale-report reminder skips a report filed under a past day's folder; a closed day's Wrap is not made stale by the next day's work. Owner, 2026-10-03.

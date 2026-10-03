@@ -161,8 +161,9 @@ per other audience.
   and go with it). `rows.json` is the full inventory (`state`, `title`, `small`, `url`, `label`, `time`).
 - Done rows sort newest first; repeated work on the same page or topic updates its one existing row (its time moves, so it rises) instead of adding a new one.
 - **Row text is a short, meaningful summary** — what happened and the result, not process words.
-- Groups in this order: running and waiting on the owner → done → plans. One line per row; every
-  row carries a time, stamped once and kept; a done row shows when it finished.
+- Waiting and plans sit at the top of the page as two closed groups; the list under them carries
+  agent working → owner → done (owner, 2026-10-03). One line per row; every row carries a time,
+  stamped once and kept; a done row shows when it finished.
 - The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
   no footer, no start or elapsed time. The page itself is fixed; updates touch rows only.
 - **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other
@@ -192,6 +193,9 @@ per other audience.
 
 ## Pages under work
 
+- **A page is never put in front of the owner.** No opening it on their screen, no extra publishes:
+  the link is given and they click it if they want. Row changes are batched into one publish per
+  reply at most (owner, 2026-10-03).
 - **Pages are kept inline** by the main session: change the page's data file, re-render with its
   script, publish; the page is never re-read. Bulky assets (images) sit in separate files.
 - **Pages carry content only:** no intro or instruction text, no legend, no log of finished work.

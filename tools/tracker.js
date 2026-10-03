@@ -26,7 +26,7 @@
  *       removed from the file disappears. A row without `time` is stamped once
  *       with the current local HH:MM and that stamp is written back to
  *       rows.json; a row with `time` keeps it. Groups, in this order: agent
- *       working (run), owner (you), waiting (wait), done (ok), plans (plan);
+ *       working (run), owner (you), done (ok) in the list; waiting (wait) and plans (plan) as closed groups above it;
  *       chronological inside a group (done: newest first), ties keep file order, an empty group gets no heading. Only http(s)
  *       urls become links. Only the <ol> and the page's "updated" stamp
  *       (data-t) change; every other byte stays. Prints `rows: N`.
@@ -123,17 +123,29 @@ function render(dir) {
   });
   const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
     .sort((a, b) => a.g - b.g || (a.g === GROUP.ok ? -1 : 1) * String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
-  const out = [];
-  sorted.forEach(({ r, g }, k) => {
-    if (k === 0 || g !== sorted[k - 1].g) out.push(`<li class="hd">${L.groups[g]}</li>`);
+  const li = (r) => {
     const link = /^https?:\/\//i.test(String(r.url || ''))
       ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const small = [r.small ? esc(r.small) : '', link].filter(Boolean).join(' · ');
-    out.push(`<li><span class="s ${r.state}">${L[r.state]}</span><div><b>${esc(r.title)}</b>${small ? `<small>${small}</small>` : ''}</div><time>${esc(r.time)}</time></li>`);
+    return `<li><span class="s ${r.state}">${L[r.state]}</span><div><b>${esc(r.title)}</b>${small ? `<small>${small}</small>` : ''}</div><time>${esc(r.time)}</time></li>`;
+  };
+  // waiting and plans sit above the list as closed groups; the list carries agent working, owner, done
+  const FOLDED = [GROUP.wait, GROUP.plan];
+  const listed = sorted.filter(({ g }) => !FOLDED.includes(g));
+  const out = [];
+  listed.forEach(({ r, g }, k) => {
+    if (k === 0 || g !== listed[k - 1].g) out.push(`<li class="hd">${L.groups[g]}</li>`);
+    out.push(li(r));
   });
   const ol = `<ol>\n${out.map((x) => '  ' + x + '\n').join('')}</ol>`;
+  const folds = FOLDED.map((g) => sorted.filter((x) => x.g === g)).filter((it) => it.length)
+    .map((it) => `<details><summary>${L.groups[it[0].g]} ${it.length}</summary><ul>\n${it.map(({ r }) => '  ' + li(r) + '\n').join('')}</ul></details>`);
+  const section = folds.length ? `<section class="folds">${folds.join('')}</section>\n` : '';
   if (!/<ol>[\s\S]*?<\/ol>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
-  html = html.replace(/<ol>[\s\S]*?<\/ol>/, () => ol).replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
+  html = html.replace(/<section class="folds">[\s\S]*?<\/section>\n?/, '');
+  html = html.replace(/<ol>[\s\S]*?<\/ol>/, () => section + ol).replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
+  // pages made before the folds keep working: their style gets the rule once
+  if (!html.includes('.folds details{')) html = html.replace('</style>', '.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}\n</style>');
   fs.writeFileSync(pagePath, html);
   if (stamped) fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');
   console.log(`rows: ${rows.length}`);
