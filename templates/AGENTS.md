@@ -1,4 +1,4 @@
-<!-- joserah:prompt-version 25 -->
+<!-- joserah:prompt-version 26 -->
 # AGENTS.md — Joserah
 
 > Source of truth for any AI assistant working in this folder. Model-agnostic, **identical in every Joserah workspace**, replaced
