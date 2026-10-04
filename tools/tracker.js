@@ -13,6 +13,8 @@
  *
  *   node tools/tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan
  *                         [--small "<text>"] [--url <http(s)>] [--label "<text>"]
+ *       [--group "<text>"]: a plan row's heading in the plans list; the Plans fold
+ *       then holds one closed fold per group.
  *       Upserts ONE row by title (case and outer spaces ignored) into rows.json
  *       and re-renders; nothing has to be read first. A changed row loses its
  *       `time` and is re-stamped now; small/url/label not given are cleared.
@@ -41,8 +43,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { run: 'Agent working', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', upd: 'updated' },
-  tr: { run: 'Ajan çalışıyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', upd: 'güncelleme' },
+  en: { run: 'Agent working', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated' },
+  tr: { run: 'Ajan çalışıyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 
@@ -57,7 +59,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo|state|small|url|label)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label|group)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -138,21 +140,30 @@ function render(dir) {
     out.push(li(r));
   });
   const ol = `<ol>\n${out.map((x) => '  ' + x + '\n').join('')}</ol>`;
+  // plans may carry a `group` (a heading of the plans list): each group is its own closed fold inside
+  const ul = (it) => `<ul>\n${it.map(({ r }) => '  ' + li(r) + '\n').join('')}</ul>`;
+  const body = (it) => {
+    const names = [...new Set(it.map(({ r }) => r.group).filter(Boolean))];
+    if (!names.length) return ul(it);
+    const part = (name) => { const m = it.filter(({ r }) => (r.group || '') === name); return `<details class="sub"><summary>${esc(name || L.other)} ${m.length}</summary>${ul(m)}</details>`; };
+    return [...names, ...(it.some(({ r }) => !r.group) ? [''] : [])].map(part).join('');
+  };
   const folds = FOLDED.map((g) => sorted.filter((x) => x.g === g)).filter((it) => it.length)
-    .map((it) => `<details><summary>${L.groups[it[0].g]} ${it.length}</summary><ul>\n${it.map(({ r }) => '  ' + li(r) + '\n').join('')}</ul></details>`);
+    .map((it) => `<details><summary>${L.groups[it[0].g]} ${it.length}</summary>${body(it)}</details>`);
   const section = folds.length ? `<section class="folds">${folds.join('')}</section>\n` : '';
   if (!/<ol>[\s\S]*?<\/ol>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
   html = html.replace(/<section class="folds">[\s\S]*?<\/section>\n?/, '');
   html = html.replace(/<ol>[\s\S]*?<\/ol>/, () => section + ol).replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
   // pages made before the folds keep working: their style gets the rule once
   if (!html.includes('.folds details{')) html = html.replace('</style>', '.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}\n</style>');
+  if (!html.includes('.folds details.sub{')) html = html.replace('</style>', '.folds details.sub{border-bottom:0;padding:4px 0 4px 12px}.folds details.sub summary{text-transform:none;letter-spacing:0}\n</style>');
   fs.writeFileSync(pagePath, html);
   if (stamped) fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');
   console.log(`rows: ${rows.length}`);
 }
 
 function upsert(dir, opt) {
-  if (!dir || !opt.title || !opt.state) die('usage: tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan [--small t] [--url u] [--label t]');
+  if (!dir || !opt.title || !opt.state) die('usage: tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan [--small t] [--url u] [--label t] [--group t]');
   if (!Object.prototype.hasOwnProperty.call(GROUP, opt.state)) die(`unknown state "${opt.state}"`);
   const rowsPath = path.join(dir, 'rows.json');
   if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found (run init first)`);
@@ -164,6 +175,7 @@ function upsert(dir, opt) {
   if (opt.small) row.small = opt.small;
   if (opt.url) row.url = opt.url;
   if (opt.label) row.label = opt.label;
+  if (opt.group) row.group = opt.group;
   const i = rows.findIndex((r) => r && key(r.title) === key(opt.title));
   if (i >= 0) rows[i] = row; else rows.push(row);
   fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');

@@ -3,6 +3,17 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.17.10
+
+0.17.10 — a reusable Changelog page, Plans grouped on the Tracker, relay and delivery rules. Owner, 2026-10-04.
+
+- **`changelog.js`.** `init <dir> --title <module> --lang <en|tr> [--logo f]`, `add <dir> --date … --line …`, `render <dir>`: one page per module, logo, name, one sentence, dated sections all closed, 2 to 5 plain lines each; nothing else. The title is the module's full name; the description one short phrase saying what the module is, never a list.
+- **Plans by heading.** `tracker.js row --state plan --group "<heading>"`: the Plans fold holds one closed fold per group.
+- **Orchestrate.** One announcement per module, each linking its changelog; maintenance notice before, done notice after, never "done" before it is live. Relays are verbatim; a worker's brief gets no restrictions of the main session's own; a feature ships complete.
+- **Rule writing.** Rules are written as the principle, not the incident (`learn`, `AGENTS.md`).
+
+The orchestrate skill and `AGENTS.md`. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.9
 
 0.17.9 — Daily Tracker: waiting and plans sit at the top as closed groups, the list carries agent working, owner and done; pages are never put in front of the owner — the link is given, publishes are batched to one per reply. Owner, 2026-10-03.

@@ -327,7 +327,7 @@ test('prompt v11 carries every behaviour rule the owner put in the native prompt
     B4: 'the struck line is not used again',
     B5: 'a number with no source carries no weight',
     B7: 'The example they give is not the scope',
-    B8: 'the incident not retold',
+    B8: 'Write the principle, not the incident',
     B9: 'approve one they have not seen',
     B12: 'Cite a source only after opening it',
     // C — role, and the end of a session

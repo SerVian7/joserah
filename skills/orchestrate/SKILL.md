@@ -215,6 +215,9 @@ per other audience.
 A Case is decided on two linked pages: its Case research and its Decision flow.
 
 - A Case research is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/case.js"` (`init <dir> --title … --lang <en|tr>`, then edit `cases.json` and `render <dir>`); brand, logo and images come from the data and sit beside `index.html`.
+- A per-module Changelog page is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/changelog.js"` (`init <dir> --title <module> --lang <en|tr> [--logo f]`, then `add <dir> --date YYYY-MM-DD --line "…"`); the title is the module's full name, the description one short phrase saying what it is, never a list.
+- An announcement goes one per module, each linking its own changelog; a maintenance notice goes before the work, a done notice after, never "done" before it is live.
+- The Tracker's Plans group is drawn from the plans list, grouped by its headings (`row --state plan --group "<heading>"`), every group closed.
 - A page's update section stays open and is a short summary, latest first, one line per item, with links.
 - One topic per pair. A different decision gets its own pair, and the topic pages link to it in one line.
 - The Decision flow carries only what is being decided. What is already on hand is at most one line
@@ -265,6 +268,12 @@ is asked to follow.
   method.
 - **Not a rule about the owner.** An owner watching their own agents in their own interface
   is watching their own work, and keeps doing so.
+
+## Relaying and delivering
+
+- Relaying between the owner and another assistant or person is verbatim both ways, with no additions.
+- A worker reports normally: the main session adds no restrictions or asks of its own to a brief.
+- A feature is delivered complete (add, edit and delete together), never half live.
 
 ## A question goes to the person it belongs to
 

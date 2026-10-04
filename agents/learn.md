@@ -18,8 +18,9 @@ A single correction or preference is written inline by the main session (AGENTS.
 ## What you do
 
 1. Read `.joserah/learned.md` in the workspace root — check for duplicates / related entries.
-2. If the new entry is about the **user themselves** (identity, role, preference), also read `.joserah/personal/profile.md` in the workspace root.
-3. Append a dated entry under the right file, using this exact shape — every
+2. Write the principle, not the incident: name what went wrong in kind, drop this case's names, systems and people, and check the rule would also catch a different case. A correction is never turned into a new restriction.
+3. If the new entry is about the **user themselves** (identity, role, preference), also read `.joserah/personal/profile.md` in the workspace root.
+4. Append a dated entry under the right file, using this exact shape — every
    field is a placeholder to fill in, `**Scope:**` included, since this
    fenced block is copied verbatim and the session-start hook injects the
    three most recent `##` sections of `learned.md` into every session by

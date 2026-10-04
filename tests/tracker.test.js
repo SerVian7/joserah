@@ -247,3 +247,18 @@ test('row upserts by title and done rows sort newest first', (t) => {
   const p = page(dir);
   assert.ok(p.indexOf('<b>a</b>') < p.indexOf('<b>B</b>'));
 });
+
+test('plans with a group: one closed fold per group inside the Plans fold', (t) => {
+  const dir = tmpdir(t);
+  init(dir);
+  setRows(dir, [
+    { state: 'plan', title: 'P1', group: 'Alpha', time: '08:00' },
+    { state: 'plan', title: 'P2', group: 'Beta', time: '08:00' },
+    { state: 'plan', title: 'P3', group: 'Alpha', time: '08:00' },
+    { state: 'plan', title: 'P4', time: '08:00' },
+  ]);
+  render(dir);
+  const folds = page(dir).match(/<section class="folds">([\s\S]*?)<\/section>/)[1];
+  assert.deepStrictEqual((folds.match(/<summary>[^<]*/g) || []).map((s) => s.replace('<summary>', '').trim()), ['Plans 4', 'Alpha 2', 'Beta 1', 'Other 1']);
+  assert.doesNotMatch(folds, /<details[^>]*\bopen/);
+});
