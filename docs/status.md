@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 4774978 · 2026-10-05 10:49 +0300 · crew: devMode name confirmed (Stage 0 done)
+Last change: 92be192 · 2026-10-05 10:49 +0300 · crew: active rows never fold; Stage 0 open points decided
 
 - Released: 0.17.10 on main, 683 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
