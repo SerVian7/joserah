@@ -6550,3 +6550,4 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - Remaining: fix + merge 6s and 10 → 11 → 12 (server half) ∥ 15 → 13 → 14 → 16 → 17 (heavy, alone) → 18 (heavy, alone) → 19. Task 20 is the owner's.
 - Known gap: Task 9 — a hard server crash can orphan a CLI process.
 - 01:54 (Manager): Task 6 server half (t06s, review fixes 4635f73, d392f7b) and Task 10 (t10, fixes 2c07f51, 7ece418) merged; server suite 127/127, existing 922/922.
+- 02:01 (Manager): Task 11 (job routes, home, job page; 350645b, a0ed52a) merged (5b53382); server suite 135/135, existing 922/922.
