@@ -86,3 +86,54 @@ test('a resumed Lead keeps its Ledger; a second Lead in the same minute gets its
   assert.strictEqual(names.length, 2);
   assert.match(fs.readFileSync(path.join(leadDir(ws), names[1]), 'utf8'), /session S2 agent A2/);
 });
+
+test('stamp goes to the matching session only', (t) => {
+  const ws = wsFor(t);
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', agent_type: 'lead' }), '2026-10-05T09:00:00');
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S2', agent_id: 'A2', agent_type: 'lead' }), '2026-10-05T10:00:00');
+  hook(ws, 'pre-compact', JSON.stringify({ session_id: 'S2', trigger: 'auto', transcript_path: '/t/s2.jsonl' }), '2026-10-05T11:00:00');
+  hook(ws, 'session-end', JSON.stringify({ session_id: 'S2', reason: 'other', transcript_path: '/t/s2.jsonl' }), '2026-10-05T12:00:00');
+  const dir = path.join(ws, '.joserah', 'desk', 'crew', '2026-10-05', 'lead');
+  const s1 = fs.readFileSync(path.join(dir, 'ledger-0900.md'), 'utf8');
+  const s2 = fs.readFileSync(path.join(dir, 'ledger-1000.md'), 'utf8');
+  assert.doesNotMatch(s1, /compact|session-end/);
+  assert.match(s2, /11:00 · compact · - · auto · \/t\/s2\.jsonl/);
+  assert.match(s2, /12:00 · session-end · - · other · \/t\/s2\.jsonl/);
+});
+
+test('no matching Ledger: nothing is written', (t) => {
+  const ws = wsFor(t);
+  const r = hook(ws, 'pre-compact', JSON.stringify({ session_id: 'S9', trigger: 'manual', transcript_path: '/t/x' }));
+  assert.strictEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(ws, '.joserah', 'desk', 'crew')));
+});
+
+test('stamps add nothing to context and print nothing', (t) => {
+  const ws = wsFor(t);
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', agent_type: 'lead' }));
+  for (const [ev, p] of [['pre-compact', { session_id: 'S1', trigger: 'manual', transcript_path: '/t/a' }],
+    ['session-end', { session_id: 'S1', reason: 'other' }]]) {
+    const r = hook(ws, ev, JSON.stringify(p), '2026-10-05T09:30:00');
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual(r.stdout, '', ev);
+  }
+  const text = fs.readFileSync(path.join(leadDir(ws), 'ledger-0900.md'), 'utf8');
+  assert.match(text, /09:30 · session-end · - · other · -\n$/, 'no transcript_path: the path field is -');
+});
+
+test('a session crossing midnight stamps yesterday\'s Ledger', (t) => {
+  const ws = wsFor(t);
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', agent_type: 'lead' }), '2026-10-05T23:50:00');
+  hook(ws, 'pre-compact', JSON.stringify({ session_id: 'S1', trigger: 'auto', transcript_path: '/t/a' }), '2026-10-06T00:10:00');
+  assert.match(fs.readFileSync(path.join(leadDir(ws), 'ledger-2350.md'), 'utf8'), /00:10 · compact · - · auto · \/t\/a/);
+  assert.ok(!fs.existsSync(leadDir(ws, '2026-10-06')));
+});
+
+test('a fresh Lead in the same session takes the stamps from then on', (t) => {
+  const ws = wsFor(t);
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', agent_type: 'lead' }), '2026-10-05T09:00:00');
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A2', agent_type: 'lead' }), '2026-10-05T10:00:00');
+  hook(ws, 'pre-compact', JSON.stringify({ session_id: 'S1', trigger: 'auto', transcript_path: '/t/a' }), '2026-10-05T11:00:00');
+  assert.doesNotMatch(fs.readFileSync(path.join(leadDir(ws), 'ledger-0900.md'), 'utf8'), /compact/);
+  assert.match(fs.readFileSync(path.join(leadDir(ws), 'ledger-1000.md'), 'utf8'), /11:00 · compact/);
+});

@@ -84,6 +84,8 @@ function openItems(text) {
 /**
  * The Ledger of `dateStr` whose `open` line names `sessionId`, or null. Never
  * the newest as a fallback: a stamp must not land in another session's Ledger.
+ * When one session has opened more than one Lead (a fresh Lead after a
+ * handoff), the newest of its own Ledgers is the one in use.
  */
 function findLedger(root, dateStr, sessionId) {
   if (!sessionId) return null;
@@ -94,7 +96,7 @@ function findLedger(root, dateStr, sessionId) {
   } catch {
     return null;
   }
-  for (const n of names) {
+  for (const n of names.reverse()) {
     const file = path.join(dir, n);
     let text;
     try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }

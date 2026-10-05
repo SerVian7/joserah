@@ -70,4 +70,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { open };
+module.exports = { open, append };

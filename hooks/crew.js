@@ -16,6 +16,10 @@
  *                   Lead the path through additionalContext. A Lead already
  *                   open in this session under the same agent id keeps its
  *                   Ledger.
+ *   pre-compact     a `compact` stamp (trigger, transcript_path) on the Ledger
+ *   session-end     a `session-end` stamp (reason, transcript_path); both go
+ *                   only to the Ledger whose `open` line names this session,
+ *                   today's or yesterday's, and to nothing when none does.
  *
  * Every path exits 0: a hook that fails must never block a spawn, a compaction
  * or the end of a session. Tests fix the clock with JOSERAH_NOW.
@@ -26,6 +30,7 @@ const path = require('path');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 const { resolveCrew } = require('../tools/lib/crew-config');
 const L = require('../tools/lib/ledger');
+const { append: appendLine } = require('../tools/ledger');
 
 const EVENTS = ['subagent-start', 'subagent-stop', 'pre-compact', 'session-end', 'session-start'];
 
@@ -78,8 +83,38 @@ function leadStarted(root, input) {
   };
 }
 
+/**
+ * This session's Ledger: today's, else yesterday's (a session crossing
+ * midnight). Matched on the `open` line's session id only, never the newest
+ * of the day as a fallback: a stamp must not land in another conversation's.
+ */
+function sessionLedger(root, session) {
+  if (!session) return null;
+  const t = now();
+  const y = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1);
+  return L.findLedger(root, isoDay(t), session) || L.findLedger(root, isoDay(y), session);
+}
+
+/** PreCompact / SessionEnd: one stamp line, nothing to context (the runtime gives them no way). */
+function stamp(root, input, kind, detail) {
+  const file = sessionLedger(root, id(input.session_id));
+  if (!file) return null;
+  const transcript = typeof input.transcript_path === 'string' && input.transcript_path.trim()
+    ? input.transcript_path.trim() : '-';
+  try {
+    appendLine(file, { kind, job: '-', text: typeof detail === 'string' ? detail : '-', path: transcript });
+  } catch {
+    appendLine(file, { kind, job: '-', text: typeof detail === 'string' ? detail : '-', path: '-' });
+  }
+  return null;
+}
+
 function handle(event, root, input) {
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
+  // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
+  // may not fire at all when a background shell is still running: best effort only.
+  if (event === 'pre-compact') return stamp(root, input, 'compact', input.trigger);
+  if (event === 'session-end') return stamp(root, input, 'session-end', input.reason);
   return null;
 }
 
