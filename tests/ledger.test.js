@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { tmpdir } = require('./helpers');
+const { tmpdir, runTool } = require('./helpers');
 const L = require('../tools/lib/ledger');
 
 const doc = [
@@ -65,4 +65,45 @@ test('findLedger returns the matching session only, never the newest', (t) => {
   assert.strictEqual(L.findLedger(root, '2026-10-05', 'S9'), null);
   assert.strictEqual(L.findLedger(root, '2026-10-04', 'S1'), null);
   assert.strictEqual(L.findLedger(root, '2026-10-05', ''), null);
+});
+
+test('add appends exactly one line; open prints only open items', (t) => {
+  const f = path.join(tmpdir(t), 'ledger-0900.md');
+  fs.writeFileSync(f, doc + '\n');
+  const env = { env: { JOSERAH_NOW: '2026-10-05T11:00:00' } };
+  assert.strictEqual(runTool('ledger.js', ['add', f, 'end', 'dots-research', 'done', 'scout/0905-dots-research.md'], env).status, 0);
+  const lines = fs.readFileSync(f, 'utf8').trim().split('\n');
+  assert.match(lines.at(-1), /^11:00 · end · dots-research · done · scout\/0905-dots-research\.md$/);
+  const out = runTool('ledger.js', ['open', f]).stdout;
+  assert.match(out, /mail-reply/);
+  assert.doesNotMatch(out, /dots-research|tracker-strip/);
+  assert.match(out, /A1/);
+});
+
+test('add refuses an unknown kind with exit 1 and leaves the file alone', (t) => {
+  const f = path.join(tmpdir(t), 'l.md'); fs.writeFileSync(f, doc + '\n');
+  const r = runTool('ledger.js', ['add', f, 'maybe', 'x', 'y']);
+  assert.strictEqual(r.status, 1);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), doc + '\n');
+});
+
+test('add: no path means -, a missing final newline is mended, a missing Ledger is refused', (t) => {
+  const dir = tmpdir(t);
+  const f = path.join(dir, 'l.md'); fs.writeFileSync(f, doc);
+  const env = { env: { JOSERAH_NOW: '2026-10-05T11:05:00' } };
+  assert.strictEqual(runTool('ledger.js', ['add', f, 'decision', '-', 'keep it'], env).status, 0);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), doc + '\n11:05 · decision · - · keep it · -\n');
+  const r = runTool('ledger.js', ['add', path.join(dir, 'nope.md'), 'decision', '-', 'x'], env);
+  assert.strictEqual(r.status, 1);
+  assert.ok(!fs.existsSync(path.join(dir, 'nope.md')), 'a mistyped path makes no stray Ledger');
+});
+
+test('stamp appends a hook stamp line and refuses another kind', (t) => {
+  const f = path.join(tmpdir(t), 'l.md'); fs.writeFileSync(f, doc + '\n');
+  const env = { env: { JOSERAH_NOW: '2026-10-05T12:00:00' } };
+  assert.strictEqual(runTool('ledger.js', ['stamp', f, 'compact', 'auto', '/t/s2.jsonl'], env).status, 0);
+  assert.strictEqual(runTool('ledger.js', ['stamp', f, 'session-end', 'other', '/t/s2.jsonl'], env).status, 0);
+  const tail = fs.readFileSync(f, 'utf8').trim().split('\n').slice(-2);
+  assert.deepStrictEqual(tail, ['12:00 · compact · - · auto · /t/s2.jsonl', '12:00 · session-end · - · other · /t/s2.jsonl']);
+  assert.strictEqual(runTool('ledger.js', ['stamp', f, 'end', 'x', '/t/x'], env).status, 1);
 });
