@@ -278,3 +278,26 @@ test('devMode off: the run group reads as in progress, never agent', (t) => {
   render(dir);
   assert.match(page(dir), /Agent working/);
 });
+
+const crew = (dir, args) => runTool('tracker.js', ['crew', dir, ...args], { env: { JOSERAH_NOW: T1 } });
+test('crew upserts by role and job', (t) => {
+  const dir = tmpdir(t); init(dir);
+  assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'DOTS research', '--state', 'work']).status, 0);
+  crew(dir, ['--role', 'scout', '--job', 'dots research ', '--state', 'idle']);
+  const j = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
+  assert.strictEqual(j.crew.length, 1);
+  assert.strictEqual(j.crew[0].state, 'idle');
+});
+test('crew refuses an unknown state, role or reason', (t) => {
+  const dir = tmpdir(t); init(dir);
+  assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'x', '--state', 'busy']).status, 1);
+  assert.strictEqual(crew(dir, ['--role', 'pilot', '--job', 'x', '--state', 'work']).status, 1);
+  assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'x', '--state', 'owner', '--reason', 'mood']).status, 1);
+  assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'x', '--state', 'owner', '--reason', 'approval']).status, 0, 'a valid one is taken');
+});
+test('a legacy array rows.json renders as before', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'ok', title: 'A' }]);
+  assert.strictEqual(render(dir).status, 0);
+  assert.ok(Array.isArray(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))));
+});

@@ -19,6 +19,15 @@
  *       and re-renders; nothing has to be read first. A changed row loses its
  *       `time` and is re-stamped now; small/url/label not given are cleared.
  *
+ *   node tools/tracker.js crew <dir> --role voice|lead|architect|builder|scout|sentry
+ *                         --job "<text>" --state work|owner|idle
+ *                         [--reason decision|sign-in|connection|approval] [--url <http(s)>]
+ *       Upserts ONE entry of the Crew strip by role + job (case and outer spaces
+ *       ignored), stamps its `time` now, re-renders. reason/url not given are
+ *       cleared. rows.json then becomes { rows: [...], crew: [...] }; a legacy
+ *       array is read as { rows, crew: [] } and kept an array until a crew entry
+ *       exists. The strip shows only in developer mode.
+ *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
  *       {match?, state, title, small?, url?, label?, time?}, state one of
@@ -54,6 +63,10 @@ const LABELS = {
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 
+const CREW_ROLES = ['voice', 'lead', 'architect', 'builder', 'scout', 'sentry'];
+const CREW_STATES = ['work', 'owner', 'idle'];
+const CREW_REASONS = ['decision', 'sign-in', 'connection', 'approval'];
+
 // Developer mode decides only whether the owner sees the crew; no workspace → off.
 function devModeFor(dir) {
   const root = findWorkspace(dir);
@@ -65,6 +78,7 @@ const die = (msg) => { console.error(`tracker: ${msg}`); process.exit(1); };
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());
 const pad = (n) => String(n).padStart(2, '0');
 const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const key = (t) => String(t ?? '').trim().toLowerCase();
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function parseArgs(argv) {
@@ -72,7 +86,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo|state|small|url|label|group)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -113,15 +127,38 @@ function init(dir, opt) {
   console.log(`tracker: wrote ${out}`);
 }
 
+// rows.json is either the legacy array of rows or { rows: [...], crew: [...] }.
+function readStore(rowsPath) {
+  let j;
+  try { j = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch (e) { die(`rows.json is not valid JSON: ${e.message}`); }
+  if (Array.isArray(j)) return { rows: j, crew: [] };
+  if (!j || typeof j !== 'object' || !Array.isArray(j.rows) || (j.crew !== undefined && !Array.isArray(j.crew))) {
+    die('rows.json must be an array, or an object with a "rows" array and a "crew" array');
+  }
+  return { rows: j.rows, crew: j.crew || [] };
+}
+
+// the legacy array shape is kept until a crew entry exists
+function writeStore(rowsPath, store) {
+  const data = store.crew.length ? { rows: store.rows, crew: store.crew } : store.rows;
+  fs.writeFileSync(rowsPath, JSON.stringify(data, null, 1) + '\n');
+}
+
+function checkCrew(e, where) {
+  if (!e || !CREW_ROLES.includes(e.role)) die(`${where}: unknown role "${e && e.role}" (${CREW_ROLES.join('|')})`);
+  if (!CREW_STATES.includes(e.state)) die(`${where}: unknown state "${e.state}" (${CREW_STATES.join('|')})`);
+  if (e.reason !== undefined && !CREW_REASONS.includes(e.reason)) die(`${where}: unknown reason "${e.reason}" (${CREW_REASONS.join('|')})`);
+  if (!String(e.job ?? '').trim()) die(`${where}: a job is required`);
+}
+
 function render(dir) {
   const pagePath = path.join(dir, 'index.html');
   const rowsPath = path.join(dir, 'rows.json');
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) die(`${dir} is not a directory`);
   if (!fs.existsSync(pagePath)) die(`${pagePath} not found (run init first)`);
   if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found`);
-  let rows;
-  try { rows = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch (e) { die(`rows.json is not valid JSON: ${e.message}`); }
-  if (!Array.isArray(rows)) die('rows.json must be an array');
+  const store = readStore(rowsPath);
+  const { rows, crew } = store;
   let html = fs.readFileSync(pagePath, 'utf8');
   const base = LABELS[(html.match(/<html[^>]*\blang="(\w+)"/) || [])[1]] || LABELS.en;
   const dev = devModeFor(dir);
@@ -131,6 +168,10 @@ function render(dir) {
   rows.forEach((r, i) => {
     if (!r || !Object.prototype.hasOwnProperty.call(GROUP, r.state)) die(`row ${i + 1}: unknown state "${r && r.state}"`);
     if (r.time === undefined || r.time === null || r.time === '') { r.time = hm(clock); stamped = true; }
+  });
+  crew.forEach((e, i) => {
+    checkCrew(e, `crew ${i + 1}`);
+    if (e.time === undefined || e.time === null || e.time === '') { e.time = hm(clock); stamped = true; }
   });
   const seen = new Set();
   rows.forEach((r, i) => {
@@ -173,7 +214,7 @@ function render(dir) {
   if (!html.includes('.folds details{')) html = html.replace('</style>', '.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}\n</style>');
   if (!html.includes('.folds details.sub{')) html = html.replace('</style>', '.folds details.sub{border-bottom:0;padding:4px 0 4px 12px}.folds details.sub summary{text-transform:none;letter-spacing:0}\n</style>');
   fs.writeFileSync(pagePath, html);
-  if (stamped) fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');
+  if (stamped) writeStore(rowsPath, store);
   console.log(`rows: ${rows.length}`);
 }
 
@@ -182,10 +223,8 @@ function upsert(dir, opt) {
   if (!Object.prototype.hasOwnProperty.call(GROUP, opt.state)) die(`unknown state "${opt.state}"`);
   const rowsPath = path.join(dir, 'rows.json');
   if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found (run init first)`);
-  let rows;
-  try { rows = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch (e) { die(`rows.json is not valid JSON: ${e.message}`); }
-  if (!Array.isArray(rows)) die('rows.json must be an array');
-  const key = (t) => String(t ?? '').trim().toLowerCase();
+  const store = readStore(rowsPath);
+  const { rows } = store;
   const row = { state: opt.state, title: opt.title };
   if (opt.small) row.small = opt.small;
   if (opt.url) row.url = opt.url;
@@ -193,7 +232,23 @@ function upsert(dir, opt) {
   if (opt.group) row.group = opt.group;
   const i = rows.findIndex((r) => r && key(r.title) === key(opt.title));
   if (i >= 0) rows[i] = row; else rows.push(row);
-  fs.writeFileSync(rowsPath, JSON.stringify(rows, null, 1) + '\n');
+  writeStore(rowsPath, store);
+  render(dir);
+}
+
+function upsertCrew(dir, opt) {
+  if (!dir || !opt.role || !opt.job || !opt.state) die(`usage: tracker.js crew <dir> --role ${CREW_ROLES.join('|')} --job "<text>" --state ${CREW_STATES.join('|')} [--reason ${CREW_REASONS.join('|')}] [--url u]`);
+  const entry = { role: opt.role, job: opt.job, state: opt.state };
+  if (opt.reason) entry.reason = opt.reason;
+  if (opt.url) entry.url = opt.url;
+  checkCrew(entry, 'crew');
+  entry.time = hm(now());
+  const rowsPath = path.join(dir, 'rows.json');
+  if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found (run init first)`);
+  const store = readStore(rowsPath);
+  const i = store.crew.findIndex((e) => e && e.role === entry.role && key(e.job) === key(entry.job));
+  if (i >= 0) store.crew[i] = entry; else store.crew.push(entry);
+  writeStore(rowsPath, store);
   render(dir);
 }
 
@@ -201,8 +256,9 @@ function main() {
   const { pos, opt } = parseArgs(process.argv.slice(2));
   if (pos[0] === 'init') init(pos[1], opt);
   else if (pos[0] === 'row') upsert(pos[1], opt);
+  else if (pos[0] === 'crew') upsertCrew(pos[1], opt);
   else if (pos.length === 1) render(pos[0]);
-  else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js <dir>');
+  else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js crew <dir> --role r --job t --state s  |  tracker.js <dir>');
 }
 
 if (require.main === module) main();
