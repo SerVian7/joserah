@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 4e81569 · 2026-10-05 12:18 +0300 · manager: crew off only (Stage 5 done)
+Last change: ce5990c · 2026-10-05 12:42 +0300 · tools: measure-run (7.1 on branch, 7.2 done, 8.1 done)
 
 - Released: 0.17.10 on main, 683 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
