@@ -128,6 +128,47 @@ so running work shows where it always has; the rows themselves stay the assistan
   (official); write ours with `writing-skills`: `joserah-node-ts-strip`, `joserah-hono-sse-routes`,
   `joserah-claude-cli-driver`, `joserah-auth-and-secrets`, `joserah-docker-native-parity`.
 
+## 6. Knowledge wiki (Karpathy's lessons)
+
+Owner, 2026-10-05: "Karpathy den alacağımız dersleri de düşünmüştün onları ekleyelim wiki falan." Source: Karpathy's
+LLM-wiki gist (gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) as read in the workspace's research note
+`platform/research/16-kb-maintenance-and-memory-tools.md`; Joserah already has its shape, the server makes it visible
+and runs its operations.
+
+- **Three layers, mapped:** raw = `imports/` (immutable, never edited — rule 4); wiki = `.joserah/knowledge/` (LLM-owned
+  pages, claim lines); schema = `AGENTS.md` + `conventions.md` ("what makes the LLM a disciplined wiki maintainer").
+- **Wiki browser:** rendered pages with backlinks, `knowledge/wiki/index.md` (one line per page, generated), an
+  append-only `log.md` (`## [YYYY-MM-DD] ingest|query|lint | title`), and a **claims view**: every
+  `[measurement|calculation|decision|estimate]` line with its condition, date, source; struck (`superseded:`) lines shown
+  struck and never used. Search: index + text search now; SQLite full-text only past ~1,000 notes (research: "at small
+  scale the index file is enough").
+- **Ingest:** a file dropped in the UI is copied verbatim to `imports/` → an ingest job writes the summary page, updates
+  the touched entity/topic pages, the index and the log, and marks the source `status: compiled` with `compiled_to`.
+- **Query:** a question asked in the UI is answered from the wiki with citations; a good answer has a "file it" button
+  that turns it into a page (Karpathy: "good answers can be filed back into the wiki").
+- **Lint, two layers:** a zero-token deterministic lint (broken links, orphans, frontmatter, stale uncompiled raw,
+  superseded markers, duplicate slugs) runs on every change and nightly; the LLM pass runs only over the changed set
+  (git/hash) and **quotes conflicting sentences and queues them as owner rows** instead of guessing.
+- **Anti-drift:** a value that lives elsewhere is stored as a pointer to its home, never copied.
+
+## 7. Token economy
+
+Owner: "Token ekonomisi yapmayı unutma." The platform exists partly to burn fewer tokens; these are requirements.
+
+- **The model never writes or re-reads a page.** It writes small JSON/Markdown through the tools (a Tracker row is a few
+  hundred bytes); the server renders HTML. Today a Tracker publish rewrote ~170 KB.
+- **Zero-token first:** rendering, indexes, link checks, lint, answer collection, job bookkeeping are scripts. A model is
+  called only for judgement, and only over what changed (git/hash change set).
+- **Lean jobs:** each job starts a fresh session with a brief the server composes — the task, file pointers, the one
+  relevant rule — never pasted file contents. Subagent briefs are one line plus a path (standing orchestration rule).
+- **Model per job type** (setting, defaults): routine bookkeeping, answer processing, session digests → Haiku; code,
+  research, ingest → Sonnet; planning and final review only → Opus. Passed to the CLI as `--model`.
+- **Cache-friendly prompts:** the stable instruction prefix first and unchanged between jobs; volatile context last and
+  small; the session-start brief carries counts and pointers, not bodies.
+- **Batching:** all new answers go to one job; the nightly lint and digest run once, not per change.
+- **Visible cost:** each job shows the CLI's cost estimate (`total_cost_usd`, labelled an estimate); the home screen shows
+  today's total; a per-job cap (turn limit and timeout; a money cap if the CLI offers one — verified in the plan).
+
 ## Out of scope (v1)
 
 OpenRouter or any second engine; the device runner and any device code; native phone/watch/TV apps; several users or several workspaces per server; a separate front-end app; Wrap or
