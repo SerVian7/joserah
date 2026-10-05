@@ -88,6 +88,45 @@ test('orchestrate makes the worker line travel in every brief', () => {
   assert.doesNotMatch(flat(template[1]), /into every brief/, 'the template recurses');
 });
 
+// 0.18.0 (owner, 2026-10-05): the crew. The skill carries the roles, the brief's
+// "Done when", Delivery, Distill, the completion-notice relay, the Ledger, the
+// Crew strip and developer mode; the Manager stays for crew off.
+test('orchestrate carries the crew', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
+  const flat = text.replace(/\s+/g, ' ');
+  // a section runs to the next heading of the same or a higher level
+  const section = (h) => {
+    const i = text.indexOf(h);
+    assert.ok(i >= 0, `missing: ${h}`);
+    const level = h.split(' ')[0];
+    const next = new RegExp(`\\n#{1,${level.length}} `, 'g');
+    next.lastIndex = i + h.length;
+    const m = next.exec(text);
+    return text.slice(i, m ? m.index : undefined).replace(/\s+/g, ' ');
+  };
+  for (const h of ['## Crew\n', '## Delivery', '## Distill', '### Completion notices', '### The Ledger', '### Crew strip']) assert.ok(text.includes(h), `missing: ${h}`);
+  assert.match(section('## Crew\n'), /Lead.*Architect.*Builder.*Scout.*Sentry/);
+  assert.match(section('## Crew\n'), /heavy.*medium.*simple/);
+  assert.ok(section('## Briefing').includes('Done when:'), 'Briefing: Done when');
+  assert.doesNotMatch(section('## Briefing'), /Verified by:/);
+  assert.match(section('## Delivery'), /same turn/);
+  assert.match(section('## Delivery'), /journal/);
+  assert.match(section('## Delivery'), /bare repository, commit or file link is not a report/);
+  assert.match(section('## Distill'), /written twice/);
+  assert.match(section('## Distill'), /verbatim/);
+  assert.match(section('### Completion notices'), /relayed to Lead verbatim/);
+  assert.match(section('### Crew strip'), /session that sees the event/);
+  assert.match(section('### Crew strip'), /never its own entry/);
+  assert.match(flat, /devMode/);
+  assert.match(flat, /first person/);
+  assert.match(section('## Trackers'), /console/);
+  assert.match(section('## Trackers'), /never folds/);
+  assert.match(section('## Trackers'), /never fully closed/);
+  assert.match(section('## Trackers'), /agent working → owner → waiting → plans → done/);
+  const mgr = section('### A manager for a wave');
+  assert.match(mgr, /crew off/);
+});
+
 test('the merged skills are gone, not left behind as duplicates', () => {
   for (const gone of ['dispatch', 'plan', 'research']) {
     assert.ok(!fs.existsSync(path.join(PLUGIN_ROOT, 'skills', gone)),

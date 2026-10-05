@@ -451,7 +451,8 @@ button ("tümü (N)") opens it in place as a bounded scroll area (keyboard acces
 under reduced-motion). Active work is never clamped or folded. With developer mode on, each strip entry may
 carry a faint `model · effort · ctx @time`; `ctx` is shown only as a reported figure with its time, never
 estimated (source: plan Task 4.6). Strip colour for waiting-on-owner: the page's owner colour (owner, "A bence.").
-Section order (active work above waiting and plans, or the 2026-10-03 order): with the owner.
+Section order (owner, 2026-10-05: "Sorunun cevabı A evet."): active work first — agent working, owner,
+waiting, plans, done — replacing the 2026-10-03 order.
 
 ## Tracker row groups
 

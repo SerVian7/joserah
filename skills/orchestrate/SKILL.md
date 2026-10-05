@@ -24,8 +24,8 @@ changes:
 | **medium** | Bounded and mechanical but still needs judgement: a bug fix with a test, a focused edit across a few files. |
 | **simple** | Fetch, count, format, rename, re-run. |
 
-A tier asks for at most what has been selected for this session: the selected model is the ceiling,
-never a reach for something better. Where the selected runtime sits below the tier the work
+With the crew off, a tier asks for at most what has been selected for this session: the selected model is the ceiling,
+never a reach for something better (with the crew on, models come from config: see "Crew"). Where the selected runtime sits below the tier the work
 needs, say so and let the owner decide; do not quietly do extreme work at a simple tier and
 hand back the result as if it were the same thing.
 
@@ -38,9 +38,10 @@ another tier or another runtime and say which, in one line.
 **A handed-off task carries its tier in its title.** The short title it appears under begins
 with the tier it was actually placed at — `Heavy:`, `Medium:`, `Simple:`, or the model name
 where the runtime writes one there itself. Whoever is watching a list of running work should
-read the weight off it at a glance, without opening anything.
+read the weight off it at a glance, without opening anything. With the crew on the title starts with
+its role instead (`Scout: …`), which implies the tier.
 
-**Default inline.** An agent is for heavy reading only — web research, multi-file code, sweeps —
+**With the crew off, default inline.** An agent is for heavy reading only — web research, multi-file code, sweeps —
 on the cheapest model that fits. Related jobs go to one agent, not several; an agent is resumed by
 message on the same topic instead of a fresh brief. Truly independent pieces may run in parallel,
 each with its own files; rule 6 (the machine's capacity) bounds how many. Near ~300k of context the
@@ -48,7 +49,7 @@ main session leaves a handoff and a new chat continues.
 
 ### A manager for a wave
 
-When a wave has several independent folders or stages, brief **one Manager** for it at heavy
+With the crew off only (with it on, Lead runs every wave). When a wave has several independent folders or stages, brief **one Manager** for it at heavy
 tier instead of every worker yourself (the `manager` agent). The Manager plans the wave, briefs
 its own workers from the same template, checks their diffs (removed lines first), and returns
 one report.
@@ -71,10 +72,59 @@ A wave with one folder or one stage gets no manager: the layer costs a full agen
 - The final report to the owner and the publish step stay with you: the manager writes the
   report file, you publish it.
 
+## Crew
+
+On by default; `"crew": false` (or `"enabled": false` in the `crew` block) in `.joserah/config.json`
+switches it off, and the rest of this skill then holds as written for crew off. With it on, a small
+fixed crew does the work, each role on the model and effort its generated definition in
+`.claude/agents/` carries (from config):
+
+| Role | Does | Default tier |
+|---|---|---|
+| **Voice** (the main session) | Talks to the owner and only talks: answers a one-lookup question itself, keeps the Daily Tracker and its Crew strip, relays to and from Lead. Never prepares a page, researches, plans or edits another file. | the session's own model |
+| **Lead** | Manager and brain, one per conversation: turns the request into jobs, briefs the workers, checks every result, keeps the Ledger, writes the journal line and Distill. Never addresses the owner. | medium |
+| **Architect** | Plans and designs; big jobs only (more than one defensible design, or too large to hold at once). | heavy; extreme with the owner told first |
+| **Builder** | Code: test first, the change, the commit. | heavy |
+| **Scout** | Research, reading, sweeps, report pages (Case research, Decision flow, Wrap content). | medium |
+| **Sentry** | Watch duty: mail checks, an outside event, a polled state. Reports what it saw and stops. | simple |
+
+- **Who talks to whom.** Owner ↔ Voice ↔ Lead ↔ workers. A worker never addresses Voice or the owner.
+  Any worker may open sub-workers under the same brief template and rules, and answers for them.
+- **Lead's lifetime.** Opened at the first job of a conversation, never for talk alone; resumed by message
+  for every later job; one at a time. Near ~300k of context Lead brings its Ledger fully up to date and says
+  so; Voice opens a fresh Lead whose brief is the Ledger's path. A finished worker is resumed for the next job
+  on its topic rather than briefed fresh.
+- **Models.** Lead may pass a cheaper model for a simple job, never a dearer one than the role's.
+- **Messages are one line plus a file path**; the work lives in files. Worker → Lead and Lead → Voice:
+  `done · <result> · <report path or link>`; Lead's start line `started: <role> <job> · agent <id> · <model> <effort> · <log path>`;
+  something only the owner can settle `owner · <decision|sign-in|connection|approval>: <what> · <link>`.
+  Voice → Lead: the owner's request in the owner's words, plus anything only Voice knows; no paraphrase
+  that narrows it. A worker sends nothing between brief and result except one `owner ·` line when blocked.
+- **Status.** Asked how the work is going, Voice asks Lead; Lead answers `done / remaining / minutes` from
+  its Ledger, asking a worker only when the Ledger cannot say. Voice relays it and never estimates.
+- **Logs.** Every worker writes its result to `.joserah/desk/crew/YYYY-MM-DD/<role>/HHMM-<slug>.md` before it
+  replies; a long job keeps `HHMM-<slug>.progress` beside it. No secret ever lands in a log.
+
+### Completion notices
+
+Where a background worker's completion notice lands is the runtime's choice: it may reach Voice rather than
+the Lead that opened the worker. So a worker writes its result to its log **before** it replies (the log, not
+the notice, is the result), and Lead does not hold its turn open waiting. A notice that reaches Voice is
+relayed to Lead verbatim, one line, by message; Voice does not act on it, open its log, or tell the owner the
+job is done until Lead says so. It does dim the worker's strip entry (see "Crew strip").
+
+### The Ledger
+
+Lead's record of the conversation, `.joserah/desk/crew/YYYY-MM-DD/lead/ledger-HHMM.md`, written **at the
+event** through `tools/ledger.js add`, never by rewriting the file: one line when a decision is taken, a job
+starts, ends, or comes to wait on the owner (`HH:MM · <kind> · <job> · <text> · <log path or ->`). The hooks
+create it when Lead opens, stamp it at compaction and session end, and bring its open items back after a
+compaction. It is kept when the conversation ends: a fresh Lead continues from it.
+
 ## Briefing
 
-A brief is four things and nothing else: the job, the rules it must not break, how it will
-be verified, and the exact shape of the report it must return. A worker that has to guess
+A brief is four things and nothing else: the job, the rules it must not break, the check that
+shows it is done, and the log its report goes to. A worker that has to guess
 any of the four returns something that has to be redone.
 
 - One deliverable per brief. Two deliverables is two briefs.
@@ -94,11 +144,12 @@ The template a brief is written from:
 ```
 Job: <the one deliverable>
 Rules: <what it must not break; the files it may write, the folders it may not touch>
-  You are a worker: you may open sub-agents of your own under these same rules. Sign a commit `<model> <effort> — Joserah Worker`.
+  You are a worker: you may open sub-agents of your own under these same rules. Sign a commit `<model> <effort> — Joserah Worker`
+  (with the crew on, `Joserah <Role>`).
   (For a manager instead: You are a manager: you may brief workers (max N at once, one folder each).)
   Checkpoint: <progress file> — one line per finished unit; on start, read it and skip what is done.
-Verified by: <the command or check that proves it>
-Report: <the exact shape of what comes back>
+Done when: <the command output or check that proves it>
+Report: <log path> — write the result there before you reply; reply with that path and one line.
 ```
 
 ## Checking what comes back
@@ -107,7 +158,8 @@ What comes back is **a report, not a fact**. Check a claim against the thing its
 building on it — especially a number, and especially a number that is convenient.
 
 Asked how a background job is going or when it will finish, ask the worker for a status line —
-what is committed, what remains, how many minutes — and relay it. Never estimate it blind.
+what is committed, what remains, how many minutes — and relay it (with the crew on, ask Lead).
+Never estimate it blind.
 
 Read the removed lines in a delivered diff before the added ones. A worker told to add a
 section overwrites the end of a page while adding it, and the loss is invisible in the added
@@ -144,7 +196,9 @@ owner speaks:
 | **Tracker** | A wave's live status page. |
 | **Daily Tracker** | The owner's own day page: the active work of the day, kept by the assistant. |
 | **Wrap** | The end-of-day report. Made only once the day has ended, or the owner says it has; never for an unfinished day. While the day runs, the Daily Tracker is the live page. |
-| **Manager** | The agent that runs a wide wave (above). |
+| **Manager** | The agent that runs a wide wave with the crew off (above). |
+| **Ledger** | Lead's record of a conversation's work (see "Crew"). |
+| **Crew strip** | The Daily Tracker's line-up of who is working right now (see "Trackers"). |
 
 ## Trackers
 
@@ -161,9 +215,15 @@ per other audience.
   and go with it). `rows.json` is the full inventory (`state`, `title`, `small`, `url`, `label`, `time`).
 - Done rows sort newest first; repeated work on the same page or topic updates its one existing row (its time moves, so it rises) instead of adding a new one.
 - **Row text is a short, meaningful summary** — what happened and the result, not process words.
-- Waiting and plans sit at the top of the page as two closed groups; the list under them carries
-  agent working → owner → done (owner, 2026-10-03). One line per row; every row carries a time,
-  stamped once and kept; a done row shows when it finished.
+- **A calm console, not cards** (owner, 2026-10-05): no rounded corners or shadows, dense rows with
+  hairline separators, a mono state tag, a right-aligned time column. One line per row; every row carries
+  a time, stamped once and kept; a done row shows when it finished.
+- **Active work first.** The sections run agent working → owner → waiting → plans → done (owner,
+  2026-10-05, replacing the 2026-10-03 order). Active work never folds and is never clamped.
+- **Lists are never fully closed.** A long list (more than five items) shows its first rows, the rest
+  fades, and a button opens it in place. Only finished work folds: sub-jobs under their main job
+  (`row --parent "<main job's title>"`, set only once it is certain), closed by default; an active
+  sub-job stays open, labelled with its main job's title.
 - The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
   no footer, no start or elapsed time. The page itself is fixed; updates touch rows only.
 - **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other
@@ -171,8 +231,8 @@ per other audience.
   adding a repeating one (the updater refuses two rows with the same title).
 - **Explicit states.** A row is one of: agent working (only while a background agent is on
   it; it moves when the agent ends), owner (the owner's decision or action, linked to the page where
-  it is decided), waiting (on someone outside, no AI working), done, plan — grouped in that order
-  (`run`, `you`, `wait`, `ok`, `plan` in rows.json).
+  it is decided), waiting (on someone outside, no AI working), done, plan (`run`, `you`, `wait`, `ok`,
+  `plan` in rows.json). With `devMode` off the page says "In progress" for agent working.
 - **The agent-working row is added in the same turn the agent is started** — never later — and moved
   when the agent ends.
 - **The reply that finishes a job closes its row** — inline or by an agent: it finds that job's
@@ -194,6 +254,24 @@ per other audience.
   is raised as an owner-waiting row on the Daily Tracker, linking to the page where it is decided
   when one exists. Never only in chat.
 
+### Crew strip
+
+With the crew on, the Daily Tracker shows under its header who is working right now: one icon per role
+with a count badge when two or more of it are working or waiting, then one line per job. States: working
+(the icon pulses), owner (the page's owner colour and the reason: decision, sign-in, connection or
+approval), idle (dimmed). A line opens the job's report.
+
+- **Written by the session that sees the event, at every start and end** (owner, 2026-10-05). Voice
+  writes the entries of Lead's workers — at the start from Lead's `started:` line, when it waits from
+  Lead's `owner ·` line, at the end when the completion notice arrives:
+  `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js" crew <dir> --role <role> --job "<job>" --state work|owner|idle [--agent <id> --model <m> --effort <e>] [--reason <reason>] [--url <report>]`.
+  A worker that opens sub-workers writes theirs, never its own entry; Lead writes none.
+  The hooks only backstop it. A local file write; Voice republishes once per reply.
+- **Developer mode** (`devMode`, off by default) decides only whether the roles are named. Off: icons,
+  states and counts, with no role name and no agent wording anywhere on the page; a line is the work only.
+  On: `<Role> · <job>`, and a faint `model · effort · ctx @time` (a context size only as reported, never
+  estimated).
+
 ## Pages under work
 
 - **A page is never put in front of the owner.** No opening it on their screen, no extra publishes:
@@ -202,7 +280,8 @@ per other audience.
 - **Pages are kept inline** by the main session: change the page's data file, re-render with its
   script, publish; the page is never re-read. Bulky assets (images) sit in separate files.
 - **Pages carry content only:** no intro or instruction text, no legend, no log of finished work.
-  Every group on a page folds, one open at a time; a closed group hides everything in it, the selected item's card included.
+  Every group on a page folds, one open at a time; a closed group hides everything in it, the selected item's card included
+  (on a Tracker only finished work folds: see "Trackers").
 - A link lives in the row or card it belongs to, never in a link block under the list. Links are
   plain text with the URL embedded behind a short label, never buttons and never bare URLs.
 - No model or tool names on any page: a recommendation box is headed "Recommendation", in the
@@ -271,12 +350,48 @@ is asked to follow.
   method.
 - **Not a rule about the owner.** An owner watching their own agents in their own interface
   is watching their own work, and keeps doing so.
+- **With the crew on, the one voice is Voice**, the main session; Lead and the workers never address the
+  owner. **Developer mode** (`devMode` in `.joserah/config.json`, off by default) decides what the owner
+  hears about them. Off: never say "agent", never name a role or a model; speak of the work in the first
+  person ("I'm on it; two of my research jobs are still running"). Asked how the work is done, say other
+  agents work behind it and that developer mode can show them. On: the crew may be named, and which role is
+  on what.
 
 ## Relaying and delivering
 
 - Relaying between the owner and another assistant or person is verbatim both ways, with no additions.
 - A worker reports normally: the main session adds no restrictions or asks of its own to a brief.
 - A feature is delivered complete (add, edit and delete together), never half live.
+- With the crew on, a worker's completion notice that reaches Voice goes to Lead verbatim (see "Completion
+  notices"), and the owner's corrections go to Lead verbatim for Distill.
+
+## Delivery
+
+Finished work reaches the owner three ways, **in the same turn**:
+
+1. **The report** — a page that stands on its own (see "Decision pages"): what was done, the result and the
+   evidence, readable without the chat or the log beside it. A job that makes no page has its log as the
+   report, published beside the Tracker and written to the same standard.
+2. **The Tracker** — the job's row moves to done, linking the report, and the page is republished (Voice,
+   with the crew on).
+3. **The journal** — one line with the report's link under `## Done today` in today's journal (Lead, with
+   the crew on, before it replies `done`).
+
+The reply to the owner carries the report link. **A bare repository, commit or file link is not a report.**
+A job missing any of the three is not done; with the crew on, Lead checks this before it passes `done` on.
+
+## Distill
+
+Every correction or decision the owner gives is **written twice**:
+
+- **Here, in full** — into the workspace's own rules (`.joserah/learned.md`), with the owner's words, the
+  case and the date.
+- **For Joserah, distilled** — as a feedback note (the `feedback` skill): names, systems and the case's
+  context stripped, the principle generalised so it would also catch a different case, through the skill's
+  forbidden-words check; when it fails, the sentence is rewritten, never the check worked around.
+
+With the crew on, Lead writes both; Voice relays the owner's words to Lead verbatim, nothing added or
+narrowed, and writes neither.
 
 ## A question goes to the person it belongs to
 
