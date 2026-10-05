@@ -125,3 +125,53 @@ test('wiki.js index writes once, lint prints findings, log appends', (t) => {
   r = runTool('wiki.js', ['log', ws, '--op', 'query', '--title', 'What is A?'], { env: { JOSERAH_NOW: '2026-10-06T09:00:00' } });
   assert.equal(fs.readFileSync(path.join(ws, K, 'wiki/log.md'), 'utf8'), '# Wiki log\n\n## [2026-10-06] query | What is A?\n');
 });
+
+test('resolveLink refuses a drive letter reached through a climb, and keeps a climb back into the knowledge folder a page', () => {
+  assert.equal(W.resolveLink('wiki/a.md', '../C:/Windows/win.ini'), null);
+  assert.equal(W.resolveLink('wiki/a.md', '../../../C:/Windows/win.ini'), null);
+  assert.equal(W.resolveLink('wiki/a.md', '..\..\..\C:\Windows\win.ini'), null);
+  assert.deepEqual(W.resolveLink('wiki/a.md', '../../knowledge/wiki/b.md'), { kind: 'page', rel: 'wiki/b.md' });
+});
+
+test('claim and lint line numbers count from the top of the file', (t) => {
+  const ws = kb(t, { [K + 'wiki/entities/enc.md']: '---\ntitle: Enc\ntype: entity\n---\n\n# Enc\n\n- [measurement] fps -> 50\n  date: 2026-09-01\n' });
+  const pages = W.scan(ws);
+  assert.equal(W.claims(pages)[0].line, 8);
+  const f = W.lint(ws, { now: new Date('2026-10-06T09:00:00Z') }).find((x) => x.kind === 'claim');
+  assert.equal(f.line, 8);
+});
+
+test('lint checks links that leave the knowledge folder', (t) => {
+  const ws = kb(t, {
+    [K + 'wiki/a.md']: '# A\n\n[src](../../../imports/2026-10-01-upload/here.txt) [gone](../../../imports/2026-10-01-upload/gone.txt)\n',
+    'imports/2026-10-01-upload/here.txt': 'x',
+  });
+  const broken = W.lint(ws, { now: new Date('2026-10-02T00:00:00Z') }).filter((f) => f.kind === 'broken-link').map((f) => f.detail);
+  assert.equal(broken.length, 1);
+  assert.match(broken[0], /gone\.txt/);
+});
+
+test('a search snippet holds the match even after characters that fold longer', (t) => {
+  const ws = kb(t, { [K + 'wiki/a.md']: '# A\n\n' + '… ½ ﬁ '.repeat(40) + 'the encoder sits here' + ' tail'.repeat(40) + '\n' });
+  const [hit] = W.search(W.scan(ws), 'encoder');
+  assert.match(hit.snippet, /encoder/);
+});
+
+test('index links survive spaces and brackets', (t) => {
+  const ws = kb(t, { [K + 'wiki/topics/my page.md']: '---\ntitle: A [draft] page\n---\n' });
+  const text = W.buildIndex(W.scan(ws));
+  assert.ok(text.split('\n').includes('- [A \\[draft\\] page](topics/my%20page.md) — page'), text);
+});
+
+test('wiki.js refuses a folder that is not a workspace and keeps log lines apart', (t) => {
+  const missing = path.join(tmpdir(t), 'no-such');
+  let r = runTool('wiki.js', ['index', missing]);
+  assert.equal(r.status, 1);
+  assert.ok(!fs.existsSync(missing));
+  r = runTool('wiki.js', ['log', missing, '--op', 'lint', '--title', 'x']);
+  assert.equal(r.status, 1);
+  assert.ok(!fs.existsSync(missing));
+  const ws = kb(t, { [K + 'wiki/log.md']: '# Wiki log\n\n## [2026-10-05] ingest | a' });
+  runTool('wiki.js', ['log', ws, '--op', 'lint', '--title', 'b'], { env: { JOSERAH_NOW: '2026-10-06T09:00:00' } });
+  assert.equal(fs.readFileSync(path.join(ws, K, 'wiki/log.md'), 'utf8'), '# Wiki log\n\n## [2026-10-05] ingest | a\n## [2026-10-06] lint | b\n');
+});

@@ -17,6 +17,7 @@ const [cmd, wsArg, ...rest] = process.argv.slice(2);
 const die = (m) => { process.stderr.write(`wiki: ${m}\n`); process.exit(1); };
 if (!wsArg) die('usage: wiki.js index|lint|log <workspace> …');
 const ws = path.resolve(wsArg);
+if (!fs.existsSync(path.join(ws, '.joserah'))) die(`not a Joserah workspace (no .joserah folder): ${ws}`);
 const now = process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date();
 if (Number.isNaN(now.getTime())) die(`JOSERAH_NOW is not a date: ${process.env.JOSERAH_NOW}`);
 const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -40,5 +41,6 @@ if (cmd === 'index') {
   const p = path.join(ws, W.KNOWLEDGE, 'wiki', 'log.md');
   fs.mkdirSync(path.dirname(p), { recursive: true });
   if (!fs.existsSync(p)) fs.writeFileSync(p, '# Wiki log\n\n');
-  fs.appendFileSync(p, W.logLine(op, title, day));
+  const old = fs.readFileSync(p, 'utf8');
+  fs.appendFileSync(p, (old && !old.endsWith('\n') ? '\n' : '') + W.logLine(op, title, day));
 } else die(`unknown command ${cmd}`);
