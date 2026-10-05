@@ -380,6 +380,8 @@ of that role is working (e.g. magnifier ·2). Under it, **one line each:** `<ico
 ## Tracker row groups
 
 Decision, owner, 2026-10-05: sub-jobs belong under their main job, in every state section, done included.
+Amended the same day (owner): **active work never folds.** Grouping folds finished work only; the upper part
+of the page (agent working, waiting on the owner) always stays open.
 
 - A row may carry an optional `parent`: the title of its main job's row. `tracker.js row --parent "<title>"`
   sets it; the parent must be an existing row (case and outer spaces ignored), otherwise the command is
@@ -387,7 +389,10 @@ Decision, owner, 2026-10-05: sub-jobs belong under their main job, in every stat
 - **Set only when certain.** Whoever writes the row (Voice, or Lead for its jobs) sets `parent` only once it is
   sure which main job the sub-job belongs to; until then the row stays ungrouped. A wrong parent is corrected
   by re-running `row` with the right one (or `--parent ""` to ungroup).
-- **Rendering:** inside each state section, the sub-jobs of one main job form one more fold, closed by
+- **Active rows never fold.** A row an agent is working on, or one waiting on the owner, is never inside a
+  closed fold: it renders as a plain open row, with its main job's title as a small muted label before it.
+- **Rendering:** inside each finished-work section (done, and the already-closed waiting and plans folds), the
+  sub-jobs of one main job form one more fold, closed by
   default, headed by the main job's title and the count of its sub-jobs; one fold open at a time on the page
   (the existing page rule). When the main job's own row is in the same section it heads the fold; when it is
   in another section (main job still running, a sub-job done) the fold carries its title and its state.
@@ -456,8 +461,9 @@ its Lead or workers; CTRL's crew never addresses this owner.
   class and reason; one inline SVG per role, no emoji; count badge only when two or more of a role are working
   or waiting; no strip and no "agent" wording with `devMode` off or absent; reduced-motion rule present;
   `rows.json` without `crew` renders as before. Icons use only theme colour tokens (no hex colour inside an
-  icon). Row groups: `--parent` naming no row is refused; a parent with a parent is refused; sub-jobs fold
-  under their main job in each section, closed by default, done included; no `parent` anywhere renders
+  icon). Row groups: `--parent` naming no row is refused; a parent with a parent is refused; finished sub-jobs fold
+  under their main job, closed by default; an agent-working or owner row is never inside a `<details>` and
+  carries its main job's title as a label; no `parent` anywhere renders
   byte-identical to before.
 - `session-start.js`: Voice line only with crew on; worker line carries the reply and log rule; developer-mode
   line says off (first person, no agent names) with the key absent or false, on with `devMode: true`.
@@ -501,10 +507,14 @@ from the numbers whether crew stays the default.
   not documented; still unmeasured. Tried 2026-10-05: `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=10` compacted nothing
   (see "Measured payloads"); the next way, driving a subagent past `--autocompact`'s 100k minimum, costs several
   hundred thousand tokens and was not run. Until measured, Lead's fallback is reading `ledger.js open`.
+  - [decision] Lead compaction before build -> not measured; Lead hands off at ~300k before it would compact, so the fallback holds; measured live in plan Task 7.3 if it happens
+    date: 2026-10-05
+    by: Lead
+    source: plan Stage 0 result
 - **Notice routing:** the docs describe interactive vs non-interactive/SDK behaviour. Measured 2026-10-05 for
   print mode only (a nested worker's notice reaches the main conversation; claim line under Message protocol,
   "Completion notices"). Interactive terminal, desktop and Remote Control are still to be recorded. The relay rule
-  holds either way.
+  holds either way. Recorded live in plan Task 7.3 (interactive terminal).
 - **CTRL transport:** recorded at build from what is set up.
 - **Lead's context measure:** how Lead knows it is near the limit, if the runtime does not report it.
 - **Live page:** a strip that updates without Voice republishing (artifact runtime state).
