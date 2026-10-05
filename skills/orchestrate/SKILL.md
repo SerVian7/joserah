@@ -227,6 +227,9 @@ per other audience.
   fades, and a button opens it in place. Only finished work folds: sub-jobs under their main job
   (`row --parent "<main job's title>"`, set only once it is certain), closed by default; an active
   sub-job stays open, labelled with its main job's title.
+  Every row sits under its project's group (`--parent`); a loose row that is a step of a known project
+  plan is moved there unasked, named as a step of that plan, with one line to the owner saying so. A
+  row's project is usually plain; only a guessed parent waits for certainty.
 - The header is one small line `<Owner> · Daily Tracker · DD.MM.YYYY`. No big heading, no subtitle,
   no footer, no start or elapsed time. The page itself is fixed; updates touch rows only.
 - **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other

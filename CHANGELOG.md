@@ -3,6 +3,10 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## Unreleased
+
+- **Rows under their project.** Every Tracker row sits under its project's group; a loose row that is a step of a known project plan is moved there unasked, named as a step of that plan, and the assistant says so in one line.
+
 ## 0.18.0
 
 0.18.0 — the crew: the work runs behind the scenes, and the Daily Tracker becomes a board you can answer on. Owner, 2026-10-05.

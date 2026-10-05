@@ -304,3 +304,11 @@ test('orchestrate: the chat gives a warm full-sentence summary; rows and items n
   assert.match(row, /names its topic with one sentence of background/);
   assert.doesNotMatch(row, /chat carries one line and the link/);
 });
+
+// Owner, 2026-10-05: "Jev denemsi joserah grubunun altına girecek. bunu önerebilirdin de.": a row sits under its
+// project's group, and a loose row that is a step of a known project plan is moved there unasked.
+test('orchestrate: every Tracker row sits under its project group; a loose plan step is moved there unasked', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(text, /Every row sits under its project's group \(`--parent`\)/);
+  assert.match(text, /a loose row that is a step of a known project plan is moved there unasked, named as a step of that plan, with one line to the owner saying so/);
+});
