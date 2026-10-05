@@ -6542,3 +6542,10 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - Hono is strict about trailing slashes (Task 5 registers both `/p/:day/:folder/` and `/*`).
 - The Tracker template may overflow at 390 px; the fix belongs in `templates/tracker/index.html`, not `tools/tracker.js` (Task 18).
 - Windows file locks during `rename` are retried (Tasks 3, 6); a persistent lock surfaces as a failed write, never a silent loss.
+
+## Progress (Lead, 2026-10-06 01:40 — account-switch checkpoint)
+
+- Merged on main and pushed: Tasks 1, 2, 3, 4, 5, 7, 8, 9; Task 6 tools part (`tools/lib/answers.js`); Task 12 tools part (`tools/lib/wiki.js`, `tools/wiki.js`). Server suite 93/93, existing suite 922/922.
+- On branches, pushed, not merged (reviewer findings 1–3 each still to fix): `task/t06s-answers-server` (Task 6 server half, 7a9f8b7, suite 109/109), `task/t10-checkpoint` (Task 10, 3948ea9, suite 101/101). Worktrees `../joserah-wt-t06s-answers-server`, `../joserah-wt-t10-checkpoint`; findings in each builder report.
+- Remaining: fix + merge 6s and 10 → 11 → 12 (server half) ∥ 15 → 13 → 14 → 16 → 17 (heavy, alone) → 18 (heavy, alone) → 19. Task 20 is the owner's.
+- Known gap: Task 9 — a hard server crash can orphan a CLI process.
