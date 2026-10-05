@@ -38,6 +38,15 @@
  *       array is read as { rows, crew: [] } and kept an array until a crew entry
  *       exists. The strip shows whenever it has entries; role names only in
  *       developer mode.
+ *       Each entry carries `since` (ISO): when its state began. It is set when the
+ *       state changes and kept on an update that keeps it, so a working or waiting
+ *       line can say how long it has been so: its <time> carries data-since and a
+ *       small inline script (SINCE_JS) turns the HH:MM into "running 7 min" /
+ *       "7 dk'dır sürüyor", "waiting on you 12 min" / "12 dk'dır sizi bekliyor",
+ *       every 30 s, text only; without script the HH:MM stays. `sinceState` is the
+ *       state `since` belongs to: a hand edit that changes the state restarts it
+ *       on the next render; an entry with no `since` starts at its own `time`,
+ *       never later than now.
  *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
@@ -162,9 +171,9 @@ const CONSOLE_CSS = [
   '.crew-sum{gap:16px;padding:7px 0;border-bottom:1px solid var(--line)}',
   '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
   '.crew svg{width:16px;height:16px}',
-  '.crew li.crew-line{display:grid;grid-template-columns:16px minmax(0,1fr) 46px;gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}',
+  '.crew li.crew-line{display:grid;grid-template-columns:16px minmax(0,1fr) minmax(46px,auto);gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}',
   '.crew li.crew-line:last-child{border-bottom:0}',
-  '.crew li.crew-line>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
+  '.crew li.crew-line>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
   '.crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}',
   '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}.crew-line .cm i{display:none}'
     + 'li[data-st],li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s t" "b b";gap:3px 12px}'
@@ -182,6 +191,15 @@ const CLIP_JS = [
   'var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(all,120)});all();window.addEventListener("load",all)})();',
 ].join('\n');
 const CLAMP = 5;
+// The strip's elapsed time (owner, 2026-10-05: "10 dk dır hiçbir şey olmadı mı abi?"): a working or
+// waiting line's <time data-since> reads how long it has been in that state, from the page's own clock,
+// every 30 s, without a republish. Text only; the HH:MM moves to the title; without script it stays.
+const SINCE_JS = '(function(){var tr=document.documentElement.lang==="tr";'
+  + 'function txt(m,o){if(m<1)return tr?"az önce":"just now";var h=Math.floor(m/60),r=m%60,q=tr?(h?h+" sa "+r+" dk":m+" dk"):(h?h+" h "+r+" min":m+" min");'
+  + 'return tr?q+"\'dır "+(o?"sizi bekliyor":"sürüyor"):(o?"waiting on you ":"running ")+q}'
+  + 'function tick(){var n=Date.now();Array.prototype.forEach.call(document.querySelectorAll(".crew-line>time[data-since]"),function(t){var s=Date.parse(t.getAttribute("data-since"));if(isNaN(s))return;'
+  + 'if(!t.title)t.title=t.textContent;t.textContent=txt(Math.max(0,Math.floor((n-s)/60000)),t.parentNode.classList.contains("owner"))})}'
+  + 'tick();setInterval(tick,30000)})();';
 
 // Developer mode decides only whether the owner sees the crew; no workspace → off.
 function devModeFor(dir) {
@@ -303,6 +321,21 @@ function crewTail(e) {
   return full ? ` <small class="cm" title="${full}">${me}${cx ? `<i>${me ? ' · ' : ''}${cx}</i>` : ''}</small>` : '';
 }
 
+// a working or waiting line's time carries when that state began; the script reads it as elapsed time
+const ticks = (e) => (e.state === 'work' || e.state === 'owner') && !!e.since;
+const elapsedTime = (e) => `<time${ticks(e) ? ` data-since="${esc(e.since)}"` : ''}>${esc(e.time)}</time>`;
+
+// `since`: when the entry's state began. A missing one starts at the entry's own HH:MM today, never
+// later than now; one that belongs to another state (a hand edit changed it) restarts now.
+function stampSince(e, clock) {
+  if (e.since && e.sinceState === e.state) return false;
+  let at = clock;
+  const m = !e.since && /^(\d\d):(\d\d)$/.exec(String(e.time || ''));
+  if (m) { const d = new Date(clock); d.setHours(+m[1], +m[2], 0, 0); if (d <= clock) at = d; }
+  e.since = at.toISOString(); e.sinceState = e.state;
+  return true;
+}
+
 function crewStrip(crew, L, dev = true) {
   const roleAttr = (r) => (dev ? ` data-role="${r}"` : '');
   const live = (e) => e.state === 'work' || e.state === 'owner';
@@ -316,7 +349,7 @@ function crewStrip(crew, L, dev = true) {
     const text = dev ? `${ROLE_NAME[e.role]} · ${esc(e.job)}` : esc(e.job);
     const body = /^https?:\/\//i.test(String(e.url || '')) ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${text}</a>` : text;
     const why = e.state === 'owner' && e.reason ? ` <em>${esc((L.reasons || {})[e.reason] || e.reason)}</em>` : '';
-    return `  <li class="crew-line ${e.state}"${roleAttr(e.role)}>${ICONS[e.role]}<span>${body}${why}${dev ? crewTail(e) : ''}</span><time>${esc(e.time)}</time></li>\n`;
+    return `  <li class="crew-line ${e.state}"${roleAttr(e.role)}>${ICONS[e.role]}<span>${body}${why}${dev ? crewTail(e) : ''}</span>${elapsedTime(e)}</li>\n`;
   }).join('');
   return `<div class="crew-sum">${sum}</div><ul>\n${lines}</ul>`;
 }
@@ -342,6 +375,7 @@ function render(dir, { quiet = false } = {}) {
   crew.forEach((e, i) => {
     checkCrew(e, `crew ${i + 1}`);
     if (e.time === undefined || e.time === null || e.time === '') { e.time = hm(clock); stamped = true; }
+    if (stampSince(e, clock)) stamped = true;
   });
   const seen = new Set();
   rows.forEach((r, i) => {
@@ -419,7 +453,8 @@ function render(dir, { quiet = false } = {}) {
   html = html.replace(/<main>[\s\S]*<\/main>/, () => `<main>\n<!-- crew -->\n${strip}${ol}\n</main>`)
     .replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
   // the console style and the clamp script are rebuilt last; no rounded corner or shadow survives in any style
-  html = html.replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '');
+  html = html.replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
+    .replace(/<script id="since">[\s\S]*?<\/script>\n/, '');
   html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) => a
     + css.replace(/border-radius:(?!0[;}\s!])[^;}]*;?/g, '').replace(/box-shadow:(?!none[;}\s!])[^;}]*;?/g, '') + b);
   // a page made before the strip gets its styles once
@@ -427,6 +462,8 @@ function render(dir, { quiet = false } = {}) {
   const at = html.lastIndexOf('</style>') + '</style>'.length;
   html = `${html.slice(0, at)}\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
   html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n</body>`);
+  // the elapsed-time script only when a strip line has something to count
+  if (crew.some(ticks)) html = html.replace('</body>', () => `<script id="since">${SINCE_JS}</script>\n</body>`);
   fs.writeFileSync(pagePath, html);
   if (stamped) writeStore(rowsPath, store);
   if (!quiet) console.log(`rows: ${rows.length}`);
@@ -483,6 +520,10 @@ function upsertCrew(dir, opt, { quiet = true } = {}) {
   }
   checkCrew(entry, 'crew');
   entry.time = stamp;
+  // the time in a state counts from when it began: kept while the state is, restarted when it changes
+  // (an entry from before `since` starts at its own time)
+  if (old.state === entry.state) { const o = { ...old }; stampSince(o, now()); entry.since = o.since; entry.sinceState = o.sinceState; }
+  else { entry.since = now().toISOString(); entry.sinceState = entry.state; }
   if (i >= 0) store.crew[i] = entry; else store.crew.push(entry);
   writeStore(rowsPath, store);
   render(dir, { quiet });
@@ -511,4 +552,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, CLIP_JS, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, CLIP_JS, SINCE_JS, CREW_ROLES, upsertCrew, readCrew, Refused };

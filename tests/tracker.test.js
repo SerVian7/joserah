@@ -580,3 +580,86 @@ test('crew --agent: stored as agent, kept when the entry is updated without it, 
   assert.doesNotMatch(page(dir), /a1b2c3/, 'an agent id is a handle, not page text');
   assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'X', '--state', 'work', '--agent', 'bad id!']).status, 1);
 });
+
+// Owner, 2026-10-05, at 12:29 looking at the strip: "10 dk dır hiçbir şey olmadı mı abi?" The page's
+// "updated" stamp moves on every render that changes anything, the strip included; each working or
+// waiting strip entry shows, in the page, how long it has been in that state.
+const crewAt = (dir, now, args) => runTool('tracker.js', ['crew', dir, ...args], { env: { JOSERAH_NOW: now } });
+const T3 = '2026-10-01T17:55:00';
+const store = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
+test('the updated stamp moves on a crew-only update', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'run', title: 'A', time: '09:00' }]);
+  render(dir, T1);
+  assert.match(page(dir), new RegExp(`data-t="${new Date(T1).toISOString()}"`));
+  assert.strictEqual(crewAt(dir, T2, ['--role', 'scout', '--job', 'B', '--state', 'work']).status, 0);
+  assert.match(page(dir), new RegExp(`data-t="${new Date(T2).toISOString()}"`), 'a crew-only change moves the stamp');
+});
+test('crew since: set when the state changes, kept on an update that keeps the state', (t) => {
+  const dir = tmpdir(t); init(dir);
+  const ISO = (s) => new Date(s).toISOString();
+  crewAt(dir, T1, ['--role', 'scout', '--job', 'A', '--state', 'work']);
+  assert.strictEqual(store(dir).crew[0].since, ISO(T1), 'a new entry starts now');
+  crewAt(dir, T2, ['--role', 'scout', '--job', 'A', '--state', 'work', '--url', 'https://example.com/x']);
+  assert.strictEqual(store(dir).crew[0].since, ISO(T1), 'same state: the time counts from when it began');
+  assert.strictEqual(store(dir).crew[0].time, '17:40', 'the edit time still moves');
+  crewAt(dir, T3, ['--role', 'scout', '--job', 'A', '--state', 'owner', '--reason', 'approval']);
+  assert.strictEqual(store(dir).crew[0].since, ISO(T3), 'a state change restarts it');
+  // a hand edit that changes the state in rows.json restarts it on the next render too
+  const s = store(dir); s.crew[0].state = 'work'; fs.writeFileSync(path.join(dir, 'rows.json'), JSON.stringify(s));
+  render(dir, '2026-10-01T18:10:00');
+  assert.strictEqual(store(dir).crew[0].since, ISO('2026-10-01T18:10:00'));
+  // an entry written before `since` existed starts at its own time, never later than now
+  const s2 = store(dir); s2.crew.push({ role: 'lead', job: 'Old', state: 'work', time: '09:00' }, { role: 'lead', job: 'Ahead', state: 'work', time: '23:59' });
+  fs.writeFileSync(path.join(dir, 'rows.json'), JSON.stringify(s2));
+  render(dir, '2026-10-01T18:10:00');
+  const c = store(dir).crew;
+  assert.strictEqual(c[1].since, ISO('2026-10-01T09:00:00'));
+  assert.strictEqual(c[2].since, ISO('2026-10-01T18:10:00'), 'a time ahead of the clock is not trusted');
+});
+test('elapsed: working and waiting strip lines carry data-since and one inline script; idle and no-crew pages none', (t) => {
+  const { SINCE_JS } = require('../tools/tracker.js');
+  for (const dev of [true, false]) {
+    const dir = dev ? devWs(t) : (() => { const d = tmpdir(t); init(d, ['--lang', 'tr']); return d; })();
+    crewAt(dir, T1, ['--role', 'scout', '--job', 'A', '--state', 'work']);
+    crewAt(dir, T1, ['--role', 'scout', '--job', 'B', '--state', 'owner', '--reason', 'decision']);
+    crewAt(dir, T1, ['--role', 'builder', '--job', 'C', '--state', 'idle']);
+    render(dir, T2);
+    const html = page(dir);
+    const iso = new Date(T1).toISOString();
+    assert.match(html, new RegExp(`class="crew-line work"[^\n]*<time data-since="${iso}">09:05</time>`), `dev ${dev}: work`);
+    assert.match(html, new RegExp(`class="crew-line owner"[^\n]*<time data-since="${iso}">09:05</time>`), `dev ${dev}: owner`);
+    assert.match(html, /class="crew-line idle"[^\n]*<time>09:05<\/time>/, `dev ${dev}: idle has no elapsed`);
+    assert.strictEqual(html.split('<script id="since">').length, 2, 'one script');
+    assert.ok(html.includes(`<script id="since">${SINCE_JS}</script>`));
+    if (!dev) assert.doesNotMatch(html, ROLE_WORDS, 'off: still no role name');
+  }
+  const plain = tmpdir(t); init(plain);
+  setRows(plain, [{ state: 'run', title: 'A', time: '09:00' }]);
+  render(plain);
+  assert.doesNotMatch(page(plain), /data-since|id="since"/, 'nothing to tick, no script');
+});
+test('elapsed text: az önce / just now, minutes, hours and minutes; ticks every 30 s; text only', () => {
+  const vm = require('vm');
+  const { SINCE_JS } = require('../tools/tracker.js');
+  assert.doesNotMatch(SINCE_JS, /animation|transition|requestAnimationFrame/, 'no motion');
+  const at = Date.parse('2026-10-01T12:00:00Z');
+  const run = (lang, mins, owner) => {
+    const el = { textContent: '11:00', title: '', getAttribute: () => new Date(at - mins * 60000).toISOString(),
+      parentNode: { classList: { contains: (c) => c === (owner ? 'owner' : 'work') } } };
+    let every = 0;
+    class D extends Date { static now() { return at; } }
+    vm.runInNewContext(SINCE_JS, { Date: D, setInterval: (f, ms) => { every = ms; },
+      document: { documentElement: { lang }, querySelectorAll: () => [el] } });
+    return { text: el.textContent, title: el.title, every };
+  };
+  assert.deepStrictEqual(run('tr', 7, false), { text: "7 dk'dır sürüyor", title: '11:00', every: 30000 });
+  assert.strictEqual(run('tr', 12, true).text, "12 dk'dır sizi bekliyor");
+  assert.strictEqual(run('tr', 0.5, false).text, 'az önce');
+  assert.strictEqual(run('tr', 65, false).text, "1 sa 5 dk'dır sürüyor");
+  assert.strictEqual(run('en', 7, false).text, 'running 7 min');
+  assert.strictEqual(run('en', 12, true).text, 'waiting on you 12 min');
+  assert.strictEqual(run('en', 0, true).text, 'just now');
+  assert.strictEqual(run('en', 65, true).text, 'waiting on you 1 h 5 min');
+  assert.strictEqual(run('en', -3, false).text, 'just now', 'a start ahead of the clock reads as just now');
+});

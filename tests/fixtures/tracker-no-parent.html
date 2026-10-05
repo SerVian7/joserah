@@ -63,9 +63,9 @@ section.crew{padding:0;border-top:1px solid var(--line);border-bottom:1px solid 
 .crew-sum{gap:16px;padding:7px 0;border-bottom:1px solid var(--line)}
 .crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}
 .crew svg{width:16px;height:16px}
-.crew li.crew-line{display:grid;grid-template-columns:16px minmax(0,1fr) 46px;gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.crew li.crew-line{display:grid;grid-template-columns:16px minmax(0,1fr) minmax(46px,auto);gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .crew li.crew-line:last-child{border-bottom:0}
-.crew li.crew-line>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
+.crew li.crew-line>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}
 .crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}
 @media (max-width:560px){main{gap:24px}main>ol{gap:24px}.crew-line .cm i{display:none}li[data-st],li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s t" "b b";gap:3px 12px}li[data-st]>.s{grid-area:s}li[data-st]>div{grid-area:b}li[data-st]>time{grid-area:t}li.job>ol,li.grp>details>ol{padding-left:12px}}
 </style>
