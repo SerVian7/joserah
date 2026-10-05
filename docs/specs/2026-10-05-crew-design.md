@@ -393,6 +393,18 @@ of that role is working (e.g. magnifier ·2). Under it, **one line each:** `<ico
   (orchestrate, "Pages under work"). The strip is therefore as fresh as Voice's last publish; a page that
   updates itself without a republish is future work.
 
+## Tracker look
+
+Decision, owner, 2026-10-05: a calm, precise admin console, not cards. No rounded corners or shadows; dense
+table-like rows with hairline separators; a mono state tag with a thin left mark; a tabular, right-aligned time
+column. A main job is a container: a header line with its sub-jobs indented behind a thin rule, quieter. Lists
+are never fully closed: a long list (more than five items) shows its first rows, the rest fades out, and a
+button ("tümü (N)") opens it in place as a bounded scroll area (keyboard accessible, no page jump, no motion
+under reduced-motion). Active work is never clamped or folded. With developer mode on, each strip entry may
+carry a faint `model · effort · ctx @time`; `ctx` is shown only as a reported figure with its time, never
+estimated (source: plan Task 4.6). Strip colour for waiting-on-owner: the page's owner colour (owner, "A bence.").
+Section order (active work above waiting and plans, or the 2026-10-03 order): with the owner.
+
 ## Tracker row groups
 
 Decision, owner, 2026-10-05: sub-jobs belong under their main job, in every state section, done included.
