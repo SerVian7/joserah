@@ -101,16 +101,17 @@ export class ClaudeCliEngine implements Engine {
       cwd: job.cwd, env: { ...jobEnv(process.env, job.id), ...this.#extra }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: true, shell: false,
     });
     let spawnError: string | null = null;
+    let ended = false; // once closed, the PID may belong to another process: never kill by it then
     const done = new Promise<{ code: number | null; signal: string | null; spawnError: string | null }>((resolve) => {
-      child.on('error', (e) => { spawnError = `${(e as NodeJS.ErrnoException).code ?? ''} ${e.message}`.trim(); q.close(); resolve({ code: null, signal: null, spawnError }); });
-      child.on('close', (code, signal) => { q.close(); resolve({ code, signal, spawnError }); });
+      child.on('error', (e) => { ended = true; spawnError = `${(e as NodeJS.ErrnoException).code ?? ''} ${e.message}`.trim(); q.close(); resolve({ code: null, signal: null, spawnError }); });
+      child.on('close', (code, signal) => { ended = true; q.close(); resolve({ code, signal, spawnError }); });
     });
     child.stdin?.on('error', () => { /* the CLI may exit before reading all of stdin */ });
     child.stdin?.end(Buffer.from(job.brief, 'utf8'));
     if (child.stdout) createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', (raw) => { for (const event of parseLine(raw)) q.push({ raw, event }); });
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (text: string) => q.push({ raw: '', event: { kind: 'stderr', text: text.slice(0, 2000) } }));
-    return { pid: child.pid, events: q, done, cancel: () => (child.pid ? killTree(child.pid) : Promise.resolve()) };
+    return { pid: child.pid, events: q, done, cancel: () => (child.pid && !ended ? killTree(child.pid) : Promise.resolve()) };
   }
 
   async health(): Promise<EngineHealth> {

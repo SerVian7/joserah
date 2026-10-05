@@ -69,10 +69,12 @@ test('a run streams init, text, result and a bad line', async () => {
 test('cancel kills the whole process tree', async (t) => {
   const pids = path.join(tmpdir(t), 'pids.json');
   const run = fakeEngine({ FAKE_CLAUDE_MODE: 'hang', FAKE_CLAUDE_PIDS: pids }).start(job());
+  t.after(() => run.cancel()); // a failed assertion must not leave the hung fake behind
   const it = run.events[Symbol.asyncIterator]();
   await it.next();
-  for (let i = 0; i < 100 && !fs.existsSync(pids); i++) await new Promise((r) => setTimeout(r, 50));
-  const [parent, child] = JSON.parse(fs.readFileSync(pids, 'utf8')) as number[];
+  const read = (): number[] | null => { try { return JSON.parse(fs.readFileSync(pids, 'utf8')) as number[]; } catch { return null; } };
+  for (let i = 0; i < 100 && !read(); i++) await new Promise((r) => setTimeout(r, 50));
+  const [parent, child] = read() ?? [];
   await run.cancel();
   await run.done;
   const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
