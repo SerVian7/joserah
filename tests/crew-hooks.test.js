@@ -386,7 +386,13 @@ const fx = (name, over = {}) => {
 const ev = { PreToolUse: 'pre-tool-use', PostToolUse: 'post-tool-use', SubagentStart: 'subagent-start', SubagentStop: 'subagent-stop' };
 const run = (ws, name, now, over) => hook(ws, ev[name.replace(/^(fg|bg)-|\d+$/g, '')], fx(name, over), now);
 const strip = (tr) => (fs.readFileSync(path.join(tr, 'index.html'), 'utf8').match(/<section class="crew">[\s\S]*?<\/section>/) || [''])[0];
-function pendingClean(t) { t.after(() => { for (const s of ['304afa0b-b958-48d9-adc9-44e178716e7f', '2fc43959-12c3-4d6f-88b3-645a48ae425b']) try { fs.rmSync(path.join(require('os').tmpdir(), `joserah-crew-pending-${s}.json`), { force: true }); } catch { /* gone */ } }); }
+// the captured payloads share two session ids: their pending lists are cleared before and after each test,
+// so a run that used the same payloads (a dry run, an interrupted test) cannot leave one behind
+function pendingClean(t) {
+  const clear = () => { for (const s of ['304afa0b-b958-48d9-adc9-44e178716e7f', '2fc43959-12c3-4d6f-88b3-645a48ae425b']) try { fs.rmSync(path.join(require('os').tmpdir(), `joserah-crew-pending-${s}.json`), { force: true }); } catch { /* gone */ } };
+  clear();
+  t.after(clear);
+}
 
 test('A1: background launches in their measured order — one entry each, job from the description, model/effort from the definition, idle at stop', (t) => {
   pendingClean(t);
