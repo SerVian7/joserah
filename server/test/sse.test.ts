@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { signedIn } from './helpers.ts';
+import { EventBus } from '../src/events.ts';
 
 async function readUntil(res: Response, pred: (text: string) => boolean): Promise<string> {
   const reader = res.body!.getReader(); const dec = new TextDecoder(); let text = '';
@@ -27,7 +28,7 @@ test('events stream live and resume after Last-Event-ID', async (t) => {
 });
 
 test('an id older than the buffer gets a reset', async (t) => {
-  const { app, deps, cookie } = await signedIn(t);
+  const { app, deps, cookie } = await signedIn(t, { bus: new EventBus(1000, 1) }); // pinned start: id 1 really falls out of the ring
   for (let i = 0; i < 1005; i++) deps.bus.publish({ type: 'jobs' });
   const text = await readUntil(await app.request('/events', { headers: { cookie, 'last-event-id': '1' } }), (s) => s.includes('reset'));
   assert.match(text, /"type":"reset"/);
