@@ -13,6 +13,7 @@ import { Store } from '../src/store.ts';
 import { ClaudeCliEngine } from '../src/engines/claude-cli.ts';
 import { JobRunner, type Checkpointer } from '../src/jobs.ts';
 import { cliTracker } from '../src/tracker-bridge.ts';
+import { GitCheckpointer } from '../src/checkpoint.ts';
 
 export const SERVER_ROOT = path.resolve(import.meta.dirname, '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
@@ -97,12 +98,12 @@ export function fakeEngine(extraEnv: Record<string, string> = {}): ClaudeCliEngi
 }
 
 /** A job runner on a fresh workspace with the fake engine; `deps.jobs` is that runner. */
-export function runnerFor(t: TestContext, o: { env?: Record<string, string>; config?: Partial<ServerConfig>; git?: boolean; checkpoint?: Checkpointer } = {}) {
+export function runnerFor(t: TestContext, o: { env?: Record<string, string>; config?: Partial<ServerConfig>; git?: boolean; checkpoint?: Checkpointer; checkpointer?: boolean } = {}) {
   const ws = tmpWorkspace(t, { git: o.git });
   const cfg: ServerConfig = { ...DEFAULT_CONFIG, ...(o.config ?? {}) };
   const deps = baseDeps(t, { workspace: ws, config: () => cfg });
   const runner = new JobRunner({ workspace: ws, store: deps.store, bus: deps.bus, engine: fakeEngine(o.env), config: () => cfg,
-    tracker: cliTracker(ws, 'en'), checkpoint: o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
+    tracker: cliTracker(ws, 'en'), checkpoint: o.checkpointer ? new GitCheckpointer(ws) : o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
   deps.jobs = runner;
   return { runner, deps, ws };
 }
