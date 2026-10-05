@@ -169,6 +169,22 @@ Owner: "Token ekonomisi yapmayı unutma." The platform exists partly to burn few
 - **Visible cost:** each job shows the CLI's cost estimate (`total_cost_usd`, labelled an estimate); the home screen shows
   today's total; a per-job cap (turn limit and timeout; a money cap if the CLI offers one — verified in the plan).
 
+## 8. Job safety and records (lessons from earlier projects)
+
+From [../design/2026-10-05-lessons-for-platform.md](../design/2026-10-05-lessons-for-platform.md) (evidence per item there;
+its other "missing" items are folded into the plan).
+
+- **Per-job-type tool allowlist.** Ingest, query and lint jobs may write only under `knowledge/**` (the verbatim
+  copy into `imports/` is made by the server, never by the job); no Bash, no network, no mail tools. General jobs use the
+  workspace's own permissions. Server secrets (`keys/server/`) live outside the directory a job runs in.
+- **Checkpoint and diff.** Jobs write through the CLI, not through Store: before each job the server makes a checkpoint
+  commit of the workspace; after it, it lists the changed files on the job and raises an owner Tracker row for any
+  deletion or any write outside the job type's allowlist.
+- **Job logs outside the backup.** The raw stream-json log is gitignored (`.joserah/desk/jobs/**/*.jsonl`); the backup
+  keeps a short text digest per job (task, result, changed files, cost estimate).
+- **Answers never overwrite.** An answer write merges by document id and never replaces another author's document —
+  an owner's `set()` cannot erase an assistant reply (the destructive-upsert bug seen in Zenger Control's registration).
+
 ## Out of scope (v1)
 
 OpenRouter or any second engine; the device runner and any device code; native phone/watch/TV apps; several users or several workspaces per server; a separate front-end app; Wrap or
