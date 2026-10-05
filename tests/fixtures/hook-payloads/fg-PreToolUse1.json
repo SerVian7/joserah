@@ -1,0 +1,16 @@
+{
+ "session_id": "2fc43959-12c3-4d6f-88b3-645a48ae425b",
+ "transcript_path": "/home/user/.claude/projects/proj/2fc43959-12c3-4d6f-88b3-645a48ae425b.jsonl",
+ "cwd": "/home/user/proj",
+ "prompt_id": "e2654728-25ec-4033-a4f1-7960de7c4deb",
+ "permission_mode": "default",
+ "hook_event_name": "PreToolUse",
+ "tool_name": "Agent",
+ "tool_input": {
+  "description": "Probe job",
+  "prompt": "say hi",
+  "subagent_type": "probe",
+  "run_in_background": false
+ },
+ "tool_use_id": "toolu_01Nzo6xsu8pskqfhAbBmytNP"
+}

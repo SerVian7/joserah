@@ -1,0 +1,12 @@
+{
+ "session_id": "304afa0b-b958-48d9-adc9-44e178716e7f",
+ "transcript_path": "/home/user/.claude/projects/proj/304afa0b-b958-48d9-adc9-44e178716e7f.jsonl",
+ "cwd": "/home/user/proj",
+ "prompt_id": "fcb17c6e-9161-4c74-9012-44655e74290d",
+ "permission_mode": "default",
+ "hook_event_name": "Stop",
+ "stop_hook_active": false,
+ "last_assistant_message": "Both probe agents completed:\n- **Probe one**: hi\n- **Probe two**: hi",
+ "background_tasks": [],
+ "session_crons": []
+}

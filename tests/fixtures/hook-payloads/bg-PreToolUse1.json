@@ -1,0 +1,16 @@
+{
+ "session_id": "304afa0b-b958-48d9-adc9-44e178716e7f",
+ "transcript_path": "/home/user/.claude/projects/proj/304afa0b-b958-48d9-adc9-44e178716e7f.jsonl",
+ "cwd": "/home/user/proj",
+ "prompt_id": "90e10496-e543-4ad3-b469-2f3259b5640b",
+ "permission_mode": "default",
+ "hook_event_name": "PreToolUse",
+ "tool_name": "Agent",
+ "tool_input": {
+  "description": "Probe one",
+  "prompt": "say hi",
+  "subagent_type": "probe",
+  "run_in_background": true
+ },
+ "tool_use_id": "toolu_01QGx5UVTTp4zbLu3NtLbJeb"
+}

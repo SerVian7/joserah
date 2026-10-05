@@ -37,12 +37,14 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { findWorkspace, readConfig } = require('./lib/workspace');
 const { resolveCrew, ROLES: CREW_ROLES } = require('../tools/lib/crew-config');
 const L = require('../tools/lib/ledger');
+const DT = require('./lib/daily-tracker');
 const { append: appendLine } = require('../tools/ledger');
 
-const EVENTS = ['subagent-start', 'subagent-stop', 'pre-compact', 'session-end', 'session-start', 'post-tool-use'];
+const EVENTS = ['subagent-start', 'subagent-stop', 'pre-compact', 'session-end', 'session-start', 'post-tool-use', 'pre-tool-use'];
 
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());
 const pad = (n) => String(n).padStart(2, '0');
@@ -121,25 +123,8 @@ function stamp(root, input, kind, detail) {
 
 const MAX_CONTEXT = 2000;
 
-/**
- * Today's Daily Tracker folder: desk/artifacts/<today>/daily-tracker, else the
- * first folder of the day whose index.html says "Daily Tracker" (the test
- * session-brief.js uses for the new-day line). Null when there is none.
- */
-function dailyTracker(root) {
-  const base = path.join(root, '.joserah', 'desk', 'artifacts', isoDay(now()));
-  let subs;
-  try { subs = fs.readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort(); } catch { return null; }
-  if (subs.includes('daily-tracker')) subs = ['daily-tracker', ...subs.filter((n) => n !== 'daily-tracker')];
-  for (const n of subs) {
-    const d = path.join(base, n);
-    try {
-      if (!fs.existsSync(path.join(d, 'rows.json'))) continue;
-      if (/Daily Tracker/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) return d;
-    } catch { /* not a page */ }
-  }
-  return null;
-}
+/** Today's Daily Tracker folder (hooks/lib/daily-tracker.js), or null. */
+const dailyTracker = (root) => DT.dailyTracker(root, isoDay(now()));
 
 /** The Tracker's rows, from either rows.json shape (array, or { rows, crew }). */
 function trackerRows(dir) {
@@ -183,33 +168,153 @@ function reinject(root, input) {
 }
 
 /**
- * The Crew strip's safety net (spec "Tracker Crew strip", Mechanics): a crew
- * worker with no entry for its role on today's Daily Tracker gets one at start,
- * `{ role, job: <agent_id>, state: work }`, dimmed to `idle` at its stop. An
- * entry Voice already wrote for the role is left as is; the hook writes only
- * what the payload carries (agent type and id), never for a type that is not a
- * crew role, and never publishes. Any refusal or error leaves the file alone.
+ * Every crew agent on today's Daily Tracker, by itself (owner, 2026-10-05: "bunu da sık sık yapıyorsun …
+ * gerçekten testini yapıp çözmek lazım"). Measured payloads (tests/fixtures/hook-payloads, 2026-10-05):
+ * SubagentStart carries agent_id and agent_type but no description; the Agent tool call carries the
+ * description — PreToolUse `tool_input.description` before the start, and PostToolUse
+ * `tool_response.agentId` with that description (at launch for a background agent, status
+ * `async_launched`; at the end for a foreground one, status `completed`) and `resolvedModel`.
+ *
+ *   pre-tool-use (Agent)   the description waits in a per-session pending list (OS temp dir)
+ *   subagent-start         the agent's entry: role from its type, job the oldest waiting description of
+ *                          that type (else its agent id), state work, model and effort from its definition
+ *   post-tool-use (Agent)  the exact agent id ↔ description: the entry is created if the start has not
+ *                          come yet, its job corrected if the start took another one's description
+ *   subagent-stop          its entry goes idle
+ *
+ * An entry is found by its agent id, else by role + job. Each change re-renders the page with tracker.js
+ * (no publish). Never for a type that is not a crew role; nothing without a Tracker for today; any error
+ * leaves the files alone.
  */
-function stripSafetyNet(root, input, starting) {
-  const role = roleOf(input.agent_type);
-  const agent = id(input.agent_id);
-  if (!CREW_ROLES.includes(role) || !agent) return;
+const pendingFile = (session) => path.join(require('os').tmpdir(), `joserah-crew-pending-${safe(session || '-')}.json`);
+const PENDING_TTL = 60 * 60 * 1000;
+function readPending(session) {
+  try { const j = JSON.parse(fs.readFileSync(pendingFile(session), 'utf8')); return Array.isArray(j) ? j : []; } catch { return []; }
+}
+function writePending(session, list) {
+  const t = now().getTime();
+  try { fs.writeFileSync(pendingFile(session), JSON.stringify(list.filter((x) => t - x.at < PENDING_TTL))); } catch { /* best effort */ }
+}
+
+/** model and effort from the agent's definition frontmatter (workspace, user, plugin), as written there. */
+function agentDefinition(root, type) {
+  const name = String(type).split(':').pop();
+  if (!/^[\w-]{1,60}$/.test(name)) return {};
+  const dirs = [path.join(root, '.claude', 'agents'), path.join(require('os').homedir(), '.claude', 'agents'), path.join(__dirname, '..', 'agents')];
+  for (const d of dirs) {
+    let text;
+    try { text = fs.readFileSync(path.join(d, `${name}.md`), 'utf8'); } catch { continue; }
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+    if (!m) return {};
+    const field = (k) => ((new RegExp(`^${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1]) || [])[1] || '');
+    const out = {};
+    const model = field('model'); const effort = field('effort');
+    if (/^[\w.:[\]-]{1,40}$/.test(model) && model !== 'inherit') out.model = model;
+    if (['low', 'medium', 'high'].includes(effort)) out.effort = effort;
+    return out;
+  }
+  return {};
+}
+
+/** Reads today's store, lets `change` edit its crew, writes and re-renders when it changed. */
+function withCrew(root, change) {
   const dir = dailyTracker(root);
   if (!dir) return;
-  try {
-    const tracker = require('../tools/tracker');
-    const crew = tracker.readCrew(dir);
-    if (starting) {
-      if (crew.some((e) => e && e.role === role)) return;
-      tracker.upsertCrew(dir, { role, job: agent, state: 'work' });
-      return;
+  const rowsPath = path.join(dir, 'rows.json');
+  let raw; let j;
+  try { raw = fs.readFileSync(rowsPath, 'utf8'); j = JSON.parse(raw); } catch { return; }
+  const store = Array.isArray(j) ? { rows: j, crew: [] } : (j && Array.isArray(j.rows) ? { rows: j.rows, crew: Array.isArray(j.crew) ? j.crew : [] } : null);
+  if (!store) return;
+  if (!change(store.crew)) return;
+  fs.writeFileSync(rowsPath, JSON.stringify({ rows: store.rows, crew: store.crew }, null, 1) + '\n');
+  const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'tools', 'tracker.js'), dir],
+    { encoding: 'utf8', timeout: 8000, env: process.env });
+  // a page that does not render keeps its store as it was: the strip is a convenience, never a break
+  if (r.status !== 0) fs.writeFileSync(rowsPath, raw);
+}
+
+const k = (x) => String(x ?? '').trim().toLowerCase();
+const stampNow = (e, state) => {
+  const t = now();
+  if (e.state !== state || e.sinceState !== state) { e.since = t.toISOString(); e.sinceState = state; }
+  e.state = state; e.time = hm(t);
+};
+function upsertAgent(crew, { role, agent, job, state, model, effort }) {
+  let e = crew.find((x) => x && x.agent === agent)
+    || crew.find((x) => x && x.role === role && !x.agent && k(x.job) === k(job))
+    || crew.find((x) => x && x.role === role && k(x.job) === k(agent));
+  if (!e) { e = { role, job }; crew.push(e); }
+  e.agent = agent;
+  if (job && k(e.job) === k(agent)) e.job = job;
+  if (model && !e.model) e.model = model;
+  if (effort && !e.effort) e.effort = effort;
+  stampNow(e, state);
+  return e;
+}
+
+function agentToolStart(input) {
+  const ti = input.tool_input || {};
+  const role = roleOf(ti.subagent_type);
+  const desc = typeof ti.description === 'string' ? ti.description.trim() : '';
+  if (!CREW_ROLES.includes(role) || !desc || !id(input.session_id)) return;
+  const list = readPending(input.session_id);
+  list.push({ tu: String(input.tool_use_id || ''), role, desc, at: now().getTime() });
+  writePending(input.session_id, list);
+}
+
+function agentStarted(root, input) {
+  const role = roleOf(input.agent_type);
+  const agent = id(input.agent_id);
+  if (!CREW_ROLES.includes(role) || !agent || !dailyTracker(root)) return;
+  const list = readPending(input.session_id);
+  const known = list.find((x) => x.agent === agent);
+  const next = known || list.find((x) => x.role === role && !x.agent);
+  if (next) { next.agent = agent; writePending(input.session_id, list); }
+  const def = agentDefinition(root, input.agent_type);
+  withCrew(root, (crew) => { upsertAgent(crew, { role, agent, job: next ? next.desc : agent, state: 'work', ...def }); return true; });
+}
+
+function agentToolDone(root, input) {
+  const ti = input.tool_input || {};
+  const tr = input.tool_response || {};
+  const role = roleOf(ti.subagent_type);
+  const agent = id(tr.agentId);
+  const desc = typeof ti.description === 'string' ? ti.description.trim() : '';
+  if (!CREW_ROLES.includes(role) || !agent || !desc || !dailyTracker(root)) return;
+  const list = readPending(input.session_id);
+  const mine = list.find((x) => x.tu && x.tu === String(input.tool_use_id || '')) || list.find((x) => x.role === role && x.desc === desc && !x.agent);
+  // the start took another launch's description: hand that one back to the agent that has its own
+  const swapped = list.find((x) => x.agent === agent && x !== mine);
+  if (swapped && mine && mine.agent) { const other = mine.agent; mine.agent = agent; swapped.agent = other; } else if (mine) mine.agent = agent;
+  writePending(input.session_id, list);
+  const def = agentDefinition(root, ti.subagent_type);
+  if (!def.model && typeof tr.resolvedModel === 'string') def.model = tr.resolvedModel;
+  withCrew(root, (crew) => {
+    const e = crew.find((x) => x && x.agent === agent);
+    if (e) {
+      if (k(e.job) === k(desc)) return false;
+      const other = crew.find((x) => x && x !== e && x.role === role && k(x.job) === k(desc));
+      if (other) other.job = e.job; // the two swapped at the start
+      e.job = desc;
+      return true;
     }
-    // at the stop: the hook's own entry (job = agent id), and an entry Voice tagged
-    // with `--agent <id>` under the job's own words; its link is kept
+    // the start has not come yet (background launch): the entry now, working; a finished foreground
+    // agent's entry was already dimmed at its stop
+    upsertAgent(crew, { role, agent, job: desc, state: tr.status === 'completed' ? 'idle' : 'work', ...def });
+    return true;
+  });
+}
+
+function agentStopped(root, input) {
+  const role = roleOf(input.agent_type);
+  const agent = id(input.agent_id);
+  if (!CREW_ROLES.includes(role) || !agent || !dailyTracker(root)) return;
+  withCrew(root, (crew) => {
     const mine = crew.filter((e) => e && e.role === role && e.state !== 'idle'
-      && (e.agent === agent || String(e.job).trim().toLowerCase() === agent.toLowerCase()));
-    for (const e of mine) tracker.upsertCrew(dir, { role, job: e.job, state: 'idle', ...(e.url ? { url: e.url } : {}) });
-  } catch { /* the strip is a convenience; the spawn and the stop go on */ }
+      && (e.agent === agent || k(e.job) === k(agent)));
+    for (const e of mine) stampNow(e, 'idle');
+    return mine.length > 0;
+  });
 }
 
 // ---- context size (Task 4.6; owner, 2026-10-05: "never an estimate") --------
@@ -301,10 +406,16 @@ function recordContext(root, input, force) {
 
 function handle(event, root, input) {
   if (event === 'session-start') return reinject(root, input);
-  if (event === 'subagent-start' || event === 'subagent-stop') stripSafetyNet(root, input, event === 'subagent-start');
-  if (event === 'subagent-stop') recordContext(root, input, true);
+  const agentTool = input.tool_name === 'Agent' || input.tool_name === 'Task';
+  if (event === 'pre-tool-use') { if (agentTool) agentToolStart(input); return null; }
+  if (event === 'subagent-start') { try { agentStarted(root, input); } catch { /* the strip is a convenience */ } }
+  if (event === 'subagent-stop') { try { agentStopped(root, input); } catch { /* idem */ } recordContext(root, input, true); }
   // a worker's tool call (its payload carries agent_id, measured); the main thread's has none
-  if (event === 'post-tool-use') { if (input.agent_id) recordContext(root, input, false); return null; }
+  if (event === 'post-tool-use') {
+    if (agentTool) { try { agentToolDone(root, input); } catch { /* idem */ } }
+    if (input.agent_id) recordContext(root, input, false);
+    return null;
+  }
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
   // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
   // may not fire at all when a background shell is still running: best effort only.

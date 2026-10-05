@@ -218,14 +218,14 @@ test('safety net: a crew worker with no entry is added at start and dimmed at st
   assert.strictEqual(e.time, '09:20');
 });
 
-test('safety net: an existing entry for the role is left as is at start', (t) => {
+// A1 (owner, 2026-10-05): every agent appears, also when its role already has an entry; that entry is kept.
+test('safety net: an existing entry for the role is kept; the agent gets its own beside it', (t) => {
   const { ws, tr, store } = trackerFixture(t);
   runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
-  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
   sub(ws, 'subagent-start', 'scout');
-  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.agent]), [['DOTS research', 'work', undefined], ['A7', 'work', 'A7']]);
   sub(ws, 'subagent-stop', 'scout');
-  assert.strictEqual(store().crew[0].state, 'work', 'the stop of an agent the hook did not add touches no other entry');
+  assert.deepStrictEqual(store().crew.map((e) => e.state), ['work', 'idle'], 'the stop touches only its own agent\'s entry');
 });
 
 test('safety net: an entry Lead tagged with --agent is dimmed at that agent\'s stop, its link kept', (t) => {
@@ -332,10 +332,10 @@ test('ctx: nothing measured, nothing written', (t) => {
 test('ctx: only the hook\'s own entry for that agent is touched', (t) => {
   const f = ctxFixture(t);
   runTool('tracker.js', ['crew', f.tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
-  sub(f.ws, 'subagent-start', 'scout', f.agent); // the role has an entry: the hook adds none
+  sub(f.ws, 'subagent-start', 'scout', f.agent); // A1: the agent gets its own entry beside the role's other one
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
-  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.ctx]), [['DOTS research', undefined]]);
+  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.ctx]), [['DOTS research', undefined], [f.agent, 101]], 'the other entry is not touched');
 });
 
 test('ctx: SubagentStop writes the final figure as it dims the entry', (t) => {
@@ -368,4 +368,90 @@ test('ctx: an entry Lead wrote with --agent is matched by its agent id first', (
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
   assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.agent, e.ctx]), [['DOTS research', f.agent, 101]]);
+});
+
+// A1 (owner, 2026-10-05: "bunu da sık sık yapıyorsun … gerçekten testini yapıp çözmek lazım"): every
+// crew agent appears on today's Tracker by itself, no model action needed. Real payloads, captured
+// 2026-10-05 (tests/fixtures/hook-payloads): SubagentStart carries no description, so the job comes from
+// the Agent tool call — PreToolUse (tool_input.description, before the start) and PostToolUse
+// (tool_response.agentId with the same description; at launch for a background agent, at the end for a
+// foreground one). Only agent_type / subagent_type are changed here, to a crew role.
+const FX = path.join(__dirname, 'fixtures', 'hook-payloads');
+const fx = (name, over = {}) => {
+  const p = JSON.parse(fs.readFileSync(path.join(FX, `${name}.json`), 'utf8'));
+  if (p.agent_type) p.agent_type = 'builder';
+  if (p.tool_input && p.tool_input.subagent_type) p.tool_input.subagent_type = 'builder';
+  return JSON.stringify({ ...p, ...over });
+};
+const ev = { PreToolUse: 'pre-tool-use', PostToolUse: 'post-tool-use', SubagentStart: 'subagent-start', SubagentStop: 'subagent-stop' };
+const run = (ws, name, now, over) => hook(ws, ev[name.replace(/^(fg|bg)-|\d+$/g, '')], fx(name, over), now);
+const strip = (tr) => (fs.readFileSync(path.join(tr, 'index.html'), 'utf8').match(/<section class="crew">[\s\S]*?<\/section>/) || [''])[0];
+function pendingClean(t) { t.after(() => { for (const s of ['304afa0b-b958-48d9-adc9-44e178716e7f', '2fc43959-12c3-4d6f-88b3-645a48ae425b']) try { fs.rmSync(path.join(require('os').tmpdir(), `joserah-crew-pending-${s}.json`), { force: true }); } catch { /* gone */ } }); }
+
+test('A1: background launches in their measured order — one entry each, job from the description, model/effort from the definition, idle at stop', (t) => {
+  pendingClean(t);
+  const { ws, tr, store } = trackerFixture(t);
+  for (const n of ['bg-PreToolUse1', 'bg-PreToolUse2']) assert.strictEqual(run(ws, n).status, 0);
+  assert.strictEqual(run(ws, 'bg-SubagentStart1', '2026-10-05T09:01:00').status, 0);
+  let c = store().crew;
+  assert.deepStrictEqual(c.map((e) => [e.role, e.job, e.state, e.agent, e.model, e.effort, e.time]),
+    [['builder', 'Probe one', 'work', 'a7677bfe7d813817e', 'opus', 'high', '09:01']]);
+  assert.match(strip(tr), />Probe one<\/button>/, 're-rendered: the line is on the page');
+  run(ws, 'bg-PostToolUse1', '2026-10-05T09:01:00');
+  run(ws, 'bg-PostToolUse2', '2026-10-05T09:01:00'); // its SubagentStart comes after (measured)
+  run(ws, 'bg-SubagentStart2', '2026-10-05T09:01:00');
+  c = store().crew;
+  assert.deepStrictEqual(c.map((e) => [e.job, e.state, e.agent]), [['Probe one', 'work', 'a7677bfe7d813817e'], ['Probe two', 'work', 'ab9a3d315a2a8cc37']], 'no duplicate');
+  run(ws, 'bg-SubagentStop1', '2026-10-05T09:05:00'); // ab9a… stops first (measured)
+  run(ws, 'bg-SubagentStop2', '2026-10-05T09:06:00');
+  c = store().crew;
+  assert.deepStrictEqual(c.map((e) => [e.job, e.state, e.time]), [['Probe one', 'idle', '09:06'], ['Probe two', 'idle', '09:05']]);
+  assert.match(strip(tr), /<li class="crew-none">/, 're-rendered: nothing running');
+});
+test('A1: a foreground agent — the late PostToolUse never sets a finished entry back to work', (t) => {
+  pendingClean(t);
+  const { ws, store } = trackerFixture(t);
+  run(ws, 'fg-PreToolUse1'); run(ws, 'fg-SubagentStart1'); run(ws, 'fg-SubagentStop1', '2026-10-05T09:03:00'); run(ws, 'fg-PostToolUse1', '2026-10-05T09:03:00');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.agent]), [['Probe job', 'idle', 'a2c4c87ea93f66eaa']]);
+});
+test('A1: two launches of one role started out of order — the PostToolUse puts each description on its own agent', (t) => {
+  pendingClean(t);
+  const { ws, store } = trackerFixture(t);
+  run(ws, 'bg-PreToolUse1'); run(ws, 'bg-PreToolUse2');
+  run(ws, 'bg-SubagentStart2'); // ab9a… starts first: it takes the oldest description, wrongly
+  run(ws, 'bg-SubagentStart1');
+  run(ws, 'bg-PostToolUse1'); run(ws, 'bg-PostToolUse2');
+  const by = Object.fromEntries(store().crew.map((e) => [e.agent, e.job]));
+  assert.deepStrictEqual(by, { a7677bfe7d813817e: 'Probe one', ab9a3d315a2a8cc37: 'Probe two' });
+  assert.strictEqual(store().crew.length, 2);
+});
+test('A1: no definition — the model is the one the runtime resolved; a launch without PreToolUse still appears', (t) => {
+  pendingClean(t);
+  const { ws, store } = trackerFixture(t);
+  fs.rmSync(path.join(ws, '.claude', 'agents', 'builder.md'));
+  run(ws, 'bg-PostToolUse1');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.model, e.effort]), [['Probe one', 'work', 'claude-haiku-4-5-20251001', undefined]]);
+  run(ws, 'fg-SubagentStart1'); // no PreToolUse recorded: its agent id stands in, as before
+  assert.deepStrictEqual(store().crew.map((e) => e.job), ['Probe one', 'a2c4c87ea93f66eaa']);
+});
+test('A1: not a crew role, a non-Agent tool, or no Tracker today writes nothing; a broken store is left alone', (t) => {
+  pendingClean(t);
+  const { ws, tr } = trackerFixture(t);
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  const probe = (name) => hook(ws, ev[name.replace(/^(fg|bg)-|\d+$/g, '')], fs.readFileSync(path.join(FX, `${name}.json`), 'utf8'));
+  for (const n of ['bg-PreToolUse1', 'bg-SubagentStart1', 'bg-PostToolUse1', 'bg-SubagentStop2']) assert.strictEqual(probe(n).status, 0);
+  assert.strictEqual(hook(ws, 'post-tool-use', JSON.stringify({ session_id: 'S1', tool_name: 'Read', tool_input: { file_path: 'x' }, tool_response: {} })).status, 0);
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before, 'agent type "probe" is no crew role');
+  fs.writeFileSync(path.join(tr, 'rows.json'), '{ broken');
+  for (const n of ['bg-PreToolUse1', 'bg-SubagentStart1', 'bg-PostToolUse1']) { const r = run(ws, n); assert.strictEqual(r.status, 0); assert.strictEqual(r.stdout, ''); }
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), '{ broken');
+  const bare = wsFor(t);
+  assert.strictEqual(run(bare, 'bg-SubagentStart1').status, 0);
+  assert.ok(!fs.existsSync(path.join(bare, '.joserah', 'desk', 'artifacts')));
+});
+test('A1: crew.js is registered for the Agent tool\'s PreToolUse', () => {
+  const h = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const g = h.PreToolUse.find((x) => x.matcher === 'Agent|Task');
+  assert.ok(g, 'a PreToolUse group for the Agent tool');
+  assert.deepStrictEqual(g.hooks, [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/crew.js" pre-tool-use', shell: 'bash' }]);
 });

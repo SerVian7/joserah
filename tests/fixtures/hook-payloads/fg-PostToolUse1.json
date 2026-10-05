@@ -1,0 +1,65 @@
+{
+ "session_id": "2fc43959-12c3-4d6f-88b3-645a48ae425b",
+ "transcript_path": "/home/user/.claude/projects/proj/2fc43959-12c3-4d6f-88b3-645a48ae425b.jsonl",
+ "cwd": "/home/user/proj",
+ "prompt_id": "e2654728-25ec-4033-a4f1-7960de7c4deb",
+ "permission_mode": "default",
+ "hook_event_name": "PostToolUse",
+ "tool_name": "Agent",
+ "tool_input": {
+  "description": "Probe job",
+  "prompt": "say hi",
+  "subagent_type": "probe",
+  "run_in_background": false
+ },
+ "tool_response": {
+  "status": "completed",
+  "prompt": "(trimmed)",
+  "agentId": "a2c4c87ea93f66eaa",
+  "agentType": "probe",
+  "harnessNoteCount": 0,
+  "harnessTailCount": 0,
+  "harnessSectionHash": "13d7d79bc2b4cc6c",
+  "content": "(trimmed)",
+  "resolvedModel": "claude-haiku-4-5-20251001",
+  "totalDurationMs": 7400,
+  "totalTokens": 16640,
+  "totalToolUseCount": 0,
+  "usage": {
+   "output_tokens_details": {
+    "thinking_tokens": 47
+   },
+   "input_tokens": 10,
+   "cache_creation_input_tokens": 16577,
+   "cache_read_input_tokens": 0,
+   "output_tokens": 53,
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 0,
+    "ephemeral_5m_input_tokens": 16577
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 10,
+     "output_tokens": 53,
+     "cache_read_input_tokens": 0,
+     "cache_creation_input_tokens": 16577,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 16577,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard",
+   "fallback_credit": null
+  }
+ },
+ "tool_use_id": "toolu_01Nzo6xsu8pskqfhAbBmytNP",
+ "duration_ms": 7402
+}

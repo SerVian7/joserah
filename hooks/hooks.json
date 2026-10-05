@@ -73,6 +73,16 @@
         ]
       },
       {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/crew.js\" pre-tool-use",
+            "shell": "bash"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -103,6 +113,16 @@
             "shell": "bash"
           }
         ]
+      },
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/tracker-guard.js\" post-tool-use",
+            "shell": "bash"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -111,6 +131,11 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/report-fresh.js\"",
+            "shell": "bash"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/tracker-guard.js\" stop",
             "shell": "bash"
           }
         ]
