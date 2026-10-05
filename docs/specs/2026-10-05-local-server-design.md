@@ -1,7 +1,7 @@
-# Joserah local server — design
+# Joserah platform server — design
 
-**Status:** design, not built. Section 1 approved by the owner in chat ("tamam durma", 2026-10-05); sections 2–5
-written straight on at his request and awaiting review together with this file.
+**Status:** approved by the owner ("Hepsini onayladım", 2026-10-05); amended the same evening for the platform
+direction (decisions 8–11). Not built.
 **Source:** Serkan (owner, developer of Joserah), in chat, 2026-10-05: "Kalıplarıyla bilmemnesiyle local bir webserver
 haline getir joserah ı … giriş yapılan ve canlı güncellenen kendi arayüzü olsun. Artifact sınırlarından kurtulalım, çok
 daha az token yakalım. Ben kendi arayüzümden kullanacağım, işi arkada sen (Claude Code) yapacaksın; mümkünse sıfır
@@ -21,6 +21,18 @@ terms, stack, skills, existing projects; every claim with its source).
    **OpenRouter later — no code for it now**; nothing in the design blocks adding a key field.
 6. Access is a setting: default this computer only; Tailscale; open internet possible — so login is strict from day one.
 7. Install: Docker or native. **In Docker everything runs inside the container, no host folder sharing**; GPU optional.
+
+8. **Joserah is a platform of three parts, built in this order** (owner, "A"): this server; then a **device runner**
+   the user installs on their own machines with their consent, so heavy local work (PDF, documents, video, ComfyUI)
+   runs on their own hardware instead of paid cloud resources — its own spec; then nothing separate for screens.
+9. **Screens are the server UI** (owner: "Ekranlar sunucu arayüzü zaten"): phone, watch and TV use the same web
+   interface — layouts must work at phone width and on a large read-only TV view; no native apps in this spec.
+10. **Engine:** the logged-in Claude Code CLI on whichever machine hosts the server; OpenRouter will be the recommended
+    engine later (owner: "ama biz openrouter önericez gelecekte") — the job runner keeps the engine behind one
+    interface () so a second engine slots in without touching routes.
+11. **Device runner, for its own spec** (owner chose C): by default runs only the tools a device allows; a device may
+    opt in to running jobs with its own Claude Code. This server only reserves for it: a  field on every job
+    ( in v1) and the  path prefix — no device code in v1.
 
 ## 1. Structure and parts (approved)
 
@@ -118,7 +130,7 @@ so running work shows where it always has; the rows themselves stay the assistan
 
 ## Out of scope (v1)
 
-OpenRouter or any second engine; several users or several workspaces per server; a separate front-end app; Wrap or
+OpenRouter or any second engine; the device runner and any device code; native phone/watch/TV apps; several users or several workspaces per server; a separate front-end app; Wrap or
 report generators beyond rendering Markdown; a mobile app; replacing the terminal plugin.
 
 ## Open questions
