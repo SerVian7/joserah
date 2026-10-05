@@ -4,13 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ClaudeCliEngine, claudeArgs, parseLine, jobEnv } from '../src/engines/claude-cli.ts';
 import type { EngineJob, EngineItem } from '../src/engine.ts';
-import { tmpdir, SERVER_ROOT } from './helpers.ts';
-
-// The plan puts these two in helpers.ts; kept here so this task touches no shared file (Lead moves them at merge).
-const FAKE_CLAUDE = path.join(SERVER_ROOT, 'test', 'fixtures', 'fake-claude.mjs');
-function fakeEngine(extraEnv: Record<string, string> = {}): ClaudeCliEngine {
-  return new ClaudeCliEngine({ command: process.execPath, prefixArgs: [FAKE_CLAUDE], extraEnv });
-}
+import { tmpdir, SERVER_ROOT, fakeEngine } from './helpers.ts';
 
 const job = (o: Partial<EngineJob> = {}): EngineJob => ({ id: 'j1', type: 'task', target: 'server', brief: 'b', model: 'sonnet', cwd: process.cwd(), budgetUsd: 2, restricted: false, writeArea: [], ...o });
 async function collect(run: { events: AsyncIterable<EngineItem> }): Promise<EngineItem[]> { const out: EngineItem[] = []; for await (const x of run.events) out.push(x); return out; }
