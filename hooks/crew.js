@@ -2,7 +2,7 @@
 /**
  * crew.js — the crew's one payload-reading hook (spec "The Ledger", safety net).
  *
- *   node hooks/crew.js <subagent-start|subagent-stop|pre-compact|session-end|session-start>
+ *   node hooks/crew.js <subagent-start|subagent-stop|pre-compact|session-end|session-start|post-tool-use>
  *
  * The event comes from argv (a closed set); the payload from stdin, read with
  * the idle-timer read of tool-count.js, because stdin is not always closed on
@@ -26,6 +26,9 @@
  *   subagent-start / subagent-stop  the Crew strip's safety net: a crew role
  *                   with no entry on today's Daily Tracker gets one (work), and
  *                   the hook's own entry is dimmed (idle) at the stop.
+ *   post-tool-use   a worker's tool call (payload with agent_id): its entry's
+ *                   context size (`ctx`, `ctxTime`) from its own transcript, at
+ *                   most once a minute; SubagentStop writes the final figure.
  *
  * Every path exits 0: a hook that fails must never block a spawn, a compaction
  * or the end of a session. Tests fix the clock with JOSERAH_NOW.
@@ -38,7 +41,7 @@ const { resolveCrew, ROLES: CREW_ROLES } = require('../tools/lib/crew-config');
 const L = require('../tools/lib/ledger');
 const { append: appendLine } = require('../tools/ledger');
 
-const EVENTS = ['subagent-start', 'subagent-stop', 'pre-compact', 'session-end', 'session-start'];
+const EVENTS = ['subagent-start', 'subagent-stop', 'pre-compact', 'session-end', 'session-start', 'post-tool-use'];
 
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());
 const pad = (n) => String(n).padStart(2, '0');
@@ -205,9 +208,97 @@ function stripSafetyNet(root, input, starting) {
   } catch { /* the strip is a convenience; the spawn and the stop go on */ }
 }
 
+// ---- context size (Task 4.6; owner, 2026-10-05: "never an estimate") --------
+// Measured 2026-10-05 (spec "Measured payloads"): a worker's own transcript is
+// <dir of transcript_path>/<session_id>/subagents/agent-<agent_id>.jsonl — the same
+// file SubagentStop names as agent_transcript_path — written live from the worker's
+// first tool call, each assistant entry carrying message.usage. The figure is the
+// last assistant entry's input + cache read + cache creation tokens, timed by that
+// entry's own timestamp. No such entry, no figure: nothing is ever guessed.
+const CTX_EVERY_MS = 60 * 1000;
+const CTX_TAIL = 512 * 1024;
+
+/** { ctx, ctxTime } from the last assistant entry with full usage in `file`, or null. */
+function lastContext(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const size = fs.fstatSync(fd).size;
+    const len = Math.min(size, CTX_TAIL);
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, size - len);
+    const lines = buf.toString('utf8').split('\n');
+    if (len < size) lines.shift(); // a cut first line is not a line
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let j;
+      try { j = JSON.parse(lines[i]); } catch { continue; }
+      const u = j && j.type === 'assistant' && j.message && j.message.usage;
+      if (!u) continue;
+      const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens];
+      if (!parts.every((n) => Number.isInteger(n) && n >= 0)) continue;
+      const at = new Date(j.timestamp);
+      if (!Number.isFinite(at.getTime())) continue;
+      return { ctx: parts[0] + parts[1] + parts[2], ctxTime: hm(at) };
+    }
+  } catch { /* no transcript yet */ } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* closed */ }
+  }
+  return null;
+}
+
+/** The worker's own transcript: SubagentStop names it; otherwise derived as measured. */
+function agentTranscript(input, agent) {
+  if (typeof input.agent_transcript_path === 'string' && input.agent_transcript_path) return input.agent_transcript_path;
+  const session = id(input.session_id);
+  if (!session || typeof input.transcript_path !== 'string' || !input.transcript_path) return null;
+  return path.join(path.dirname(input.transcript_path), session, 'subagents', `agent-${agent}.jsonl`);
+}
+
+// Throttle stamp, one small file per session + agent in the OS temp dir, like tool-count.js.
+const safe = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
+const ctxStampFile = (session, agent) => path.join(require('os').tmpdir(), `joserah-crew-ctx-${safe(session)}-${safe(agent)}`);
+
+/**
+ * Sets `ctx` / `ctxTime` on the Crew strip entry the safety net wrote for this
+ * agent (role + job = agent id) on today's Daily Tracker; no other entry. A
+ * worker's PostToolUse reads at most once a minute per agent (`force` at its
+ * stop). A local rows.json write: no re-render, no publish.
+ */
+function recordContext(root, input, force) {
+  const role = roleOf(input.agent_type);
+  const agent = id(input.agent_id);
+  if (!CREW_ROLES.includes(role) || !agent) return;
+  const stampFile = ctxStampFile(input.session_id || '-', agent);
+  const t = now().getTime();
+  if (!force) {
+    let last = NaN;
+    try { last = Number(fs.readFileSync(stampFile, 'utf8')); } catch { /* first read */ }
+    if (Number.isFinite(last) && t - last < CTX_EVERY_MS && t >= last) return;
+  }
+  const dir = dailyTracker(root);
+  if (!dir) return;
+  const file = agentTranscript(input, agent);
+  if (!file) return;
+  try { fs.writeFileSync(stampFile, String(t), 'utf8'); } catch { /* throttle is best effort */ }
+  const fig = lastContext(file);
+  if (!fig) return;
+  const rowsPath = path.join(dir, 'rows.json');
+  let j;
+  try { j = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch { return; }
+  if (!j || Array.isArray(j) || !Array.isArray(j.crew)) return; // no crew entry yet, so not this agent's
+  const e = j.crew.find((x) => x && x.role === role && String(x.job).trim().toLowerCase() === agent.toLowerCase());
+  if (!e || (e.ctx === fig.ctx && e.ctxTime === fig.ctxTime)) return;
+  e.ctx = fig.ctx;
+  e.ctxTime = fig.ctxTime;
+  fs.writeFileSync(rowsPath, JSON.stringify(j, null, 1) + '\n');
+}
+
 function handle(event, root, input) {
   if (event === 'session-start') return reinject(root, input);
   if (event === 'subagent-start' || event === 'subagent-stop') stripSafetyNet(root, input, event === 'subagent-start');
+  if (event === 'subagent-stop') recordContext(root, input, true);
+  // a worker's tool call (its payload carries agent_id, measured); the main thread's has none
+  if (event === 'post-tool-use') { if (input.agent_id) recordContext(root, input, false); return null; }
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
   // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
   // may not fire at all when a background shell is still running: best effort only.

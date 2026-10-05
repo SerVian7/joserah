@@ -330,6 +330,43 @@ to a file, session and workers on Haiku 4.5; by: Builder; source: Task 0.1 scrat
   compaction stays unmeasured (Open/future)
   condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
 
+**Context size** (plan Task 4.6; owner, 2026-10-05: never an estimate). Same capture method:
+
+- [measurement] PreToolUse / PostToolUse inside a worker -> payload carries `agent_id` and `agent_type`; its
+  `transcript_path` is the **main** session's transcript, and no field names the worker's own transcript
+  condition: Claude Code 2.1.289 · print mode (`claude -p --model haiku`, json output) · Windows 11 · Haiku 4.5 ·
+  project-settings hooks (`"shell": "bash"`) appending stdin and a snapshot of each transcript file at the moment
+  the hook fired · 3 runs, one `general-purpose` worker each doing 2–3 Read calls (run 2 launched in the background,
+  runs 1 and 3 in the foreground) · date: 2026-10-05 · by: Builder · source: Task 4.6 scratch capture (not kept)
+- [measurement] A worker's own transcript -> `<dir of transcript_path>/<session_id>/subagents/agent-<agent_id>.jsonl`;
+  the same path SubagentStop gives as `agent_transcript_path` (runs 2 and 3: equal)
+  condition: Claude Code 2.1.289 · print mode (`claude -p --model haiku`, json output) · Windows 11 · Haiku 4.5 ·
+  project-settings hooks (`"shell": "bash"`) appending stdin and a snapshot of each transcript file at the moment
+  the hook fired · 3 runs, one `general-purpose` worker each doing 2–3 Read calls (run 2 launched in the background,
+  runs 1 and 3 in the foreground) · date: 2026-10-05 · by: Builder · source: Task 4.6 scratch capture (not kept)
+- [measurement] Worker transcript during the run -> absent at SubagentStart; present from the worker's first
+  PreToolUse on, growing at each tool call (run 2: 12 → 13 → 19 → 20 → 23 → 24 lines, then 28 at SubagentStop;
+  run 3: 13 → 14 → 15 → 16, then 23), foreground and background alike — a live source
+  condition: Claude Code 2.1.289 · print mode (`claude -p --model haiku`, json output) · Windows 11 · Haiku 4.5 ·
+  project-settings hooks (`"shell": "bash"`) appending stdin and a snapshot of each transcript file at the moment
+  the hook fired · 3 runs, one `general-purpose` worker each doing 2–3 Read calls (run 2 launched in the background,
+  runs 1 and 3 in the foreground) · date: 2026-10-05 · by: Builder · source: Task 4.6 scratch capture (not kept)
+- [measurement] Worker transcript entries -> every `type: "assistant"` entry carries `message.usage` with
+  `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`; one API message
+  written as several entries (one per content block: thinking, tool_use, text) repeats the same input figures;
+  each entry has an ISO `timestamp`
+  condition: Claude Code 2.1.289 · print mode (`claude -p --model haiku`, json output) · Windows 11 · Haiku 4.5 ·
+  project-settings hooks (`"shell": "bash"`) appending stdin and a snapshot of each transcript file at the moment
+  the hook fired · 3 runs, one `general-purpose` worker each doing 2–3 Read calls (run 2 launched in the background,
+  runs 1 and 3 in the foreground) · date: 2026-10-05 · by: Builder · source: Task 4.6 scratch capture (not kept)
+- [measurement] Worker context by the plan's definition (input + cache read + cache creation of the last
+  assistant entry) -> at SubagentStop 19064 (run 1), 18381 (run 2), 19022 (run 3) tokens; read at a PostToolUse it
+  is the figure of the message that made that tool call, so it trails the tool result just added
+  condition: Claude Code 2.1.289 · print mode (`claude -p --model haiku`, json output) · Windows 11 · Haiku 4.5 ·
+  project-settings hooks (`"shell": "bash"`) appending stdin and a snapshot of each transcript file at the moment
+  the hook fired · 3 runs, one `general-purpose` worker each doing 2–3 Read calls (run 2 launched in the background,
+  runs 1 and 3 in the foreground) · date: 2026-10-05 · by: Builder · source: Task 4.6 scratch capture (not kept)
+
 ## Tracker Crew strip
 
 A strip on the Daily Tracker showing every agent working for the owner, directly under the one-line header and
@@ -549,3 +586,9 @@ from the numbers whether crew stays the default.
 - **Live page:** a strip that updates without Voice republishing (artifact runtime state).
 - **Run group vs strip:** whether the `run` row group later folds into the strip.
 - **Log compression:** old crew logs compressed or summarised during sweep — deferred, not designed here.
+- **Context size, what is left** (plan Task 4.6, built 2026-10-05): `hooks/crew.js` writes `ctx`/`ctxTime` from the
+  worker's own transcript (measured above) at its tool calls, at most once a minute per agent, and the final figure
+  at SubagentStop — but only onto the entry the safety net wrote for that agent (`job` = its agent id). An entry
+  Lead wrote under the job's own words carries no agent id, so the hook cannot find it; until a link exists, such
+  an entry's figure comes from Lead's `--ctx` with what a worker reports. Not measured: the main session's own
+  context for Voice's entry; whether the definition matches the runtime's own context meter; interactive terminal.

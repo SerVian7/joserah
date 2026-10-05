@@ -257,3 +257,95 @@ test('safety net: a broken rows.json is left alone and the hook exits 0', (t) =>
   assert.strictEqual(r.stdout, '');
   assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), '{ broken');
 });
+
+// Task 4.6 (owner, 2026-10-05: "never an estimate"): a worker's context size, read from its own
+// transcript (measured: <dir of transcript_path>/<session_id>/subagents/agent-<agent_id>.jsonl, live
+// from the worker's first tool call, each assistant entry carrying message.usage).
+const usageLine = (ts, i, cr, cc) => JSON.stringify({ type: 'assistant', timestamp: ts,
+  message: { id: `m-${ts}`, role: 'assistant', content: [{ type: 'text', text: 'x' }], usage: { input_tokens: i, cache_read_input_tokens: cr, cache_creation_input_tokens: cc, output_tokens: 5 } } });
+const localHm = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function ctxFixture(t) {
+  const fx = trackerFixture(t);
+  const agent = `a${process.pid}${Math.random().toString(16).slice(2, 10)}`;
+  const proj = path.join(tmpdir(t), 'proj');
+  const main = path.join(proj, 'S1.jsonl');
+  const agentFile = path.join(proj, 'S1', 'subagents', `agent-${agent}.jsonl`);
+  fs.mkdirSync(path.dirname(agentFile), { recursive: true });
+  fs.writeFileSync(main, '');
+  const write = (...lines) => fs.writeFileSync(agentFile, ['{"type":"user","message":{"role":"user","content":"go"}}', ...lines].join('\n') + '\n');
+  const post = (now) => hook(fx.ws, 'post-tool-use', JSON.stringify({ session_id: 'S1', transcript_path: main, agent_id: agent, agent_type: 'scout', tool_name: 'Read' }), now);
+  t.after(() => { try { fs.rmSync(require('os').tmpdir() + `/joserah-crew-ctx-S1-${agent}`, { force: true }); } catch { /* gone */ } });
+  return { ...fx, agent, main, agentFile, write, post };
+}
+
+test('ctx: a worker\'s tool call sets its entry\'s context size from its own transcript', (t) => {
+  const f = ctxFixture(t);
+  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  f.write(usageLine('2026-10-05T06:01:00.000Z', 10, 0, 16904), usageLine('2026-10-05T06:02:00.000Z', 8, 16904, 1930));
+  const r = f.post('2026-10-05T09:05:00');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout, '');
+  const e = f.store().crew[0];
+  assert.strictEqual(e.ctx, 8 + 16904 + 1930, 'the last assistant message: input + cache read + cache creation');
+  assert.strictEqual(e.ctxTime, localHm('2026-10-05T06:02:00.000Z'), 'the time of the figure, not of the hook');
+  assert.strictEqual(e.state, 'work');
+});
+
+test('ctx: at most once a minute per agent', (t) => {
+  const f = ctxFixture(t);
+  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
+  f.post('2026-10-05T09:05:00');
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0), usageLine('2026-10-05T06:02:30.000Z', 1, 200, 0));
+  f.post('2026-10-05T09:05:40');
+  assert.strictEqual(f.store().crew[0].ctx, 101, 'throttled: 40 s later nothing is read');
+  f.post('2026-10-05T09:06:00');
+  assert.strictEqual(f.store().crew[0].ctx, 201, 'a minute later the figure moves');
+});
+
+test('ctx: nothing measured, nothing written', (t) => {
+  const f = ctxFixture(t);
+  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  const before = () => fs.readFileSync(path.join(f.tr, 'rows.json'), 'utf8');
+  const b = before();
+  f.post('2026-10-05T09:05:00'); // no transcript yet (measured: none before the first tool call)
+  assert.strictEqual(before(), b);
+  f.write('{"type":"assistant","timestamp":"2026-10-05T06:02:00.000Z","message":{"content":[]}}', 'not json');
+  f.post('2026-10-05T09:07:00'); // no usage anywhere
+  assert.strictEqual(before(), b);
+  const r = hook(f.ws, 'post-tool-use', JSON.stringify({ session_id: 'S1', transcript_path: f.main, tool_name: 'Read' }));
+  assert.strictEqual(r.status, 0, 'the main thread (no agent_id) is not a worker');
+  assert.strictEqual(before(), b);
+});
+
+test('ctx: only the hook\'s own entry for that agent is touched', (t) => {
+  const f = ctxFixture(t);
+  runTool('tracker.js', ['crew', f.tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  sub(f.ws, 'subagent-start', 'scout', f.agent); // the role has an entry: the hook adds none
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
+  f.post('2026-10-05T09:05:00');
+  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.ctx]), [['DOTS research', undefined]]);
+});
+
+test('ctx: SubagentStop writes the final figure as it dims the entry', (t) => {
+  const f = ctxFixture(t);
+  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
+  f.post('2026-10-05T09:05:00');
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0), usageLine('2026-10-05T06:05:10.000Z', 8, 18834, 222));
+  const r = hook(f.ws, 'subagent-stop', JSON.stringify({ session_id: 'S1', transcript_path: f.main, agent_id: f.agent, agent_type: 'scout', agent_transcript_path: f.agentFile }), '2026-10-05T09:05:20');
+  assert.strictEqual(r.status, 0, r.stderr);
+  const e = f.store().crew[0];
+  assert.strictEqual(e.state, 'idle');
+  assert.strictEqual(e.ctx, 8 + 18834 + 222, 'not throttled at the stop');
+  assert.strictEqual(e.ctxTime, localHm('2026-10-05T06:05:10.000Z'));
+});
+
+test('ctx: crew.js is registered for PostToolUse, one command string', () => {
+  const h = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const cmds = h.PostToolUse.flatMap((e) => e.hooks);
+  const c = cmds.find((x) => /hooks\/crew\.js" post-tool-use$/.test(x.command));
+  assert.ok(c, 'registered');
+  assert.strictEqual(c.shell, 'bash');
+  assert.ok(h.PostToolUse.some((e) => e.hooks.includes(c) && (e.matcher === '' || e.matcher === undefined)), 'every tool');
+});
