@@ -35,6 +35,11 @@
  *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
  *       rows with the same title (case and outer spaces ignored): one job, one row.
  *
+ * Developer mode (`devMode: true` in the workspace's .joserah/config.json, found
+ * by walking up from <dir>) shows the crew: the run state reads "Agent working".
+ * Off (the default, and outside any workspace) it reads "In progress" and the
+ * page carries no agent wording.
+ *
  * Labels follow <html lang> (en, tr). Tests may fix the clock with
  * JOSERAH_NOW=<ISO timestamp>. No dependencies.
  */
@@ -43,10 +48,18 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { run: 'Agent working', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated' },
-  tr: { run: 'Ajan çalışıyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme' },
+  en: { run: 'Agent working', runPlain: 'In progress', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated' },
+  tr: { run: 'Ajan çalışıyor', runPlain: 'Sürüyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
+const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
+
+// Developer mode decides only whether the owner sees the crew; no workspace → off.
+function devModeFor(dir) {
+  const root = findWorkspace(dir);
+  const cfg = root && readConfig(root);
+  return !!(cfg && cfg.devMode === true);
+}
 
 const die = (msg) => { console.error(`tracker: ${msg}`); process.exit(1); };
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());
@@ -110,7 +123,9 @@ function render(dir) {
   try { rows = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch (e) { die(`rows.json is not valid JSON: ${e.message}`); }
   if (!Array.isArray(rows)) die('rows.json must be an array');
   let html = fs.readFileSync(pagePath, 'utf8');
-  const L = LABELS[(html.match(/<html[^>]*\blang="(\w+)"/) || [])[1]] || LABELS.en;
+  const base = LABELS[(html.match(/<html[^>]*\blang="(\w+)"/) || [])[1]] || LABELS.en;
+  const dev = devModeFor(dir);
+  const L = dev ? base : { ...base, run: base.runPlain, groups: [base.runPlain, ...base.groups.slice(1)] };
   const clock = now();
   let stamped = false;
   rows.forEach((r, i) => {
@@ -182,8 +197,13 @@ function upsert(dir, opt) {
   render(dir);
 }
 
-const { pos, opt } = parseArgs(process.argv.slice(2));
-if (pos[0] === 'init') init(pos[1], opt);
-else if (pos[0] === 'row') upsert(pos[1], opt);
-else if (pos.length === 1) render(pos[0]);
-else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js <dir>');
+function main() {
+  const { pos, opt } = parseArgs(process.argv.slice(2));
+  if (pos[0] === 'init') init(pos[1], opt);
+  else if (pos[0] === 'row') upsert(pos[1], opt);
+  else if (pos.length === 1) render(pos[0]);
+  else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js <dir>');
+}
+
+if (require.main === module) main();
+module.exports = { devModeFor, LABELS };

@@ -77,7 +77,7 @@ test('a row with time keeps it untouched', (t) => {
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].time, '03:30');
 });
 
-test('groups: agent working, owner, done in the list; waiting and plans as closed groups at the top; empty group has none', (t) => {
+test('groups: in progress (agent working in developer mode), owner, done in the list; waiting and plans as closed groups at the top; empty group has none', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -90,7 +90,7 @@ test('groups: agent working, owner, done in the list; waiting and plans as close
   render(dir);
   const items = lis(dir).map((l) => l.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
   assert.deepStrictEqual(items.map((s) => s.split(' ')[0]),
-    ['Agent', 'Agent', 'Owner', 'Owner', 'Done', 'Done']);
+    ['In', 'In', 'Owner', 'Owner', 'Done', 'Done'], 'outside a workspace developer mode is off');
   const html = page(dir);
   const folds = html.match(/<section class="folds">([\s\S]*?)<\/section>/);
   assert.ok(folds, 'folds section present');
@@ -179,7 +179,8 @@ test('tr labels', (t) => {
   ]);
   render(dir);
   const p = page(dir);
-  for (const w of ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar', 'Bitti', 'Plan', '>sayfa<']) assert.ok(p.includes(w), w);
+  assert.ok(!p.includes('Ajan'), 'no agent wording with developer mode off');
+  for (const w of ['Sürüyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar', 'Bitti', 'Plan', '>sayfa<']) assert.ok(p.includes(w), w);
 });
 
 test('errors: missing dir, bad JSON, unknown state', (t) => {
@@ -261,4 +262,19 @@ test('plans with a group: one closed fold per group inside the Plans fold', (t) 
   const folds = page(dir).match(/<section class="folds">([\s\S]*?)<\/section>/)[1];
   assert.deepStrictEqual((folds.match(/<summary>[^<]*/g) || []).map((s) => s.replace('<summary>', '').trim()), ['Plans 4', 'Alpha 2', 'Beta 1', 'Other 1']);
   assert.doesNotMatch(folds, /<details[^>]*\bopen/);
+});
+
+test('devMode off: the run group reads as in progress, never agent', (t) => {
+  const ws = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', ws, '--workspace', 'w', '--owner', 'A B']);
+  const dir = path.join(ws, '.joserah', 'desk', 'artifacts', 'd', 'tracker');
+  init(dir);
+  setRows(dir, [{ state: 'run', title: 'Research' }]);
+  render(dir);
+  assert.doesNotMatch(page(dir), /Agent working/);
+  assert.match(page(dir), /In progress/);
+  const p = path.join(ws, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), devMode: true }));
+  render(dir);
+  assert.match(page(dir), /Agent working/);
 });
