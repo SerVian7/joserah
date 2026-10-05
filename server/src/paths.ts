@@ -10,7 +10,10 @@ export function localDay(d: Date = now()): string { return `${d.getFullYear()}-$
 export function hhmm(d: Date = now()): string { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 export function stateDir(workspace: string): string {
   if (process.env.JOSERAH_STATE_DIR) return process.env.JOSERAH_STATE_DIR;
-  const h = crypto.createHash('sha1').update(path.resolve(workspace)).digest('hex').slice(0, 12);
+  const abs = path.resolve(workspace);
+  // Windows paths are case-insensitive: `c:\x` and `C:\X` must find the same state (password, cookie key).
+  const key = process.platform === 'win32' ? abs.toLowerCase() : abs;
+  const h = crypto.createHash('sha1').update(key).digest('hex').slice(0, 12);
   return path.join(os.homedir(), '.joserah-server', h);
 }
 export function rel(root: string, abs: string): string { return path.relative(root, abs).split(path.sep).join('/'); }

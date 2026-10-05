@@ -45,6 +45,23 @@ test('bad values name their key', (t) => {
   assert.throws(() => loadServerConfig(bad), /server\.json/);
 });
 
+test('values of the wrong type are refused, naming their key', (t) => {
+  assert.throws(() => loadServerConfig(ws(t, { exposure: 'internet', https: 'cert.pem' })), /https/);
+  assert.throws(() => loadServerConfig(ws(t, { https: true })), /https/);
+  assert.throws(() => loadServerConfig(ws(t, { https: {} })), /https/);
+  assert.throws(() => loadServerConfig(ws(t, { proxy: 'false' })), /proxy/);
+  assert.throws(() => loadServerConfig(ws(t, { answerStartsJob: 'false' })), /answerStartsJob/);
+  assert.throws(() => loadServerConfig(ws(t, { nightlyLlmLint: 'no' })), /nightlyLlmLint/);
+  assert.throws(() => loadServerConfig(ws(t, { bind: 5 })), /bind/);
+  assert.throws(() => loadServerConfig(ws(t, { publicOrigin: 'not a url' })), /publicOrigin/);
+  assert.throws(() => loadServerConfig(ws(t, { models: 'opus' })), /models/);
+  assert.throws(() => loadServerConfig(ws(t, { nightlyAt: 330 })), /nightlyAt/);
+  assert.throws(() => loadServerConfig(ws(t, { port: 4747.5 })), /port/);
+  assert.throws(() => loadServerConfig(ws(t, { jobMaxTurns: 2.5 })), /jobMaxTurns/);
+  const ok = loadServerConfig(ws(t, { exposure: 'internet', https: { cert: 'c.pem', key: 'k.pem' }, publicOrigin: 'https://example.invalid', bind: '0.0.0.0' }));
+  assert.deepEqual(ok.https, { cert: 'c.pem', key: 'k.pem' });
+});
+
 test('exposure decides the bind address', () => {
   assert.equal(resolveListen(DEFAULT_CONFIG, {}).hostname, '127.0.0.1');
   assert.equal(resolveListen({ ...DEFAULT_CONFIG, exposure: 'tailnet', bind: '100.64.0.7' }, {}).hostname, '100.64.0.7');
@@ -62,6 +79,10 @@ test('state dir is outside the workspace and stable', () => {
   process.env.JOSERAH_STATE_DIR = '/tmp/s';
   assert.equal(stateDir('/x/ws'), '/tmp/s');
   delete process.env.JOSERAH_STATE_DIR;
+});
+
+test('state dir ignores path case on Windows', { skip: process.platform !== 'win32' }, () => {
+  assert.equal(stateDir('C:\\X\\Ws'), stateDir('c:\\x\\ws'));
 });
 
 test('localDay honours JOSERAH_NOW', () => {
