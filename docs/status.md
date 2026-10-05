@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 351d41e · 2026-10-04 06:10 +0300 · prompt v26: rule-writing guidance reaches workspaces
+Last change: d126c8a · 2026-10-05 09:09 +03 · orchestrate: finishing reply closes its Tracker row
 
 - Released: 0.17.10 on main, 683 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
