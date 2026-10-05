@@ -58,3 +58,75 @@ test('two writers lose nothing', async (t) => {
   assert.equal(Object.keys(docs).length, 120);
   assert.ok(!fs.existsSync(path.join(d, 'answers.json.lock')));
 });
+
+const { runTool, HERMETIC_CONFIG_DIR } = require('./helpers');
+const { spawnSync } = require('child_process');
+
+function pageWith(t) {
+  const ws = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', ws, '--workspace', 'w', '--owner', 'O', '--language', 'en', '--role', 'r']);
+  const d = path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-06', 'daily-tracker');
+  fs.mkdirSync(d, { recursive: true });
+  A.put(d, 'a-q-1', { row: 'Pick a cable', key: 'B', note: 'the short one', at: '2026-10-06T08:00:00Z' }, 'owner');
+  return { ws, d };
+}
+
+test('answers.js list, reply and mark', (t) => {
+  const { d } = pageWith(t);
+  let r = runTool('answers.js', ['list', d, '--new']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^a-q-1 · new · \d\d:\d\d · B · Pick a cable · the short one$/m);
+  r = runTool('answers.js', ['reply', d, 'a-q-1', '--note', 'Ordered the short one.']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^reply: a-q-1--r[a-z0-9]+$/m);
+  r = runTool('answers.js', ['mark', d, 'a-q-1', 'read']);
+  assert.match(r.stdout, /^marked: a-q-1$/m);
+  r = runTool('answers.js', ['list', d, '--new', '--json']);
+  assert.deepEqual(JSON.parse(r.stdout), []);
+  r = runTool('answers.js', ['mark', d, 'a-nope', 'read']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /answers: not-found/);
+});
+
+test('answers.js pages lists counts and paths, nothing when none', (t) => {
+  const { ws, d } = pageWith(t);
+  let r = runTool('answers.js', ['pages', ws]);
+  assert.equal(r.stdout.trim(), `2026-10-06/daily-tracker · 1 new · ${d}`);
+  A.markRead(d, 'a-q-1');
+  r = runTool('answers.js', ['pages', ws]);
+  assert.equal(r.stdout, '');
+});
+
+test('the session brief carries one [answers] line with counts and pointers, no bodies', (t) => {
+  const { ws } = pageWith(t);
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'session-brief.js')],
+    { cwd: ws, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: HERMETIC_CONFIG_DIR, CLAUDE_PLUGIN_ROOT: '', JOSERAH_NOW: '2026-10-06T09:00:00' } });
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  const line = ctx.split('\n').find((l) => l.startsWith('[answers]'));
+  assert.ok(line, ctx);
+  assert.match(line, /1 new answer/);
+  assert.match(line, /2026-10-06\/daily-tracker/);
+  assert.match(line, /answers\.js" list /);
+  assert.ok(!line.includes('the short one'), 'pointers, never bodies');
+});
+
+test('two replies in one millisecond keep both, and a broken answers.json is kept aside', (t) => {
+  const d = tmpdir(t);
+  const a = A.reply(d, 'a-x-1', 'first', 1700000000000);
+  const b = A.reply(d, 'a-x-1', 'second', 1700000000000);
+  assert.ok(a.ok && b.ok && a.id !== b.id);
+  assert.deepEqual(A.list(d).map((x) => x.note).sort(), ['first', 'second']);
+  fs.writeFileSync(path.join(d, 'answers.json'), '{ not json');
+  assert.ok(A.put(d, 'a-y-1', { note: 'n' }, 'owner').ok);
+  const kept = fs.readdirSync(d).filter((f) => f.startsWith('answers.json.broken-'));
+  assert.equal(kept.length, 1);
+  assert.equal(fs.readFileSync(path.join(d, kept[0]), 'utf8'), '{ not json');
+});
+
+test('answers.js reply refuses an id that is not on the page', (t) => {
+  const { d } = pageWith(t);
+  const r = runTool('answers.js', ['reply', d, 'a-typo-1', '--note', 'x']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /answers: not-found/);
+  assert.equal(Object.keys(A.read(d).docs).length, 1);
+});

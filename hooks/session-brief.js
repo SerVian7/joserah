@@ -448,6 +448,21 @@ function newDayLine(root, cfg, now) {
   return null;
 }
 
+// 0.19.0: answers the owner left on a page served by the Joserah server. Counts and pointers only —
+// the session reads the answers through tools/answers.js when it acts on them (spec §2, §7).
+function answersLine(root, cfg) {
+  let pages;
+  try { pages = require('../tools/lib/answers').newCounts(root, 2); } catch (e) { return null; }
+  if (!pages.length) return null;
+  const n = pages.reduce((s, p) => s + p.count, 0);
+  const tool = path.join(__dirname, '..', 'tools', 'answers.js');
+  const where = pages.map((p) => `${p.page} (${p.count})`).join(', ');
+  const first = pages[0].dir;
+  return isTurkish(cfg.dialogueLanguage)
+    ? `[answers] Sayfalarda ${n} yeni cevap var: ${where}. Oku: node "${tool}" list "${first}" --new; cevapla: node "${tool}" reply "${first}" <id> --note "…"; sonra mark <id> read.`
+    : `[answers] ${n} new answer${n === 1 ? '' : 's'} on the pages: ${where}. Read: node "${tool}" list "${first}" --new; reply: node "${tool}" reply "${first}" <id> --note "…"; then mark <id> read.`;
+}
+
 const now = new Date();
 const today = isoDate(now);
 const cfg = readConfig(ROOT) || {};
@@ -456,6 +471,7 @@ const cfg = readConfig(ROOT) || {};
 const staleness = backupStalenessLine(ROOT, cfg, now);
 const sweep = sweepLine(ROOT, cfg, now);
 const newDay = newDayLine(ROOT, cfg, now);
+const answers = answersLine(ROOT, cfg);
 const dailyPath = ensureDailyStub(today);
 
 // This is layer 6 — what happens to be true of this moment and of no other. It
@@ -482,6 +498,7 @@ if (dailyText.trim() && !isStub(dailyText, today)) {
 if (staleness) parts.push('\n' + staleness);
 if (sweep) parts.push('\n' + sweep);
 if (newDay) parts.push('\n' + newDay);
+if (answers) parts.push('\n' + answers);
 
 for (const line of updateLines(cfg, now)) parts.push('\n' + line);
 
