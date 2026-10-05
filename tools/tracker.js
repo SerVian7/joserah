@@ -46,14 +46,20 @@
  *
  *   Active work (tr "Aktif çalışma", every mode): the strip under the header is
  *       the one list of running work — run rows are never listed in the sections
- *       below. A head with its line count (and the role icons on the right when
- *       there are crew entries), then one line per row being worked on, per entry
- *       with no row, and per run row no entry names (no icon, oldest first). Every
+ *       below. Only what is running now: crew entries in state work and run rows;
+ *       an entry waiting on the owner or idle is never a strip line (what waits on
+ *       the owner is the owner section's). A head with its line count (and on the
+ *       right Voice's icon and each working role's, when there are crew entries),
+ *       then one line per row being worked on, per working entry with no row, and
+ *       per run row no working entry names (no icon, oldest first); nothing running:
+ *       head count 0 and one line "Nothing running right now" / "Şu an çalışan iş
+ *       yok". Every role icon carries title and aria-label saying what the role is
+ *       doing (L.doing: developer mode "Builder · kod yazıyor", off "Kod yazıyor";
+ *       a summary icon leads with its count, "2 · kod yazıyor"). Every
  *       line is a control: an entry with no row but a url is that link; any other
  *       line is a <button aria-expanded aria-controls> that opens its detail (the
  *       row's small text, its "sonraki:/next:" part on its own line, its links and
- *       the entries' links; a line waiting on the owner leads with the link to where
- *       it is decided; with nothing more, its title) in a panel directly under that
+ *       the entries' links; with nothing more, its title) in a panel directly under that
  *       line (<li class="crew-dl">, the list's next item), one open at a time
  *       (PANEL_JS, <script id="panel"> inside the strip); without script every
  *       detail shows under its own line.
@@ -109,8 +115,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -167,6 +173,7 @@ const STRIP_CSS = [
   '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}',
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd[hidden]{display:none}',
+  '.crew li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
   // phone width: icons and elapsed time on the top line, the text under them (as the rows below)
   '@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew li.crew-dl{padding-left:12px}.crew .cd{padding-left:0}}',
 ];
@@ -397,23 +404,18 @@ function stampSince(e, clock) {
 const isUrl = (u) => /^https?:\/\//i.test(String(u || ''));
 // A row's detail: its small text, the next step ("sonraki: …" / "next: …" parts of the small line) on
 // its own line, and its links (the row's, then each entry's). Empty when there is nothing to show.
-// A line waiting on the owner leads with the link to where it is decided: an owner entry's url, else
-// the row's (Lead, 2026-10-05, after the owner could not click a waiting line).
+// (Lines waiting on the owner are no longer strip lines, owner 2026-10-05, so no detail leads with a
+// decision link any more.)
 function detailOf(r, es, L) {
   const parts = String((r && r.small) || '').split(' · ').map((x) => x.trim()).filter(Boolean);
   const nextRe = /^(sonraki|next)\s*:\s*/i;
   const rest = parts.filter((x) => !nextRe.test(x)).join(' · ');
   const next = parts.filter((x) => nextRe.test(x)).map((x) => x.replace(nextRe, '')).filter(Boolean);
-  const ownerUrl = (es.find((e) => e.state === 'owner' && isUrl(e.url)) || {}).url;
-  const decide = ownerUrl ? [ownerUrl, L.decide]
-    : es.some((e) => e.state === 'owner') && r && isUrl(r.url) ? [r.url, r.label || L.decide] : null;
   const urls = [];
-  if (r && isUrl(r.url) && !(decide && decide[0] === r.url)) urls.push([r.url, r.label || L.link]);
-  for (const e of es) if (isUrl(e.url) && !(decide && decide[0] === e.url) && !urls.some(([u]) => u === e.url)) urls.push([e.url, L.link]);
-  const a = ([u, l]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`;
-  if (!decide && !rest && !next.length && !urls.length) return '';
-  return (decide ? `<p class="dl">${a(decide)}</p>` : '')
-    + (rest ? `<p>${esc(rest)}</p>` : '')
+  if (r && isUrl(r.url)) urls.push([r.url, r.label || L.link]);
+  for (const e of es) if (isUrl(e.url) && !urls.some(([u]) => u === e.url)) urls.push([e.url, L.link]);
+  if (!rest && !next.length && !urls.length) return '';
+  return (rest ? `<p>${esc(rest)}</p>` : '')
     + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
     + (urls.length ? `<p class="ln">${urls.map(([u, l]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`).join(' · ')}</p>` : '');
 }
@@ -424,10 +426,22 @@ function detailOf(r, es, L) {
 // names (no icon, oldest first), so nothing running is hidden. Developer mode on: the role is only the
 // icon's title, and a faint model · effort tail follows; off: icons and elapsed time only, no role name
 // anywhere (owner, 2026-10-05: "ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir.").
+// Only what is running (owner, 2026-10-05: "şu an çalışan bir şey var mı anlamıyorum hepsi beni bekliyor
+// galiba"): entries waiting on the owner or idle are left out, so every line reads as running; with
+// nothing running the strip says so in one line. Each role icon says what the role is doing ("ikonların
+// üstüne gelince planning gibi anlaşılır şeyler yazsın"), as title and aria-label.
 function activeStrip(crew, rows, L, dev = true) {
   const byTitle = new Map(rows.map((r) => [key(r.title), r]));
+  const working = crew.filter((e) => e.state === 'work');
+  const act = (role) => (L.doing || LABELS.en.doing)[role];
+  const cap = (s) => s.charAt(0).toLocaleUpperCase(L.locale || 'en') + s.slice(1);
+  const tip = (role, n) => {
+    const t = dev ? `${ROLE_NAME[role]} · ${act(role)}` : (n ? act(role) : cap(act(role)));
+    const s = esc(n ? `${n} · ${t}` : t);
+    return ` role="img" title="${s}" aria-label="${s}"`;
+  };
   const items = []; const byRow = new Map();
-  for (const e of crew) {
+  for (const e of working) {
     const r = key(e.row) ? byTitle.get(key(e.row)) : null;
     if (!r) { items.push({ r: null, es: [e] }); continue; }
     if (!byRow.has(r)) { const it = { r, es: [] }; byRow.set(r, it); items.push(it); }
@@ -436,26 +450,23 @@ function activeStrip(crew, rows, L, dev = true) {
   rows.map((r, i) => ({ r, i })).filter(({ r }) => r.state === 'run' && !byRow.has(r))
     .sort((a, b) => String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i)
     .forEach(({ r }) => items.push({ r, es: [] }));
-  if (!items.length) return '';
-  const live = (e) => e.state === 'work' || e.state === 'owner';
-  const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || crew.some((e) => e.role === r)).map((r) => {
-    const mine = crew.filter((e) => e.role === r);
-    const n = mine.filter(live).length;
-    const st = mine.some((e) => e.state === 'owner') ? 'owner' : mine.some((e) => e.state === 'work') ? 'work' : mine.length ? 'idle' : '';
-    return `<span${st ? ` class="${st}"` : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${dev ? ` title="${ROLE_NAME[r]}"` : ''}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+  // the summary: Voice, then each role with working entries, its count in the icon's text
+  const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || working.some((e) => e.role === r)).map((r) => {
+    const n = working.filter((e) => e.role === r).length;
+    return `<span${n ? ' class="work"' : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${tip(r, n)}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
   }).join('')}</div>` : '';
+  const head = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${items.length}</span>${sum}</div>`;
+  if (!items.length) return `${head}<ul>\n  <li class="crew-none">${esc(L.none || LABELS.en.none)}</li>\n</ul>`;
   const details = [];
   const lines = items.map(({ r, es }) => {
-    const st = es.some((e) => e.state === 'owner') ? 'owner' : es.some((e) => e.state === 'work') ? 'work' : es.length ? 'idle' : 'run';
+    const st = es.length ? 'work' : 'run';
     // category: the row's main job (its parent row's title) or its group; summary: the row's title
     const main = r && hasParent(r) ? byTitle.get(key(r.parent)) : null;
     const cat = r ? (main ? main.title : String(r.parent || r.group || '').trim()) : '';
     const sumText = r ? r.title : es[0].job;
     const text = `${cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(sumText)}`;
-    const reasons = [...new Set(es.filter((e) => e.state === 'owner' && e.reason).map((e) => (L.reasons || {})[e.reason] || e.reason))];
-    const why = reasons.length ? ` <em>${esc(reasons.join(', '))}</em>` : '';
     const tail = dev ? crewTail(es) : '';
-    const icons = es.map((e) => `<span${dev ? ` title="${ROLE_NAME[e.role]}"` : ''}>${ICONS[e.role]}</span>`).join('');
+    const icons = es.map((e) => `<span${tip(e.role, 0)}>${ICONS[e.role]}</span>`).join('');
     // the line's time: its latest change; a working or waiting line counts from the earliest start in that state
     let time = `<time>${esc(r ? r.time : '')}</time>`;
     if (es.length) {
@@ -466,13 +477,13 @@ function activeStrip(crew, rows, L, dev = true) {
     // but a url is the link itself; anything else opens a panel that shows at least its title
     let body; let panel = '';
     if (!r && isUrl(es[0].url)) {
-      body = `<a class="tx" href="${esc(es[0].url)}" target="_blank" rel="noopener">${text}${why}${tail}</a>`;
+      body = `<a class="tx" href="${esc(es[0].url)}" target="_blank" rel="noopener">${text}${tail}</a>`;
     } else {
       const d = r ? detailOf(r, es, L) : '';
       const id = `cd-${details.length + 1}`;
       details.push(id);
       panel = `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(sumText)}</b>${d}</div></li>\n`;
-      body = `<button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}${why}${tail}</button>`;
+      body = `<button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}${tail}</button>`;
     }
     // the detail is the list's next item after its own line, so it opens right under the line clicked
     // (owner, 2026-10-05: one shared panel after the list opened every detail under the last line)
