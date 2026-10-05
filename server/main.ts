@@ -15,6 +15,7 @@ import { cliTracker } from './src/tracker-bridge.ts';
 import { GitCheckpointer } from './src/checkpoint.ts';
 import { workspaceLang } from './src/config.ts';
 import { AnswerTrigger } from './src/answer-trigger.ts';
+import { ingestBookkeeping } from './src/wiki-books.ts';
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; }
 function fail(message: string): never { console.error(`joserah: ${message}`); process.exit(1); }
@@ -60,10 +61,12 @@ const store = new Store(workspace, bus, { pollDirs: () => {
 } });
 const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude' });
 const lang = workspaceLang(workspace);
-const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker: cliTracker(workspace, lang), checkpoint: new GitCheckpointer(workspace, store), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
+const tracker = cliTracker(workspace, lang);
+const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker, checkpoint: new GitCheckpointer(workspace, store), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
 const answers = new AnswerTrigger({ workspace, bus, jobs, config: () => cfg });
 const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure,
-  store, bus, engine, jobs, answers, engineHealth: null };
+  store, bus, engine, jobs, answers, tracker, engineHealth: null };
+jobs.onEnd(ingestBookkeeping({ store, workspace }));   // an ingest that ends marks its source compiled, rebuilds the index and logs it
 jobs.onEnd((j) => { deps.health.lastJobOk = j.state === 'done'; });
 const app = createApp(deps);
 const ready = () => {

@@ -5,6 +5,7 @@ function post(url,body){return fetch(url,{method:'POST',credentials:'same-origin
 var f=$('#job');if(f)f.addEventListener('submit',function(e){e.preventDefault();var t=$('textarea',f),ty=$('select',f),err=$('.row .err',f);err.textContent='';
 post('/api/jobs',{text:t.value,type:ty?ty.value:'task'}).then(function(j){location.href='/jobs/'+j.id},function(x){err.textContent=(x&&(x.reason||x.message||x.error))||'error'})});
 Array.prototype.forEach.call(all('button[data-act]'),function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-id'),act=b.getAttribute('data-act'),body={};
+if(act==='file'){var ti=$('#file-title');post('/api/query/'+id+'/file',{title:ti?ti.value:''}).then(function(j){location.href='/w/page/'+j.path.replace(/^\\.joserah\\/knowledge\\//,'')},function(x){alert((x&&(x.message||x.error))||'error')});return}
 if(act==='reply'){var ta=$('#reply-text');body.text=ta?ta.value:'';}post('/api/jobs/'+id+'/'+act,body).then(function(j){location.href='/jobs/'+j.id},function(x){alert((x&&(x.message||x.error))||'error')})})});
 var ask=$('#ask');if(ask)ask.addEventListener('submit',function(e){e.preventDefault();var err=$('.err',ask);err.textContent='';
 post('/api/query',{question:$('textarea',ask).value}).then(function(j){location.href='/jobs/'+j.id},function(x){err.textContent=(x&&(x.reason||x.message||x.error))||'error'})});

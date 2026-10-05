@@ -52,6 +52,7 @@ export function register(app: App, deps: AppDeps): void {
 ${j.resultText ? `<h2>${esc(L.result)}</h2><p>${esc(j.resultText)}</p>` : ''}
 ${j.changed?.length ? `<h2>${esc(L.changed)}</h2><ul>${j.changed.map((f) => `<li>${esc(f.status)} ${esc(f.path)}</li>`).join('')}</ul>` : ''}
 ${j.flags?.length ? `<ul class="err">${j.flags.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+${j.type === 'query' && j.state === 'done' && j.resultText ? `<p><input id="file-title" value="${esc(j.text.slice(0, 120))}" aria-label="title"> ${btn('file', L.fileIt)}</p>` : ''}
 <ol class="stream" data-job="${esc(j.id)}">${lines}</ol>
 ${['done', 'failed', 'needs-approval', 'interrupted'].includes(j.state) ? `<p><textarea id="reply-text" maxlength="8000"></textarea></p><p>${btn('reply', L.reply)}</p>` : ''}
 <script src="/_/app.js"></script>`;
