@@ -399,3 +399,55 @@ test('row without --parent keeps the parent it had (only --parent "" ungroups)',
   const sub = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8')).find((r) => r.title === 'Sub');
   assert.strictEqual(sub.parent, 'Main');
 });
+
+test('finished sub-jobs fold under their main job; active rows never fold', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [
+    { state: 'run', title: 'Main', time: '09:00' },
+    { state: 'ok', title: 'Sub done 1', parent: 'Main', time: '09:10' },
+    { state: 'ok', title: 'Sub done 2', parent: 'Main', time: '09:20' },
+    { state: 'run', title: 'Sub running', parent: 'Main', time: '09:30' },
+    { state: 'ok', title: 'Loose', time: '09:40' },
+  ]);
+  assert.strictEqual(render(dir).status, 0);
+  const html = page(dir);
+  const done = html.slice(html.indexOf('>Done<'));
+  assert.match(done, /<li class="grp"><details name="trk"><summary><b>Main<\/b> 2 · In progress<\/summary><ul>[\s\S]*Sub done 2[\s\S]*Sub done 1[\s\S]*<\/ul><\/details><\/li>/);
+  assert.match(done, /<li>[\s\S]*Loose/, 'a row without parent stays ungrouped');
+  const run = html.slice(html.indexOf('>In progress<'), html.indexOf('>Done<'));
+  assert.doesNotMatch(run, /<details/, 'active work never folds');
+  assert.match(run, /<span class="par">Main<\/span>[\s\S]*Sub running/, 'an active sub-job shows its main job as a label');
+  // one open at a time: top-level folds share name="trk"; a fold nested in a fold takes the next level's
+  // name (trk-2, trk-3), because a same-named descendant closes its own ancestor when opened (Edge 154)
+  assert.doesNotMatch(html, /<details(?![^>]*name="trk(-\d)?")/, 'every fold carries a one-open-at-a-time name');
+  assert.doesNotMatch(html, /<details[^>]*\sopen/, 'closed by default');
+});
+test('no parent anywhere: byte-identical to the previous renderer', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'run', title: 'A', time: '09:00' }, { state: 'ok', title: 'B', time: '09:05' }]);
+  render(dir, '2026-10-01T09:05:00Z'); // UTC, so the page's data-t stamp is the same in every time zone
+  assert.strictEqual(page(dir), fs.readFileSync(path.join(__dirname, 'fixtures', 'tracker-no-parent.html'), 'utf8'));
+});
+test('groups inside the waiting and plans folds: details.sub, main in the same section heads the fold', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [
+    { state: 'wait', title: 'W main', time: '08:00' },
+    { state: 'wait', title: 'W sub', parent: 'W main', time: '08:10' },
+    { state: 'plan', title: 'P sub', parent: 'Done main', group: 'Alpha', time: '08:00' },
+    { state: 'plan', title: 'P loose', group: 'Alpha', time: '08:00' },
+    { state: 'ok', title: 'Done main', time: '07:00' },
+    { state: 'ok', title: 'Done sub', parent: 'Done main', time: '07:30' },
+    { state: 'you', title: 'Ask', parent: 'Done main', time: '07:40' },
+  ]);
+  assert.strictEqual(render(dir).status, 0, render(dir).stderr);
+  const html = page(dir);
+  const folds = html.match(/<section class="folds">([\s\S]*?)<\/section>/)[1];
+  assert.match(folds, /<details name="trk"><summary>Waiting 2<\/summary><ul>\n  <li class="grp"><details class="sub" name="trk-2"><summary><b>W main<\/b> 1<\/summary><ul>[\s\S]*<b>W main<\/b>[\s\S]*<b>W sub<\/b>/);
+  assert.match(folds, /<details class="sub" name="trk-2"><summary>Alpha 2<\/summary><ul>\n  <li class="grp"><details class="sub" name="trk-3"><summary><b>Done main<\/b> 1 · Done<\/summary>/);
+  const done = html.slice(html.indexOf('>Done<'));
+  assert.match(done, /<li class="grp"><details name="trk"><summary><b>Done main<\/b> 1<\/summary><ul>[\s\S]*<b>Done main<\/b>[\s\S]*<b>Done sub<\/b>/);
+  assert.match(html, /<span class="par">Done main<\/span><b>Ask<\/b>/);
+  assert.match(html, /\.grp summary b\{/, 'group styles injected once a group shows');
+  render(dir);
+  assert.strictEqual(page(dir).split('.grp summary b{').length, 2, 'once');
+});

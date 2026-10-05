@@ -35,7 +35,7 @@
  *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
- *       {match?, state, title, small?, url?, label?, time?}, state one of
+ *       {match?, state, title, small?, url?, label?, group?, parent?, time?}, state one of
  *       run (a background agent is working on it right now) | you (the owner's
  *       decision or action) | wait (waiting on someone outside, no AI working) |
  *       ok (done) | plan. The <ol> is rebuilt from it, so a row
@@ -44,7 +44,11 @@
  *       rows.json; a row with `time` keeps it. Groups, in this order: agent
  *       working (run), owner (you), done (ok) in the list; waiting (wait) and plans (plan) as closed groups above it;
  *       chronological inside a group (done: newest first), ties keep file order, an empty group gets no heading. Only http(s)
- *       urls become links. Only the <ol> and the page's "updated" stamp
+ *       urls become links. Rows with a `parent` fold under their main job in the
+ *       finished sections (done, and inside the waiting and plans folds); an
+ *       active (run, you) sub-job never folds and shows its main job as a label.
+ *       Every fold is closed; top-level folds share name="trk" (one open at a
+ *       time), nested ones trk-2, trk-3. Only the <ol> and the page's "updated" stamp
  *       (data-t) change; every other byte stays. Prints `rows: N`.
  *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
  *       rows with the same title (case and outer spaces ignored): one job, one row.
@@ -174,6 +178,11 @@ function checkCrew(e, where) {
   if (!String(e.job ?? '').trim()) die(`${where}: a job is required`);
 }
 
+const GROUP_CSS = 'li.grp{display:block;padding:0;background:none;border:0}'
+  + '.grp details{padding:4px 0}.grp summary{cursor:pointer;font-size:13px;color:var(--muted)}'
+  + '.grp summary b{display:inline;color:var(--ink)}.grp ul{list-style:none;margin:4px 0 0 12px;padding:0}'
+  + '.par{display:block;font-size:12px;color:var(--faint);overflow-wrap:anywhere}';
+
 // A row's `parent` names its main job's row: it must exist, must not be the row itself, and must not
 // have a parent of its own (one level only).
 const hasParent = (r) => !!(r && key(r.parent));
@@ -237,31 +246,67 @@ function render(dir) {
   checkParents(rows);
   const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
     .sort((a, b) => a.g - b.g || (a.g === GROUP.ok ? -1 : 1) * String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
+  // a row's main job (its `parent`, resolved to that row)
+  const byTitle = new Map(rows.map((r) => [key(r.title), r]));
+  const mainOf = (r) => (hasParent(r) ? byTitle.get(key(r.parent)) : null);
+  const ACTIVE = [GROUP.run, GROUP.you];
   const li = (r) => {
     const link = /^https?:\/\//i.test(String(r.url || ''))
       ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const small = [r.small ? esc(r.small) : '', link].filter(Boolean).join(' · ');
-    return `<li><span class="s ${r.state}">${L[r.state]}</span><div><b>${esc(r.title)}</b>${small ? `<small>${small}</small>` : ''}</div><time>${esc(r.time)}</time></li>`;
+    // active work never folds: a sub-job being worked on, or waiting on the owner, names its main job instead
+    const main = ACTIVE.includes(GROUP[r.state]) && mainOf(r);
+    const par = main ? `<span class="par">${esc(main.title)}</span>` : '';
+    return `<li><span class="s ${r.state}">${L[r.state]}</span><div>${par}<b>${esc(r.title)}</b>${small ? `<small>${small}</small>` : ''}</div><time>${esc(r.time)}</time></li>`;
   };
+  // Finished work (done, waiting, plans): the sub-jobs of one main job fold together, closed, headed by the
+  // main job's title and the count of its sub-jobs; the main row heads the fold when it is in the same
+  // section, otherwise the summary carries its state. The fold sits where its newest sub-job would sort.
+  // `depth` names the fold for one-open-at-a-time: a fold nested in a fold takes the next level's name,
+  // because opening a same-named descendant would close its own ancestor.
+  const fold = (depth) => (depth === 1 ? '<details name="trk">' : `<details class="sub" name="trk-${depth}">`);
+  const items = (it, depth) => {
+    const groups = new Map();
+    for (const x of it) {
+      const m = mainOf(x.r);
+      if (!m) continue;
+      if (!groups.has(m)) groups.set(m, []);
+      groups.get(m).push(x);
+    }
+    const heads = new Map(it.filter((x) => groups.has(x.r)).map((x) => [x.r, x]));
+    const newestFirst = it.length && it[0].g === GROUP.ok;
+    const anchor = new Map([...groups].map(([m, subs]) => [newestFirst ? subs[0] : subs[subs.length - 1], m]));
+    const inGroup = new Set([...[...groups.values()].flat(), ...heads.values()]);
+    const lines = [];
+    for (const x of it) {
+      if (anchor.has(x)) {
+        const m = anchor.get(x); const subs = groups.get(m); const head = heads.get(m);
+        const summary = `<b>${esc(m.title)}</b> ${subs.length}${head ? '' : ` · ${L[m.state]}`}`;
+        lines.push(`<li class="grp">${fold(depth)}<summary>${summary}</summary>${ul(head ? [head, ...subs] : subs, depth + 1, false)}</details></li>`);
+      } else if (!inGroup.has(x)) lines.push(li(x.r));
+    }
+    return lines;
+  };
+  const ul = (it, depth, group = true) => `<ul>\n${(group ? items(it, depth) : it.map(({ r }) => li(r))).map((x) => '  ' + x + '\n').join('')}</ul>`;
   // waiting and plans sit above the list as closed groups; the list carries agent working, owner, done
   const FOLDED = [GROUP.wait, GROUP.plan];
-  const listed = sorted.filter(({ g }) => !FOLDED.includes(g));
   const out = [];
-  listed.forEach(({ r, g }, k) => {
-    if (k === 0 || g !== listed[k - 1].g) out.push(`<li class="hd">${L.groups[g]}</li>`);
-    out.push(li(r));
-  });
+  for (const g of [GROUP.run, GROUP.you, GROUP.ok]) {
+    const it = sorted.filter((x) => x.g === g);
+    if (!it.length) continue;
+    out.push(`<li class="hd">${L.groups[g]}</li>`);
+    out.push(...(g === GROUP.ok ? items(it, 1) : it.map(({ r }) => li(r))));
+  }
   const ol = `<ol>\n${out.map((x) => '  ' + x + '\n').join('')}</ol>`;
   // plans may carry a `group` (a heading of the plans list): each group is its own closed fold inside
-  const ul = (it) => `<ul>\n${it.map(({ r }) => '  ' + li(r) + '\n').join('')}</ul>`;
   const body = (it) => {
     const names = [...new Set(it.map(({ r }) => r.group).filter(Boolean))];
-    if (!names.length) return ul(it);
-    const part = (name) => { const m = it.filter(({ r }) => (r.group || '') === name); return `<details class="sub"><summary>${esc(name || L.other)} ${m.length}</summary>${ul(m)}</details>`; };
+    if (!names.length) return ul(it, 2);
+    const part = (name) => { const m = it.filter(({ r }) => (r.group || '') === name); return `${fold(2)}<summary>${esc(name || L.other)} ${m.length}</summary>${ul(m, 3)}</details>`; };
     return [...names, ...(it.some(({ r }) => !r.group) ? [''] : [])].map(part).join('');
   };
   const folds = FOLDED.map((g) => sorted.filter((x) => x.g === g)).filter((it) => it.length)
-    .map((it) => `<details><summary>${L.groups[it[0].g]} ${it.length}</summary>${body(it)}</details>`);
+    .map((it) => `${fold(1)}<summary>${L.groups[it[0].g]} ${it.length}</summary>${body(it)}</details>`);
   const section = folds.length ? `<section class="folds">${folds.join('')}</section>\n` : '';
   if (!/<ol>[\s\S]*?<\/ol>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
   html = html.replace(/<section class="folds">[\s\S]*?<\/section>\n?/, '');
@@ -269,6 +314,9 @@ function render(dir) {
   // pages made before the folds keep working: their style gets the rule once
   if (!html.includes('.folds details{')) html = html.replace('</style>', '.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}\n</style>');
   if (!html.includes('.folds details.sub{')) html = html.replace('</style>', '.folds details.sub{border-bottom:0;padding:4px 0 4px 12px}.folds details.sub summary{text-transform:none;letter-spacing:0}\n</style>');
+  // row groups and main-job labels get their styles the first time a page shows one, so a page
+  // without any `parent` stays byte-identical to what it was before row groups existed
+  if (/class="(grp|par)"/.test(section + ol) && !html.includes('.grp summary b{')) html = html.replace('</style>', `${GROUP_CSS}\n</style>`);
   // the Crew strip: developer mode only; without it the page carries no strip at all
   html = html.replace(/<section class="crew">[\s\S]*?<\/section>\n?/, '');
   if (dev && crew.length) {

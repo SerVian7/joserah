@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Demo board · 01.10.2026</title>
+<style>
+:root{color-scheme:light dark;--bg:#f6f6f5;--card:#ffffff;--line:#dcdcd9;--ink:#222222;--muted:#5c5c59;--faint:#797976;--run:#2563a8;--you:#b4232a;--ok:#2f7d55;--wait:#a8650f;--link:#2563a8;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}}
+:root[data-theme="dark"]{--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--sans)}
+.top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.top img{height:20px;width:auto;max-width:96px}
+.top .line{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top .upd{color:var(--faint);white-space:nowrap}
+main{max-width:720px;margin:0 auto;padding:8px 16px 32px}
+ol{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;background:var(--card);border:1px solid var(--line);border-radius:8px}
+li.hd{display:block;background:none;border:0;padding:14px 0 2px;margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+li div{flex:1;min-width:0}
+b{display:block;font-weight:600;overflow-wrap:anywhere}
+small{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+small a{color:var(--link)}
+time{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.s{flex:none;min-width:96px;font-size:12px;font-weight:600;color:var(--faint)}
+.s.run{color:var(--run)}.s.you{color:var(--you)}.s.ok{color:var(--ok)}.s.wait,.s.plan{color:var(--wait)}
+.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}
+.folds details.sub{border-bottom:0;padding:4px 0 4px 12px}.folds details.sub summary{text-transform:none;letter-spacing:0}
+.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}.crew-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:2px 0 6px}.crew-sum span{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}.crew svg{width:18px;height:18px;flex:none;color:var(--muted)}.crew ul{list-style:none;margin:0;padding:0}.crew li.crew-line{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;background:none;border:0;border-radius:0;font-size:13px}.crew-line span{flex:1;min-width:0;overflow-wrap:anywhere}.crew-line a{color:inherit}.crew-line em{font-style:normal;color:var(--you)}.crew-line.work svg,.crew-sum .work svg{animation:crew-pulse 2.4s ease-in-out infinite}.crew-line.owner svg{color:var(--you)}.crew-sum .owner svg{color:var(--you)}.crew-line.idle,.crew-sum .idle{opacity:.5}@keyframes crew-pulse{50%{opacity:.4}}@media (prefers-reduced-motion: reduce){.crew-line.work svg,.crew-sum .work svg{animation:none}}
+</style>
+</head>
+<body>
+<header class="top"><span class="line">Demo board · 01.10.2026</span><span class="upd" data-t="2026-10-01T09:05:00.000Z"></span></header>
+<main>
+<!-- crew -->
+<ol>
+  <li class="hd">In progress</li>
+  <li><span class="s run">In progress</span><div><b>A</b></div><time>09:00</time></li>
+  <li class="hd">Done</li>
+  <li><span class="s ok">Done</span><div><b>B</b></div><time>09:05</time></li>
+</ol>
+</main>
+<script>
+(function(){var e=document.querySelector(".upd"),t=e&&e.getAttribute("data-t");if(!t)return;var d=new Date(t);if(isNaN(d))return;
+var tr=document.documentElement.lang==="tr",hm=d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+e.textContent=tr?"güncelleme "+hm:"updated "+hm;})();
+</script>
+</body>
+</html>
