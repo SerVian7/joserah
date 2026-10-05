@@ -139,3 +139,54 @@ test('a refused job (no workspace yet) answers with the reason, not a crash', as
   assert.equal(r.status, 409);
   assert.equal((await r.json()).error, 'no-workspace');
 });
+
+test('a token-only or at-sign password address is never shown on the page', async (t) => {
+  const { app, deps, cookie } = await signedIn(t);
+  git(deps.workspace, 'init', '-q');
+  for (const url of ['https://ghp_tok123@example.invalid/w.git', 'https://u:p@ss-word@example.invalid/w.git']) {
+    git(deps.workspace, 'remote', 'add', 'origin', 'https://placeholder.invalid/x.git');
+    git(deps.workspace, 'remote', 'set-url', 'origin', url);
+    const page = await (await app.request('/setup', { headers: { cookie } })).text();
+    assert.ok(!/ghp_tok123|ss-word/.test(page), url);
+    assert.match(page, /example\.invalid\/w\.git/);
+    git(deps.workspace, 'remote', 'remove', 'origin');
+  }
+});
+
+test('the backup history needs the workspace first, and a failed start can be retried', async (t) => {
+  const empty = path.join(tmpdir(t), 'fresh');
+  fs.mkdirSync(empty);
+  const { app, cookie } = await signedIn(t, { workspace: empty });
+  const r = await app.request('/api/setup/git-init', post({}, cookie));
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).error, 'no-workspace');
+  assert.ok(!fs.existsSync(path.join(empty, '.git')));
+  await app.request('/api/setup/workspace', post({ owner: 'O', name: 'w', language: 'English' }, cookie));
+  // a hook that refuses every commit makes the commit step fail; the half-made repository must not stay behind
+  const hooks = path.join(tmpdir(t), 'hooks'); fs.mkdirSync(hooks);
+  fs.writeFileSync(path.join(hooks, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const prev = process.env.GIT_CONFIG_COUNT;
+  process.env.GIT_CONFIG_COUNT = '1'; process.env.GIT_CONFIG_KEY_0 = 'core.hooksPath'; process.env.GIT_CONFIG_VALUE_0 = hooks;
+  t.after(() => { delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0; if (prev === undefined) delete process.env.GIT_CONFIG_COUNT; else process.env.GIT_CONFIG_COUNT = prev; });
+  const bad = await app.request('/api/setup/git-init', post({}, cookie));
+  assert.equal(bad.status, 500);
+  assert.ok(!fs.existsSync(path.join(empty, '.git')), 'no half-made history left behind');
+  delete process.env.GIT_CONFIG_COUNT; delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0;
+  assert.equal((await app.request('/api/setup/git-init', post({}, cookie))).status, 201);
+});
+
+test('an address with a query or fragment is refused; the engine refusal carries its reason', async (t) => {
+  const { app, deps, cookie } = await signedIn(t, { engine: fakeEngine({ FAKE_CLAUDE_SIGNED_IN: '0' }) });
+  git(deps.workspace, 'init', '-q');
+  assert.equal((await (await app.request('/api/setup/remote', post({ url: 'https://example.invalid/w.git?access_token=abc' }, cookie))).json()).error, 'bad-url');
+  const r = await (await app.request('/api/setup/test-job', post({}, cookie))).json();
+  assert.ok(r.message && r.message.length > 0, 'the page prints message');
+});
+
+test('a cross-origin post to the password step is refused', async (t) => {
+  const deps = baseDeps(t); const app = createApp(deps);
+  const tok = setupToken(deps.stateDir);
+  const r = await app.request('/api/setup/password', { method: 'POST', headers: { origin: 'http://evil.invalid', 'content-type': 'application/json' }, body: JSON.stringify({ token: tok, password: 'long-enough-1', confirm: 'long-enough-1' }) });
+  assert.equal(r.status, 403);
+  assert.equal(deps.auth.state.kind, 'setup');
+});

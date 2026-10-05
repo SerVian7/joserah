@@ -19,8 +19,8 @@ export function wizardPass(job: JobRecord): boolean { return job.state === 'done
 const TEST_TEXT = 'This is the setup check. Reply with the single word: ready';
 const same = (a: string, b: string) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 const gitIn = (cwd: string, ...args: string[]) => spawnSync('git', ['-c', 'user.name=Joserah Server', '-c', 'user.email=server@joserah.invalid', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8', windowsHide: true });
-/** A password inside an address (`https://user:pw@host`) is never shown back. */
-const maskUrl = (u: string) => u.replace(/\/\/([^/@\s:]+):[^/@\s]*@/, '//$1@');
+/** Whatever sits before the host of an http(s) address (a password, a token) and any query or fragment is never shown back. */
+const maskUrl = (u: string) => u.replace(/^(https?:\/\/)[^/]*@/i, '$1').replace(/[?#].*$/, '');
 
 const SETUP_JS = `(function(){function post(u,b){return fetch(u,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw j;return j})})}
 document.querySelectorAll('form[data-step]').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var b={};new FormData(f).forEach(function(v,k){b[k]=v});var err=f.querySelector('.err');if(err)err.textContent='';
@@ -59,7 +59,7 @@ export function register(app: App, deps: AppDeps): void {
 <h2>${ok(hasWs)} 2. ${tr() ? 'Çalışma alanı' : 'Workspace'}</h2><p class="muted">${esc(ws)}</p>
 ${hasWs ? '' : `<form data-step="workspace"><input name="owner" required placeholder="${tr() ? 'Adınız' : 'Your name'}"> <input name="name" required placeholder="${tr() ? 'Çalışma alanı adı' : 'Workspace name'}"> <select name="language"><option>Turkish</option><option>English</option></select> <button>OK</button> <span class="err"></span></form>`}
 <h2>${ok(isRepo && !!remote)} 3. ${tr() ? 'Yedek' : 'Backup'}</h2>
-${isRepo ? '' : `<form data-step="git-init"><button>${tr() ? 'Yedek geçmişini başlat' : 'Start the backup history'}</button> <span class="err"></span></form>`}
+${isRepo || !hasWs ? '' : `<form data-step="git-init"><button>${tr() ? 'Yedek geçmişini başlat' : 'Start the backup history'}</button> <span class="err"></span></form>`}
 ${isRepo ? `<form data-step="remote"><input name="url" required value="${esc(remote)}" placeholder="https://…/workspace.git"> <button>OK</button> <span class="err"></span></form>` : ''}
 <h2>${ok(h.installed && h.signedIn)} 4. Claude Code</h2><p>${esc(h.installed ? `${h.version} · ${h.detail}` : h.detail)}</p>
 ${h.signedIn ? '' : `<p>${tr() ? 'Bir terminalde bir kez çalıştırıp giriş yapın:' : 'Run once in a terminal and sign in:'} <code>${docker ? 'docker exec -it -w /workspace joserah claude' : 'claude'}</code> — ${tr() ? 'sonra bu sayfayı yenileyin.' : 'then reload this page.'}</p>`}
@@ -103,9 +103,14 @@ ${h.signedIn ? `<form data-step="test-job"><button>${tr() ? 'Deneme işini çal�
   app.post('/api/setup/git-init', (c) => {
     const no = signedOnly(c); if (no) return no;
     if (hasHistory()) return jsonError(c, 409, 'exists');
+    // The scaffold writes the secret rules of .gitignore; committing before it would put keys/ into the history.
+    if (!hasWorkspace()) return jsonError(c, 409, 'no-workspace', { message: 'create the workspace first' });
     for (const args of [['init', '-q'], ['add', '-A'], ['commit', '-q', '--allow-empty', '-m', 'workspace: start', '-m', 'Joserah Server']]) {
       const r = gitIn(deps.workspace, ...args);
-      if (r.status !== 0) return jsonError(c, 500, 'git', { message: r.stderr.trim().split('\n')[0] });
+      if (r.status !== 0) {
+        fs.rmSync(path.join(deps.workspace, '.git'), { recursive: true, force: true }); // no half-made history: the step can be run again
+        return jsonError(c, 500, 'git', { message: (r.stderr || r.stdout).trim().split('\n')[0] });
+      }
     }
     return c.json({ commit: gitIn(deps.workspace, 'rev-parse', 'HEAD').stdout.trim() }, 201);
   });
@@ -115,7 +120,7 @@ ${h.signedIn ? `<form data-step="test-job"><button>${tr() ? 'Deneme işini çal�
     const b = await c.req.json().catch(() => ({})) as { url?: string };
     const url = String(b.url ?? '').trim();
     if (/^(https?|ssh):\/\/[^/@\s]+:[^/@\s]*@/i.test(url) || /^https?:\/\/[^/@\s]+@/i.test(url)) return jsonError(c, 400, 'credentials-in-url', { message: 'put the token in the vault, not in the address' });
-    if (!/^(https:\/\/|ssh:\/\/|git@)[^\s]+$/.test(url)) return jsonError(c, 400, 'bad-url');
+    if (!/^(https:\/\/|ssh:\/\/|git@)[^\s?#]+$/.test(url)) return jsonError(c, 400, 'bad-url');
     if (!hasHistory()) return jsonError(c, 409, 'no-history', { message: 'start the backup history first' });
     const has = gitIn(deps.workspace, 'remote', 'get-url', 'origin').status === 0;
     const r = gitIn(deps.workspace, 'remote', has ? 'set-url' : 'add', 'origin', url);
@@ -131,7 +136,7 @@ ${h.signedIn ? `<form data-step="test-job"><button>${tr() ? 'Deneme işini çal�
   app.post('/api/setup/test-job', async (c) => {
     const no = signedOnly(c); if (no) return no;
     const h = await deps.engine.health(); deps.engineHealth = h; deps.health.signedIn = h.signedIn;
-    if (!h.installed || !h.signedIn) return jsonError(c, 503, 'engine', { reason: h.detail });
+    if (!h.installed || !h.signedIn) return jsonError(c, 503, 'engine', { reason: h.detail, message: h.detail });
     try {
       const j = deps.jobs.submit({ type: 'bookkeeping', text: TEST_TEXT, budgetUsd: 0.05 });
       lastTest = j.id;
