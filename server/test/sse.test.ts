@@ -22,7 +22,7 @@ test('events stream live and resume after Last-Event-ID', async (t) => {
   assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/);
   const text = await readUntil(res, (s) => s.includes('"path":"b"'));
   assert.match(text, /data: {"type":"changed","path":"b"}/);
-  assert.match(text, /^id: 2$/m);
+  assert.match(text, new RegExp(`^id: ${first + 1}$`, "m"));
   assert.ok(!text.includes('"path":"a"'));
 });
 

@@ -6,6 +6,7 @@ import { preparePage } from '../src/pages.ts';
 
 type Fetch = (url: string, init?: { method?: string; body?: string }) => Promise<{ status: number; ok: boolean; json(): Promise<unknown> }>;
 function browser(o: { page?: string; mode?: string; fetch: Fetch; session?: Record<string, string>; EventSource?: unknown }) {
+  const intervals: Array<() => void> = [];
   const appended: Array<{ id: string; text: string; href?: string }> = [];
   const store = new Map(Object.entries(o.session ?? {}));
   const el = (tag: string) => { const e: Record<string, unknown> & { children: unknown[] } = { tag, children: [], style: {}, setAttribute() {}, appendChild(c: unknown) { this.children.push(c); return c; } }; return e; };
@@ -19,12 +20,12 @@ function browser(o: { page?: string; mode?: string; fetch: Fetch; session?: Reco
   const window: Record<string, unknown> = {
     document, location: { pathname: '/p/2026-10-06/daily-tracker/', search: '', reload() { window.reloaded = true; } },
     sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) },
-    fetch: o.fetch, setTimeout, clearTimeout, setInterval: () => 0, Date, JSON, encodeURIComponent, Promise,
+    fetch: o.fetch, setTimeout, clearTimeout, setInterval: (fn: () => void) => { intervals.push(fn); return 0; }, Date, JSON, encodeURIComponent, Promise,
   };
   if (o.EventSource) window.EventSource = o.EventSource;
   window.window = window;
   vm.runInNewContext(SHIM_JS, window);
-  return { window, appended, store };
+  return { window, appended, store, intervals };
 }
 const res = (status: number, body: unknown = {}) => Promise.resolve({ status, ok: status < 300, json: () => Promise.resolve(body) });
 
@@ -87,4 +88,42 @@ test('preparePage puts the shim before any page script', () => {
   const h = preparePage('<html><head><script>window.x=1</script></head><body></body></html>', { page: 'd/f', mode: 'page' });
   assert.ok(h.indexOf('/_/shim.js') < h.indexOf('window.x=1'));
   assert.ok(h.indexOf('joserah-mode') < h.indexOf('/_/shim.js'), 'after the two meta tags');
+});
+
+// Reviewer finding 3: tracker.js ANSWER_JS hides every form on invalid_argument (feature unavailable); a plain 400 must not.
+test('shim: a 400 from the server is bad-request, never invalid_argument (which hides the form)', async () => {
+  const { window } = browser({ page: '2026-10-06/daily-tracker', fetch: () => res(400, { error: 'bad-body' }) });
+  const claude = window.claude as { use(n: string): Promise<{ collection(n: string): { doc(id: string): { set(a: unknown): Promise<void> } } }> };
+  const db = await claude.use('db');
+  await assert.rejects(db.collection('answers').doc('a-x-1').set({}), (e: { code: string }) => e.code === 'bad-request');
+});
+
+// Reviewer finding 2: only an onmessage used to reset the drop counter; pings are comments, so quiet resumes counted up.
+test('shim: a stream that reopens between drops is never abandoned for polling', () => {
+  const made: Array<{ readyState: number; closed: boolean; onopen?: () => void; onerror?: () => void }> = [];
+  class FakeES { readyState = 0; closed = false; onopen?: () => void; onerror?: () => void; constructor() { made.push(this); } close() { this.readyState = 2; this.closed = true; } }
+  const { intervals } = browser({ page: '2026-10-06/daily-tracker', EventSource: FakeES, fetch: () => res(200, { stamp: 1 }) });
+  const es = made[0];
+  for (let round = 0; round < 4; round++) { es.onerror!(); es.onerror!(); es.onopen!(); }
+  assert.equal(es.closed, false, 'four rounds of two drops each, with a reopen between, keep the stream');
+  assert.equal(intervals.length, 0, 'no polling fallback started');
+  es.onerror!(); es.onerror!(); es.onerror!();
+  assert.equal(es.closed, true, 'three drops in a row still fall back');
+  assert.equal(intervals.length, 1);
+});
+
+// Reviewer finding 2: /api/stamp leaves out answers.json, so poll mode must re-read the answers itself.
+test('shim: polling re-reads the answers so a terminal reply still reaches onSnapshot', async () => {
+  const urls: string[] = [];
+  const { window, intervals } = browser({ page: '2026-10-06/daily-tracker', fetch: (url) => { urls.push(url); return res(200, url.includes('/api/db/') ? { docs: [] } : { stamp: 1 }); } });
+  const claude = window.claude as { use(n: string): Promise<{ collection(n: string): { onSnapshot(cb: (s: unknown) => void): () => void } }> };
+  const db = await claude.use('db');
+  let snaps = 0; db.collection('answers').onSnapshot(() => { snaps++; });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(snaps, 1);
+  assert.equal(intervals.length, 1, 'no EventSource: polling started');
+  intervals[0]();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(snaps, 2, 'each poll tick refreshes the answers');
+  assert.ok(urls.includes('/api/stamp/2026-10-06/daily-tracker'));
 });
