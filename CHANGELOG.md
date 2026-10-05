@@ -3,6 +3,18 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.18.0
+
+0.18.0 — the crew: the work runs behind the scenes. Owner, 2026-10-05.
+
+- **Work behind the scenes.** The assistant you talk to now only talks; the work goes to a crew of five agents (Lead, Architect, Builder, Scout, Sentry), each with its own model and effort. Nothing to learn: you ask as before, and the assistant speaks of the work in the first person ("two of my research jobs are still running"). The Daily Tracker shows a Crew strip — icons, states and counts — while jobs run.
+- **Developer mode shows it.** Off by default. Add `"devMode": true` to `.joserah/config.json` to see the crew named: role names on the Tracker strip, and the assistant may say which role is on what.
+- **Switching the crew off.** `"crew": false` (or `"crew": { "enabled": false }`) in `.joserah/config.json` brings back the way it worked before; the agent definitions the crew wrote are removed, your own agents never. An optional `crew` block sets a role's model or effort; after any change, `/joserah:update` (or `crew.js`) rewrites the definitions.
+- **Install paths.** New workspaces get the five definitions in `.claude/agents/`; `/joserah:update` writes them in existing ones and never overwrites a same-named file of yours (it says so). If that folder is new, restart Claude Code once. Doctor checks the definitions (`crew definitions current`).
+- **Memory across compaction.** Lead keeps a Ledger of open jobs, decisions and what waits on you; after a `/compact` the open items come back on their own.
+
+The prompt (v27), the orchestrate, feedback, setup, update and doctor skills, new hooks and tools. Run `/joserah:update`, then `/reload-plugins`; restart once if it says the agents folder is new.
+
 ## 0.17.10
 
 0.17.10 — a reusable Changelog page, Plans grouped on the Tracker, relay and delivery rules. Owner, 2026-10-04.
