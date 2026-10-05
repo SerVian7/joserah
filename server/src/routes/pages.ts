@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Context } from 'hono';
 import type { App, Env } from '../app.ts';
 import type { AppDeps } from '../deps.ts';
-import { pageDir, ensureFresh, resolveAsset, todayTrackerPage, preparePage, listPages } from '../pages.ts';
+import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage, listPages } from '../pages.ts';
 import { renderMarkdown } from '../markdown.ts';
 import { shell, esc, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
@@ -12,9 +12,11 @@ const TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg
 // The raw request path inside a page: day and folder segments, then the rest, all still percent-encoded.
 const IN_PAGE = /^\/p\/([^/]+)\/([^/]+)\/(.*)$/;
 
-export function serveIndex(dir: string, page: string, mode: 'page' | 'tv'): string {
+/** The page's index.html, re-rendered first when stale; null when it is no longer a regular file inside the page folder. */
+export function serveIndex(dir: string, page: string, mode: 'page' | 'tv'): string | null {
   ensureFresh(dir);
-  return preparePage(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), { page, mode });
+  const index = indexOf(dir);
+  return index ? preparePage(fs.readFileSync(index, 'utf8'), { page, mode }) : null;
 }
 
 export function register(app: App, deps: AppDeps): void {
@@ -26,14 +28,15 @@ export function register(app: App, deps: AppDeps): void {
   });
   app.get('/p/tracker', (c) => {
     const t = todayTrackerPage(deps.workspace);
-    if (t) return c.redirect(`/p/${t.day}/${t.folder}/`, 302);
+    if (t && pageDir(deps.workspace, t.day, t.folder)) return c.redirect(`/p/${t.day}/${t.folder}/`, 302);
     return c.html(shell({ title: LABELS[lang()].tracker, lang: lang(), body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
   });
   app.get('/tv', (c) => {
     const t = todayTrackerPage(deps.workspace);
     const dir = t && pageDir(deps.workspace, t.day, t.folder);
-    if (!t || !dir) return c.html(shell({ title: 'TV', lang: lang(), nav: false, tv: true, head: '<meta name="joserah-mode" content="tv"><meta http-equiv="refresh" content="60">', body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
-    return c.html(serveIndex(dir, `${t.day}/${t.folder}`, 'tv'));
+    const html = t && dir ? serveIndex(dir, `${t.day}/${t.folder}`, 'tv') : null;
+    if (!html) return c.html(shell({ title: 'TV', lang: lang(), nav: false, tv: true, head: '<meta name="joserah-mode" content="tv"><meta http-equiv="refresh" content="60">', body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
+    return c.html(html);
   });
   // Only a real page gets its slash added; anything else is a plain 404, so no redirect is ever built from an unchecked name.
   app.get('/p/:day/:folder', (c) => {
@@ -49,7 +52,7 @@ export function register(app: App, deps: AppDeps): void {
     const dir = pageDir(deps.workspace, day, folder);
     if (!dir) return c.notFound();
     const prefix = `/p/${day}/${folder}/`;
-    if (sub === '' || sub === 'index.html') return c.html(serveIndex(dir, `${day}/${folder}`, 'page'));
+    if (sub === '' || sub === 'index.html') { const html = serveIndex(dir, `${day}/${folder}`, 'page'); return html ? c.html(html) : c.notFound(); }
     const file = resolveAsset(dir, sub);
     if (!file) return c.notFound();
     if (file.endsWith('.md')) {

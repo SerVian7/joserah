@@ -116,3 +116,19 @@ test('an asset in the page is served; a link out of the page and a dotfile are n
   assert.equal(r.status, 302);
   assert.equal((await app.request(`/p/${DAY}/no-such-page`, { headers: { cookie } })).status, 404);
 });
+
+test('a symlinked index.html pointing out of the page is not served', async (t) => {
+  const { app, deps, cookie } = await signedIn(t);
+  const base = path.join(deps.workspace, '.joserah', 'desk', 'artifacts', DAY, 'f');
+  fs.mkdirSync(base, { recursive: true });
+  fs.mkdirSync(path.join(deps.workspace, 'keys'), { recursive: true });
+  fs.writeFileSync(path.join(deps.workspace, 'keys', 'x'), 'TOPSECRET');
+  try { fs.symlinkSync(path.join(deps.workspace, 'keys', 'x'), path.join(base, 'index.html'), 'file'); }
+  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EPERM') throw e; fs.symlinkSync(path.join(deps.workspace, 'keys'), path.join(base, 'index.html'), 'junction'); }   // Windows without the privilege: a junction out
+  for (const p of [`/p/${DAY}/f/`, `/p/${DAY}/f/index.html`]) {
+    const r = await app.request(p, { headers: { cookie } });
+    assert.equal(r.status, 404, p);
+    assert.ok(!(await r.text()).includes('TOPSECRET'), p);
+  }
+  assert.deepEqual(listPages(deps.workspace).map((p) => p.folder), []);
+});

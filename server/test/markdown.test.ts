@@ -25,3 +25,11 @@ test('gfm tables and Turkish text', () => {
   assert.match(h, /<table>/);
   assert.match(h, /ğüşiöç/);
 });
+
+test('a control character in a link never hides a script scheme', () => {
+  assert.equal(safeHref('java\tscript:alert(1)'), null);
+  assert.equal(safeHref('\x01javascript:alert(1)'), null);
+  assert.equal(safeHref('/\t/evil.example.invalid', (h) => h), null);
+  const h = renderMarkdown('[a](<java\tscript:alert(1)>)');
+  assert.ok(!/href=/.test(h), h);
+});

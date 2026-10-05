@@ -4,6 +4,7 @@ import { esc } from './layout.ts';
 /** A link target that is safe to emit: http(s), mailto, an in-page anchor, or a relative link the caller resolves. Null drops it. */
 export function safeHref(href: string, resolve?: (h: string) => string | null): string | null {
   const h = String(href ?? '').trim();
+  if (/[\x00-\x1f\x7f]/.test(h)) return null;   // a browser strips tabs and newlines, so `java\tscript:` would still run
   if (/^(https?:|mailto:)/i.test(h)) return h;
   if (!h || h.startsWith('//') || h.includes('\\') || /^[a-z][a-z0-9+.-]*:/i.test(h)) return null;
   if (h.startsWith('#')) return h;

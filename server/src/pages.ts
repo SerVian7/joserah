@@ -30,7 +30,13 @@ function within(base: string, p: string): string | null {
 export function pageDir(ws: string, day: string, folder: string): string | null {
   if (!DAY_RE.test(day) || !FOLDER_RE.test(folder) || folder.includes('..')) return null;
   const d = within(path.join(ws, ARTIFACTS), path.join(ws, ARTIFACTS, day, folder));
-  return d && fs.existsSync(path.join(d, 'index.html')) ? d : null;
+  return d && indexOf(d) ? d : null;
+}
+
+/** The page's index.html as a real path inside the page folder (a symlink out is refused), or null. */
+export function indexOf(dir: string): string | null {
+  const p = within(dir, path.join(dir, 'index.html'));
+  try { return p && fs.statSync(p).isFile() ? p : null; } catch { return null; }
 }
 
 export function kindOf(dir: string): PageKind {
@@ -54,7 +60,8 @@ export function listPages(ws: string, days = 14): PageInfo[] {
     for (const folder of folders) {
       const dir = pageDir(ws, day, folder);
       if (!dir) continue;
-      const index = path.join(dir, 'index.html');
+      const index = indexOf(dir);
+      if (!index) continue;
       out.push({ day, folder, kind: kindOf(dir), title: titleOf(index), url: `/p/${day}/${folder}/`, mtimeMs: fs.statSync(index).mtimeMs,
         reports: fs.readdirSync(dir).filter((n) => n.endsWith('.md') && n !== 'tracker.md' && !n.startsWith('.')).sort() });
     }
