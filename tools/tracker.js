@@ -28,16 +28,34 @@
  *                         --job "<text>" --state work|owner|idle
  *                         [--reason decision|sign-in|connection|approval] [--url <http(s)>]
  *                         [--model <name>] [--effort low|medium|high] [--ctx <tokens>] [--agent <id>]
+ *                         [--row "<row title>"]
  *       Upserts ONE entry of the Crew strip by role + job (case and outer spaces
  *       ignored), stamps its `time` now, re-renders. reason/url not given are
- *       cleared; model, effort, ctx and agent carry over, and --ctx stamps `ctxTime`;
+ *       cleared; model, effort, ctx, agent and row carry over, and --ctx stamps `ctxTime`;
  *       `agent` is the id the hooks match the entry by (never shown).
+ *       `row` names the row the entry works on (a row title, case and outer spaces
+ *       ignored; an unknown one is refused; --row "" clears it): the strip line then
+ *       reads "<category> · <summary>" from that row (category: its parent's title or
+ *       its group; summary: its title) and opens the row's detail. Entries naming the
+ *       same row share one line. An entry with no row shows its own job, no detail.
  *       In developer mode they show as a faint `model · effort · ctx @time`
  *       tail, the context figure only with its time (never estimated).
  *       rows.json then becomes { rows: [...], crew: [...] }; a legacy
  *       array is read as { rows, crew: [] } and kept an array until a crew entry
- *       exists. The strip shows whenever it has entries; role names only in
- *       developer mode.
+ *       exists.
+ *
+ *   Active work (tr "Aktif çalışma", every mode): the strip under the header is
+ *       the one list of running work — run rows are never listed in the sections
+ *       below. A head with its line count (and the role icons on the right when
+ *       there are crew entries), then one line per row being worked on, per entry
+ *       with no row, and per run row no entry names (no icon, oldest first). Every
+ *       line is a control: an entry with no row but a url is that link; any other
+ *       line is a <button aria-expanded aria-controls> that opens its detail (the
+ *       row's small text, its "sonraki:/next:" part on its own line, its links and
+ *       the entries' links; a line waiting on the owner leads with the link to where
+ *       it is decided; with nothing more, its title) in one panel under the lines,
+ *       one at a time (PANEL_JS, <script id="panel"> inside the strip); without
+ *       script every detail shows under its own title.
  *       Each entry carries `since` (ISO): when its state began. It is set when the
  *       state changes and kept on an update that keeps it, so a working or waiting
  *       line can say how long it has been so: its <time> carries data-since and a
@@ -56,9 +74,10 @@
  *       ok (done) | plan. The <ol> is rebuilt from it, so a row
  *       removed from the file disappears. A row without `time` is stamped once
  *       with the current local HH:MM and that stamp is written back to
- *       rows.json; a row with `time` keeps it. Sections, in this order, all open:
- *       in progress / agent working (run), owner (you), waiting (wait), plans
- *       (plan), done (ok); active ones oldest first, the others newest first,
+ *       rows.json; a row with `time` keeps it. Run rows are lines of the Active
+ *       work strip above the list; the sections, in this order, all open: owner
+ *       (you), waiting (wait), plans (plan), done (ok); owner oldest first, the
+ *       others newest first,
  *       ties keep file order, an empty section gets no heading. A plan's `group`
  *       leads its small line. Only http(s) urls become links. Rows with a
  *       `parent` form a container under their main job: a header line over the
@@ -75,11 +94,11 @@
  *       rows with the same title (case and outer spaces ignored): one job, one row.
  *
  * Developer mode (`devMode: true` in the workspace's .joserah/config.json, found
- * by walking up from <dir>) names the crew: the run state reads "Agent working"
- * and each strip line reads "<Role> · <job>". Off (the default, and outside any
- * workspace) the run state reads "In progress" (tr "Sürüyor") and the strip keeps
- * its icons, states and counts but carries no role name and no agent wording,
- * in text, title or data attributes: a line is the work only.
+ * by walking up from <dir>) names the crew only as each icon's title, and adds the
+ * faint model · effort tail. Off (the default, and outside any workspace) the strip
+ * keeps its icons, states, counts and elapsed time but carries no role name and no
+ * agent wording, in text, title or data attributes: a line is the work only. The
+ * run label is "Active work" (tr "Aktif çalışma") in both modes.
  *
  * Labels follow <html lang> (en, tr). Tests may fix the clock with
  * JOSERAH_NOW=<ISO timestamp>. No dependencies.
@@ -89,8 +108,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Agent working', runPlain: 'In progress', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Ajan çalışıyor', runPlain: 'Sürüyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -117,6 +136,46 @@ const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
   + '.crew-line.idle,.crew-sum .idle{opacity:.5}'
   + '@keyframes crew-pulse{50%{opacity:.4}}'
   + '@media (prefers-reduced-motion: reduce){.crew-line.work svg,.crew-sum .work svg{animation:none}}';
+
+// Active work (owner, 2026-10-05: "Ajan çalışıyor, kısmını aktif çalışma gibi yapalım ben yukarıdan
+// tıklayınca aşağıyı doldursun … önce işin kategori ismi sonra kısa özet gibi. net yalın olsun."): the
+// strip is a section like the others — a head with its count and the icon summary on the right — and
+// the one list of running work. A line reads "<category> · <summary>"; a line with a detail is a real
+// button (the whole line is its target) that opens the detail in one panel under the lines, one at a
+// time. Without script every detail shows, each under its own title. Theme tokens only.
+const STRIP_CSS = [
+  'section.crew{padding:0;border:0}',
+  '.crew .hd{flex-wrap:wrap}',
+  '.crew .hd .crew-sum{display:flex;flex-wrap:wrap;margin-left:auto;gap:14px;padding:0;border:0;letter-spacing:0}',
+  '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
+  '.crew svg{width:16px;height:16px}',
+  '.crew li.crew-line{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) minmax(46px,auto);gap:0 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}',
+  '.crew .ic,.crew .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}',
+  '.crew .tx{min-width:0;overflow-wrap:anywhere;color:var(--ink)}.crew .ct{color:var(--muted)}',
+  '.crew button.tx{display:block;width:100%;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer}',
+  '.crew a.tx{display:block;text-decoration:none}',
+  '.crew button.tx::before,.crew a.tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}',
+  '.crew button.tx[aria-expanded="true"]::before{content:"\\25BE"}.crew a.tx::before{content:"\\2197"}',
+  '.crew .tx::after{content:"";position:absolute;inset:0}',
+  '.crew li.crew-line:hover .tx,.crew button.tx[aria-expanded="true"]{color:var(--link)}',
+  '.crew .tx:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
+  '.crew li.crew-line>time{order:0;align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
+  '.crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}',
+  '.crew-d .cd{padding:10px 0 12px 42px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
+  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.crew.js .cd:not(.bare)>b{display:none}',
+  '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}',
+  '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
+  '.cd[hidden]{display:none}',
+  // phone width: icons and elapsed time on the top line, the text under them (as the rows below)
+  '@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew-d .cd{padding-left:14px}}',
+];
+// The panel: with script, every detail starts closed; a line's button opens its own and closes the
+// others; a second click closes it. aria-expanded follows; no scrolling, focus stays on the button.
+const PANEL_JS = '(function(){var s=document.querySelector("section.crew");if(!s)return;var bs=s.querySelectorAll("button.tx");if(!bs.length)return;s.classList.add("js");'
+  + 'function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o}'
+  + 'Array.prototype.forEach.call(bs,function(b){set(b,false)});'
+  + 's.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";'
+  + 'Array.prototype.forEach.call(bs,function(x){if(x!==b)set(x,false)});set(b,o)})})();';
 
 // Console look (owner, 2026-10-05: "kartlar olmasın yuvarlak köşeli … elit admin gibi"): no cards, no
 // rounded corners, no shadows; hairline rows, a mono state tag with a thin left mark, a tabular
@@ -167,14 +226,7 @@ const CONSOLE_CSS = [
   '.more[aria-expanded="true"]::before{content:"\\25B4"}',
   '.more:hover{color:var(--ink)}',
   '.more:focus-visible,li.grp>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
-  'section.crew{padding:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}',
-  '.crew-sum{gap:16px;padding:7px 0;border-bottom:1px solid var(--line)}',
-  '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
-  '.crew svg{width:16px;height:16px}',
-  '.crew li.crew-line{display:grid;grid-template-columns:16px minmax(0,1fr) minmax(46px,auto);gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}',
-  '.crew li.crew-line:last-child{border-bottom:0}',
-  '.crew li.crew-line>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
-  '.crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}',
+  ...STRIP_CSS,
   '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}.crew-line .cm i{display:none}'
     + 'li[data-st],li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s t" "b b";gap:3px 12px}'
     + 'li[data-st]>.s{grid-area:s}li[data-st]>div{grid-area:b}li[data-st]>time{grid-area:t}li.job>ol,li.grp>details>ol{padding-left:12px}}',
@@ -222,7 +274,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent|row)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -292,6 +344,8 @@ function checkCrew(e, where) {
   if (e.ctxTime !== undefined && !/^\d\d:\d\d$/.test(e.ctxTime)) die(`${where}: ctxTime must be HH:MM`);
   // the agent id the hooks match an entry by (never shown on the page)
   if (e.agent !== undefined && !/^[\w-]{1,80}$/.test(e.agent)) die(`${where}: bad agent id "${e.agent}"`);
+  // the row the entry works on (a row title): its category, summary and detail come from that row
+  if (e.row !== undefined && (typeof e.row !== 'string' || !e.row.trim())) die(`${where}: row must be a row title`);
 }
 
 // A row's `parent` names its main job's row: it must exist, must not be the row itself, and must not
@@ -314,11 +368,14 @@ function checkParents(rows) {
 // no title, no data-role — so a line is the work only.
 // Developer mode only: a faint `model · effort · ctx @time` after the line, as reported; the context
 // figure only with the time it was reported (never estimated), and at phone width it moves to the title.
-function crewTail(e) {
-  const me = [e.model, e.effort].filter(Boolean).map(esc).join(' · ');
-  const cx = e.ctx && e.ctxTime ? `${e.ctx >= 1000 ? Math.round(e.ctx / 1000) + 'k' : e.ctx} @${esc(e.ctxTime)}` : '';
-  const full = [me, cx].filter(Boolean).join(' · ');
-  return full ? ` <small class="cm" title="${full}">${me}${cx ? `<i>${me ? ' · ' : ''}${cx}</i>` : ''}</small>` : '';
+// Several entries on one line (one row): their tails one after another, " / " between them.
+function crewTail(es) {
+  const parts = es.map((e) => {
+    const me = [e.model, e.effort].filter(Boolean).map(esc).join(' · ');
+    const cx = e.ctx && e.ctxTime ? `${e.ctx >= 1000 ? Math.round(e.ctx / 1000) + 'k' : e.ctx} @${esc(e.ctxTime)}` : '';
+    return { full: [me, cx].filter(Boolean).join(' · '), inline: `${me}${cx ? `<i>${me ? ' · ' : ''}${cx}</i>` : ''}` };
+  }).filter((x) => x.full);
+  return parts.length ? ` <small class="cm" title="${parts.map((x) => x.full).join(' / ')}">${parts.map((x) => x.inline).join(' / ')}</small>` : '';
 }
 
 // a working or waiting line's time carries when that state began; the script reads it as elapsed time
@@ -336,22 +393,90 @@ function stampSince(e, clock) {
   return true;
 }
 
-function crewStrip(crew, L, dev = true) {
-  const roleAttr = (r) => (dev ? ` data-role="${r}"` : '');
+const isUrl = (u) => /^https?:\/\//i.test(String(u || ''));
+// A row's detail: its small text, the next step ("sonraki: …" / "next: …" parts of the small line) on
+// its own line, and its links (the row's, then each entry's). Empty when there is nothing to show.
+// A line waiting on the owner leads with the link to where it is decided: an owner entry's url, else
+// the row's (Lead, 2026-10-05, after the owner could not click a waiting line).
+function detailOf(r, es, L) {
+  const parts = String((r && r.small) || '').split(' · ').map((x) => x.trim()).filter(Boolean);
+  const nextRe = /^(sonraki|next)\s*:\s*/i;
+  const rest = parts.filter((x) => !nextRe.test(x)).join(' · ');
+  const next = parts.filter((x) => nextRe.test(x)).map((x) => x.replace(nextRe, '')).filter(Boolean);
+  const ownerUrl = (es.find((e) => e.state === 'owner' && isUrl(e.url)) || {}).url;
+  const decide = ownerUrl ? [ownerUrl, L.decide]
+    : es.some((e) => e.state === 'owner') && r && isUrl(r.url) ? [r.url, r.label || L.decide] : null;
+  const urls = [];
+  if (r && isUrl(r.url) && !(decide && decide[0] === r.url)) urls.push([r.url, r.label || L.link]);
+  for (const e of es) if (isUrl(e.url) && !(decide && decide[0] === e.url) && !urls.some(([u]) => u === e.url)) urls.push([e.url, L.link]);
+  const a = ([u, l]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`;
+  if (!decide && !rest && !next.length && !urls.length) return '';
+  return (decide ? `<p class="dl">${a(decide)}</p>` : '')
+    + (rest ? `<p>${esc(rest)}</p>` : '')
+    + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
+    + (urls.length ? `<p class="ln">${urls.map(([u, l]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`).join(' · ')}</p>` : '');
+}
+
+// The Active work strip, the one list of running work (owner, 2026-10-05): one line per row being
+// worked on — the crew entries that name that row (`row`) share its line, their icons side by side —
+// then one line per entry that names no row (its own job, no detail), then every running row no entry
+// names (no icon, oldest first), so nothing running is hidden. Developer mode on: the role is only the
+// icon's title, and a faint model · effort tail follows; off: icons and elapsed time only, no role name
+// anywhere (owner, 2026-10-05: "ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir.").
+function activeStrip(crew, rows, L, dev = true) {
+  const byTitle = new Map(rows.map((r) => [key(r.title), r]));
+  const items = []; const byRow = new Map();
+  for (const e of crew) {
+    const r = key(e.row) ? byTitle.get(key(e.row)) : null;
+    if (!r) { items.push({ r: null, es: [e] }); continue; }
+    if (!byRow.has(r)) { const it = { r, es: [] }; byRow.set(r, it); items.push(it); }
+    byRow.get(r).es.push(e);
+  }
+  rows.map((r, i) => ({ r, i })).filter(({ r }) => r.state === 'run' && !byRow.has(r))
+    .sort((a, b) => String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i)
+    .forEach(({ r }) => items.push({ r, es: [] }));
+  if (!items.length) return '';
   const live = (e) => e.state === 'work' || e.state === 'owner';
-  const sum = CREW_ROLES.filter((r) => r === 'voice' || crew.some((e) => e.role === r)).map((r) => {
+  const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || crew.some((e) => e.role === r)).map((r) => {
     const mine = crew.filter((e) => e.role === r);
     const n = mine.filter(live).length;
     const st = mine.some((e) => e.state === 'owner') ? 'owner' : mine.some((e) => e.state === 'work') ? 'work' : mine.length ? 'idle' : '';
-    return `<span${st ? ` class="${st}"` : ''}${roleAttr(r)}${n >= 2 ? ` data-count="${n}"` : ''}${dev ? ` title="${ROLE_NAME[r]}"` : ''}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+    return `<span${st ? ` class="${st}"` : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${dev ? ` title="${ROLE_NAME[r]}"` : ''}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+  }).join('')}</div>` : '';
+  const details = [];
+  const lines = items.map(({ r, es }) => {
+    const st = es.some((e) => e.state === 'owner') ? 'owner' : es.some((e) => e.state === 'work') ? 'work' : es.length ? 'idle' : 'run';
+    // category: the row's main job (its parent row's title) or its group; summary: the row's title
+    const main = r && hasParent(r) ? byTitle.get(key(r.parent)) : null;
+    const cat = r ? (main ? main.title : String(r.parent || r.group || '').trim()) : '';
+    const sumText = r ? r.title : es[0].job;
+    const text = `${cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(sumText)}`;
+    const reasons = [...new Set(es.filter((e) => e.state === 'owner' && e.reason).map((e) => (L.reasons || {})[e.reason] || e.reason))];
+    const why = reasons.length ? ` <em>${esc(reasons.join(', '))}</em>` : '';
+    const tail = dev ? crewTail(es) : '';
+    const icons = es.map((e) => `<span${dev ? ` title="${ROLE_NAME[e.role]}"` : ''}>${ICONS[e.role]}</span>`).join('');
+    // the line's time: its latest change; a working or waiting line counts from the earliest start in that state
+    let time = `<time>${esc(r ? r.time : '')}</time>`;
+    if (es.length) {
+      const inSt = es.filter((e) => e.state === st && e.since).map((e) => e.since).sort();
+      time = elapsedTime({ state: st, since: inSt[0], time: es.map((e) => String(e.time)).sort().pop() });
+    }
+    // every line is a control (Lead, 2026-10-05): a row's line opens its panel; an entry with no row
+    // but a url is the link itself; anything else opens a panel that shows at least its title
+    let body;
+    if (!r && isUrl(es[0].url)) {
+      body = `<a class="tx" href="${esc(es[0].url)}" target="_blank" rel="noopener">${text}${why}${tail}</a>`;
+    } else {
+      const d = r ? detailOf(r, es, L) : '';
+      const id = `cd-${details.length + 1}`;
+      details.push(`<div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(sumText)}</b>${d}</div>`);
+      body = `<button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}${why}${tail}</button>`;
+    }
+    return `  <li class="crew-line ${st}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}><span class="ic">${icons}</span>${body}${time}</li>\n`;
   }).join('');
-  const lines = crew.map((e) => {
-    const text = dev ? `${ROLE_NAME[e.role]} · ${esc(e.job)}` : esc(e.job);
-    const body = /^https?:\/\//i.test(String(e.url || '')) ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${text}</a>` : text;
-    const why = e.state === 'owner' && e.reason ? ` <em>${esc((L.reasons || {})[e.reason] || e.reason)}</em>` : '';
-    return `  <li class="crew-line ${e.state}"${roleAttr(e.role)}>${ICONS[e.role]}<span>${body}${why}${dev ? crewTail(e) : ''}</span>${elapsedTime(e)}</li>\n`;
-  }).join('');
-  return `<div class="crew-sum">${sum}</div><ul>\n${lines}</ul>`;
+  return `<div class="hd">${esc(L.groups[GROUP.run])} <span>${items.length}</span>${sum}</div><ul>\n${lines}</ul>`
+    // the panel script sits in the strip, after the panel, so the strip is self-contained inside <main>
+    + (details.length ? `<div class="crew-d">${details.join('')}</div><script id="panel">${PANEL_JS}</script>` : '');
 }
 
 function render(dir, { quiet = false } = {}) {
@@ -445,10 +570,11 @@ function render(dir, { quiet = false } = {}) {
   };
   // one list, active work first (owner, 2026-10-05, replacing the 2026-10-03 placement of waiting and
   // plans at the top): in progress, owner, waiting, plans, done
-  const secs = [GROUP.run, GROUP.you, GROUP.wait, GROUP.plan, GROUP.ok].map(block).filter(Boolean).map((b) => `<li class="sec">${b}</li>`);
+  const secs = [GROUP.you, GROUP.wait, GROUP.plan, GROUP.ok].map(block).filter(Boolean).map((b) => `<li class="sec">${b}</li>`);
   const ol = `<ol>\n${secs.map((x) => '  ' + x + '\n').join('')}</ol>`;
   // the Crew strip: shown whenever it has entries; developer mode decides only whether roles are named
-  const strip = crew.length ? `<section class="crew">${crewStrip(crew, L, dev)}</section>\n` : '';
+  const stripHtml = activeStrip(crew, rows, L, dev);
+  const strip = stripHtml ? `<section class="crew">${stripHtml}</section>\n` : '';
   if (!/<main>[\s\S]*<\/main>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
   html = html.replace(/<main>[\s\S]*<\/main>/, () => `<main>\n<!-- crew -->\n${strip}${ol}\n</main>`)
     .replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
@@ -510,8 +636,14 @@ function upsertCrew(dir, opt, { quiet = true } = {}) {
   const i = store.crew.findIndex((e) => e && e.role === entry.role && key(e.job) === key(entry.job));
   // model, effort and the context figure carry over unless given again; --ctx stamps the time it was reported
   const old = i >= 0 ? store.crew[i] : {};
-  for (const k of ['model', 'effort', 'ctx', 'ctxTime', 'agent']) if (old[k] !== undefined) entry[k] = old[k];
+  for (const k of ['model', 'effort', 'ctx', 'ctxTime', 'agent', 'row']) if (old[k] !== undefined) entry[k] = old[k];
   if (opt.agent !== undefined) entry.agent = opt.agent;
+  // --row "<title>": the row this entry works on (must be a row); --row "" clears it
+  if (opt.row !== undefined) {
+    if (!String(opt.row).trim()) delete entry.row;
+    else if (!store.rows.some((r) => r && key(r.title) === key(opt.row))) die(`row "${opt.row}" is not a row`);
+    else entry.row = opt.row;
+  }
   if (opt.model !== undefined) entry.model = opt.model;
   if (opt.effort !== undefined) entry.effort = opt.effort;
   if (opt.ctx !== undefined) {
@@ -552,4 +684,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, CLIP_JS, SINCE_JS, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, activeStrip, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
