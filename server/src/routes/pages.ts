@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Context } from 'hono';
 import type { App, Env } from '../app.ts';
 import type { AppDeps } from '../deps.ts';
-import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage, listPages } from '../pages.ts';
+import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage } from '../pages.ts';
 import { renderMarkdown } from '../markdown.ts';
 import { shell, esc, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
@@ -21,11 +21,6 @@ export function serveIndex(dir: string, page: string, mode: 'page' | 'tv'): stri
 
 export function register(app: App, deps: AppDeps): void {
   const lang = () => workspaceLang(deps.workspace);
-  app.get('/', (c) => {
-    const L = LABELS[lang()];
-    const items = listPages(deps.workspace).map((p) => `<li><a href="${esc(p.url)}">${esc(p.title)}</a> <span class="muted">${esc(p.day)} · ${esc(p.kind)}</span>${p.reports.map((r) => ` · <a href="${esc(p.url + encodeURIComponent(r))}">${esc(r)}</a>`).join('')}</li>`).join('');
-    return c.html(shell({ title: 'Joserah', lang: lang(), body: `<h1>${esc(L.pages)}</h1><ul>${items}</ul>` }));
-  });
   app.get('/p/tracker', (c) => {
     const t = todayTrackerPage(deps.workspace);
     if (t && pageDir(deps.workspace, t.day, t.folder)) return c.redirect(`/p/${t.day}/${t.folder}/`, 302);
