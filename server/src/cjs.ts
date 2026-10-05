@@ -26,3 +26,20 @@ export const answersLib = require('../../tools/lib/answers.js') as {
   reply(dir: string, baseId: string, note: string, nowMs?: number): AnswerResult;
   newCounts(workspace: string, days?: number): Array<{ page: string; dir: string; count: number }>;
 };
+export interface WikiPage { rel: string; title: string; type: string; description: string; body: string; links: string[]; wikilinks: string[]; bytes: number; mtimeMs: number; sha1: string; hasFrontmatter: boolean; unclosed: boolean; bodyLine: number }
+export interface WikiFinding { kind: string; rel: string; line?: number; detail: string }
+export interface SourceEntry { status: 'raw' | 'compiled' | 'quarantined'; added: string; sha1?: string; job?: string; compiled_to?: string[] }
+export const wikiLib = require('../../tools/lib/wiki.js') as {
+  KNOWLEDGE: string; SIZE_LIMIT: number; STALE_RAW_DAYS: number;
+  scan(ws: string): WikiPage[];
+  resolveLink(fromRel: string, href: string): { kind: 'page' | 'outside'; rel: string } | null;
+  resolveWikilink(pages: WikiPage[], name: string): string | null;
+  backlinks(pages: WikiPage[]): Map<string, string[]>;
+  buildIndex(pages: WikiPage[]): string;
+  logLine(op: string, title: string, day: string): string;
+  claims(pages: WikiPage[]): Array<Claim & { page: string }>;
+  fold(s: string): string;
+  search(pages: WikiPage[], q: string, limit?: number): Array<{ rel: string; title: string; snippet: string }>;
+  readSources(ws: string): { version: 1; sources: Record<string, SourceEntry> };
+  lint(ws: string, o?: { now?: Date }): WikiFinding[];
+};
