@@ -59,11 +59,13 @@ const isOwners = (file) => fs.existsSync(file) && !fs.readFileSync(file, 'utf8')
 
 /**
  * Resolve the config and write the definitions (or, with `check`, only
- * compare them). Returns one `{ role, action }` per role; throws the
- * resolver's error on a bad config.
+ * compare them). Returns one `{ role, action }` per role (a `drift` for
+ * an absent file also carries `missing: true`); throws the resolver's error
+ * on a bad config. `cfg` is the parsed config when the caller has already
+ * read it (doctor's checks read config.json once); by default it is read here.
  */
-function generate(root, { check = false } = {}) {
-  const crew = resolveCrew(readConfig(root) || {});
+function generate(root, { check = false, cfg } = {}) {
+  const crew = resolveCrew((cfg === undefined ? readConfig(root) : cfg) || {});
   if (!crew.enabled) {
     // Off: take away what this generator wrote (stamped), never an owner's file.
     return ROLES.map((role) => {
@@ -78,8 +80,8 @@ function generate(root, { check = false } = {}) {
     if (isOwners(file)) return { role, action: 'kept-owner' };
     const text = definition(role, crew.roles[role]);
     if (check) {
-      const same = fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text;
-      return { role, action: same ? 'ok' : 'drift' };
+      if (!fs.existsSync(file)) return { role, action: 'drift', missing: true };
+      return { role, action: fs.readFileSync(file, 'utf8') === text ? 'ok' : 'drift' };
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text, 'utf8');

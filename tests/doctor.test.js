@@ -140,6 +140,9 @@ test('I-K3: a workspace recorded as created by an older plugin version still pas
   cfg.createdByPluginVersion = '0.2.0';
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
   fs.rmSync(path.join(dir, '.claude'), { recursive: true });
+  // 0.18.0: an updated workspace has the crew definitions again (update runs
+  // crew.js); this test is about settings.json alone.
+  runTool('crew.js', [dir]);
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /ok\s+\.claude\/settings\.json \(absent\)/);
@@ -729,4 +732,45 @@ test('doctor still fails on a broken link to a missing knowledge file', (t) => {
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /FAIL\s+internal links resolve|internal links resolve/);
+});
+
+// 0.18.0 (crew plan, Task 6.3): doctor runs crew.js --check's own function.
+test('doctor: crew definitions — missing, stale, config typo, fresh pass, crew off silent', (t) => {
+  const dir = freshWs(t);
+  let r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^ok\s+crew definitions current/m);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const base = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const setCfg = (extra) => fs.writeFileSync(cfgPath, JSON.stringify({ ...base, ...extra }, null, 2));
+  const scout = path.join(dir, '.claude', 'agents', 'scout.md');
+
+  fs.rmSync(scout);
+  r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /crew definition missing: scout/);
+  runTool('crew.js', [dir]);
+
+  setCfg({ crew: { scout: { effort: 'low' } } });
+  r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /crew definition stale: scout/);
+  assert.doesNotMatch(r.stdout, /crew definition (stale|missing): lead/);
+
+  setCfg({ crew: { scuot: {} } });
+  r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /crew config: unknown role "scuot"/);
+
+  setCfg({ crew: false });
+  r = runTool('doctor.js', [dir]);
+  assert.doesNotMatch(r.stdout, /crew/i, 'crew off: no crew finding');
+});
+
+test('doctor: an owner file under a crew role name is reported, not failed', (t) => {
+  const dir = freshWs(t);
+  fs.writeFileSync(path.join(dir, '.claude', 'agents', 'scout.md'), 'mine');
+  const r = runTool('doctor.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /warn\s+crew definitions current.*scout/);
 });

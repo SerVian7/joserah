@@ -658,6 +658,42 @@ const CHECKS = [
   },
 
   {
+    id: 'crew-definitions',
+    remedies: [
+      {
+        key: '`crew definitions current` FAIL',
+        text: '*missing* or *stale*: run `node "${CLAUDE_PLUGIN_ROOT}/tools/crew.js" <workspace>` — it rewrites the stamped definitions in `.claude/agents/` from config. *crew config*: the `crew` block in `.joserah/config.json` has a typo the line names; fix that key with the owner, then run `crew.js`. If `.claude/agents/` did not exist when the session started, a restart is needed once, told in one line.',
+      },
+      {
+        key: '`crew definitions current` warn',
+        text: 'A file the owner wrote sits under a crew role\'s name in `.claude/agents/`, so that role runs on the owner\'s file, not the generated one. Never overwrite it: say so in one line and let the owner rename or remove it, then run `crew.js`.',
+      },
+    ],
+    // 0.18.0: the five agent definitions crew.js writes from config. The check
+    // is crew.js --check's own function (generate with check: true), fed the
+    // config this run already read — one comparison, not a second copy of it.
+    // Crew off: nothing to report.
+    run({ root, cfg }) {
+      if (!cfg) return null;
+      const { generate } = require('../crew');
+      let results;
+      try {
+        results = generate(root, { check: true, cfg });
+      } catch (e) {
+        const what = e.message.replace(/^crew(?:\.(\w+))?: /, (m, role) => (role ? `${role}: ` : ''));
+        return check('crew definitions current', false, `crew config: ${what}`);
+      }
+      if (results.every((r) => r.action === 'skipped-off')) return null;
+      const drift = results.filter((r) => r.action === 'drift')
+        .map((r) => `crew definition ${r.missing ? 'missing' : 'stale'}: ${r.role}`);
+      if (drift.length) return check('crew definitions current', false, `${drift.join(', ')} — run crew.js`);
+      const owners = results.filter((r) => r.action === 'kept-owner').map((r) => r.role);
+      if (owners.length) return warn('crew definitions current', `the owner's own file under a crew role name: ${owners.join(', ')}`);
+      return check('crew definitions current', true, `${results.length} definitions`);
+    },
+  },
+
+  {
     id: 'placeholders',
     remedies: [
       { key: 'Unfilled placeholder', text: 'Ask for the value, then substitute it' },

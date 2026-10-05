@@ -35,6 +35,7 @@ const FRESH_ORDER = [
   'local verify-links.js current',
   'local secret.js current',
   'vault index current',
+  'crew definitions current',
   'no unfilled {{placeholders}}',
   'internal links resolve',
   'typed claims consistent',
