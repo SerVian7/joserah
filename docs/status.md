@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: d6f5f50 · 2026-10-05 13:06 +0300 · crew: comparison measured (8.2, 8.3)
+Last change: bbaafc5 · 2026-10-05 13:16 +0300 · tracker: active work in the strip, one list
 
 - Released: 0.17.10 on main, 683 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
