@@ -46,8 +46,9 @@ export function register(app: App, deps: AppDeps): void {
     }
   });
   app.post('/api/query', async (c) => {
-    let b: { question?: unknown };
+    let b: { question?: unknown } | null;
     try { b = await c.req.json(); } catch { return jsonError(c, 400, 'bad-text'); }
+    if (!b || typeof b !== 'object') return jsonError(c, 400, 'bad-text');
     try { return c.json({ id: deps.jobs.submit({ type: 'query', text: String(b.question ?? ''), pointers: ['.joserah/knowledge/wiki/index.md'] }).id }, 201); }
     catch (e) { if (e instanceof Refused) return jsonError(c, e.code === 'daily-budget' ? 429 : 400, e.code, { message: e.message }); throw e; }
   });
@@ -55,8 +56,8 @@ export function register(app: App, deps: AppDeps): void {
     const job = deps.jobs.get(c.req.param('id'));
     if (!job || job.type !== 'query') return jsonError(c, 404, 'not-found');
     if (job.state !== 'done' || !job.resultText) return jsonError(c, 409, 'not-done');
-    let b: { title?: unknown } = {};
+    let b: { title?: unknown } | null = {};
     try { b = await c.req.json(); } catch { /* title optional */ }
-    return c.json({ path: fileAnswer({ store: deps.store, workspace: deps.workspace, job, title: String(b.title ?? '') }) }, 201);
+    return c.json({ path: fileAnswer({ store: deps.store, workspace: deps.workspace, job, title: String(b?.title ?? '') }) }, 201);
   });
 }

@@ -113,3 +113,10 @@ test('a done query job page offers "file it"; an unfinished or unknown job canno
   assert.match(page, /data-act="file"/);
   assert.equal((await app.request('/api/query/j-nope/file', json(cookie, { title: 'x' }))).status, 404);
 });
+
+test('the scan also reads UTF-16 text; a JSON null body is a 400, not a 500', async (t) => {
+  assert.ok(scanUpload(Buffer.from('﻿password: hunter2hunter2', 'utf16le')).length >= 1);
+  assert.deepEqual(scanUpload(Buffer.from('﻿just notes', 'utf16le')), []);
+  const { app, cookie } = await signedIn(t);
+  assert.equal((await app.request('/api/query', json(cookie, null))).status, 400);
+});

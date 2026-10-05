@@ -15,7 +15,7 @@ export function safeName(name: string): string | null {
 // Best effort on binary files (a PDF's text may be compressed); never a guarantee (AGENTS.md 8.3).
 export function scanUpload(bytes: Uint8Array): string[] {
   const buf = Buffer.from(bytes);
-  const texts = [buf.toString('utf8'), buf.toString('latin1')];
+  const texts = [buf.toString('utf8'), buf.toString('latin1'), buf.toString('utf16le')];
   const hits: string[] = [];
   redactions.SPECIFIC.forEach(([re], i) => {
     const once = new RegExp(re.source, re.flags.replace('g', ''));
