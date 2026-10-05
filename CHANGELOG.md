@@ -6,6 +6,7 @@ any of them.
 ## Unreleased
 
 - **The crew is off by default.** A workspace without a `crew` key now runs as before the crew existed: the assistant does the work itself, and uses an agent only for heavy reading. Switch the crew on with `"crew": true` in `.joserah/config.json` when the work gets heavy. Workspaces that set `"crew": false` are unchanged; ones that relied on the old default turn it on that way.
+- **The Tracker reads in one order.** Each section (Active work, Owner, Waiting, Done today, Plans) is its own framed area; every row stands under its project group, a group of one too, never with a "project ·" prefix; group names are calm and never louder than the section title. A question's options are themselves the choice, every row takes a note from a small reply icon, and a row's conversation (your notes and the assistant's replies) shows in its detail. A row with nothing more to say no longer repeats its title when opened, and long lists lose the fade at the bottom.
 - **Rows under their project.** Every Tracker row sits under its project's group; a loose row that is a step of a known project plan is moved there unasked, named as a step of that plan, and the assistant says so in one line.
 
 ## 0.18.0
