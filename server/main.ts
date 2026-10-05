@@ -12,6 +12,7 @@ import { Store } from './src/store.ts';
 import { ClaudeCliEngine } from './src/engines/claude-cli.ts';
 import { JobRunner, ensureJobIgnores, rotateLogs } from './src/jobs.ts';
 import { cliTracker } from './src/tracker-bridge.ts';
+import { GitCheckpointer } from './src/checkpoint.ts';
 import { workspaceLang } from './src/config.ts';
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; }
@@ -58,7 +59,7 @@ const store = new Store(workspace, bus, { pollDirs: () => {
 } });
 const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude' });
 const lang = workspaceLang(workspace);
-const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker: cliTracker(workspace, lang), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
+const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker: cliTracker(workspace, lang), checkpoint: new GitCheckpointer(workspace, store), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
 const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure,
   store, bus, engine, jobs, engineHealth: null };
 jobs.onEnd((j) => { deps.health.lastJobOk = j.state === 'done'; });
