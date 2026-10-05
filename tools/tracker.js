@@ -53,9 +53,10 @@
  *       line is a <button aria-expanded aria-controls> that opens its detail (the
  *       row's small text, its "sonraki:/next:" part on its own line, its links and
  *       the entries' links; a line waiting on the owner leads with the link to where
- *       it is decided; with nothing more, its title) in one panel under the lines,
- *       one at a time (PANEL_JS, <script id="panel"> inside the strip); without
- *       script every detail shows under its own title.
+ *       it is decided; with nothing more, its title) in a panel directly under that
+ *       line (<li class="crew-dl">, the list's next item), one open at a time
+ *       (PANEL_JS, <script id="panel"> inside the strip); without script every
+ *       detail shows under its own line.
  *       Each entry carries `since` (ISO): when its state began. It is set when the
  *       state changes and kept on an update that keeps it, so a working or waiting
  *       line can say how long it has been so: its <time> carries data-since and a
@@ -161,13 +162,13 @@ const STRIP_CSS = [
   '.crew .tx:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
   '.crew li.crew-line>time{order:0;align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
   '.crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}',
-  '.crew-d .cd{padding:10px 0 12px 42px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
+  '.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}.crew .cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
   '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.crew.js .cd:not(.bare)>b{display:none}',
   '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}',
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd[hidden]{display:none}',
   // phone width: icons and elapsed time on the top line, the text under them (as the rows below)
-  '@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew-d .cd{padding-left:14px}}',
+  '@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew li.crew-dl{padding-left:12px}.crew .cd{padding-left:0}}',
 ];
 // The panel: with script, every detail starts closed; a line's button opens its own and closes the
 // others; a second click closes it. aria-expanded follows; no scrolling, focus stays on the button.
@@ -463,20 +464,23 @@ function activeStrip(crew, rows, L, dev = true) {
     }
     // every line is a control (Lead, 2026-10-05): a row's line opens its panel; an entry with no row
     // but a url is the link itself; anything else opens a panel that shows at least its title
-    let body;
+    let body; let panel = '';
     if (!r && isUrl(es[0].url)) {
       body = `<a class="tx" href="${esc(es[0].url)}" target="_blank" rel="noopener">${text}${why}${tail}</a>`;
     } else {
       const d = r ? detailOf(r, es, L) : '';
       const id = `cd-${details.length + 1}`;
-      details.push(`<div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(sumText)}</b>${d}</div>`);
+      details.push(id);
+      panel = `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(sumText)}</b>${d}</div></li>\n`;
       body = `<button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}${why}${tail}</button>`;
     }
-    return `  <li class="crew-line ${st}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}><span class="ic">${icons}</span>${body}${time}</li>\n`;
+    // the detail is the list's next item after its own line, so it opens right under the line clicked
+    // (owner, 2026-10-05: one shared panel after the list opened every detail under the last line)
+    return `  <li class="crew-line ${st}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}><span class="ic">${icons}</span>${body}${time}</li>\n${panel}`;
   }).join('');
   return `<div class="hd">${esc(L.groups[GROUP.run])} <span>${items.length}</span>${sum}</div><ul>\n${lines}</ul>`
-    // the panel script sits in the strip, after the panel, so the strip is self-contained inside <main>
-    + (details.length ? `<div class="crew-d">${details.join('')}</div><script id="panel">${PANEL_JS}</script>` : '');
+    // the panel script sits in the strip, after the list, so the strip is self-contained inside <main>
+    + (details.length ? `<script id="panel">${PANEL_JS}</script>` : '');
 }
 
 function render(dir, { quiet = false } = {}) {

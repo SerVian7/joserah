@@ -76,12 +76,12 @@ section.crew{padding:0;border:0}
 .crew .tx:focus-visible{outline:1px solid var(--link);outline-offset:2px}
 .crew li.crew-line>time{order:0;align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}
 .crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}
-.crew-d .cd{padding:10px 0 12px 42px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}
+.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}.crew .cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}
 .cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.crew.js .cd:not(.bare)>b{display:none}
 .cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}
 .cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
 .cd[hidden]{display:none}
-@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew-d .cd{padding-left:14px}}
+@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew li.crew-dl{padding-left:12px}.crew .cd{padding-left:0}}
 @media (max-width:560px){main{gap:24px}main>ol{gap:24px}.crew-line .cm i{display:none}li[data-st],li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s t" "b b";gap:3px 12px}li[data-st]>.s{grid-area:s}li[data-st]>div{grid-area:b}li[data-st]>time{grid-area:t}li.job>ol,li.grp>details>ol{padding-left:12px}}
 </style>
 </head>
@@ -91,7 +91,8 @@ section.crew{padding:0;border:0}
 <!-- crew -->
 <section class="crew"><div class="hd">Active work <span>1</span></div><ul>
   <li class="crew-line run"><span class="ic"></span><button type="button" class="tx" aria-expanded="false" aria-controls="cd-1">A</button><time>09:00</time></li>
-</ul><div class="crew-d"><div class="cd bare" id="cd-1"><b>A</b></div></div><script id="panel">(function(){var s=document.querySelector("section.crew");if(!s)return;var bs=s.querySelectorAll("button.tx");if(!bs.length)return;s.classList.add("js");function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o}Array.prototype.forEach.call(bs,function(b){set(b,false)});s.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";Array.prototype.forEach.call(bs,function(x){if(x!==b)set(x,false)});set(b,o)})})();</script></section>
+  <li class="crew-dl"><div class="cd bare" id="cd-1"><b>A</b></div></li>
+</ul><script id="panel">(function(){var s=document.querySelector("section.crew");if(!s)return;var bs=s.querySelectorAll("button.tx");if(!bs.length)return;s.classList.add("js");function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o}Array.prototype.forEach.call(bs,function(b){set(b,false)});s.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";Array.prototype.forEach.call(bs,function(x){if(x!==b)set(x,false)});set(b,o)})})();</script></section>
 <ol>
   <li class="sec"><div class="blk" data-k="ok"><div class="hd">Done <span>1</span></div><div class="clip" id="clip-ok"><ol>
   <li data-st="ok"><span class="s ok">Done</span><div><b>B</b></div><time>09:05</time></li>

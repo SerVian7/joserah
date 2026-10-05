@@ -727,7 +727,7 @@ test('crew --row: category and summary from the row, one detail panel, one line 
   assert.match(ls.find((l) => l.includes('Kendi')), /class="tx" aria-expanded="false" aria-controls="cd-\d+">Kendi işi<\/button>/);
   // the detail: small text, next step, links (the row's and the entries'), in one panel under the lines
   const s = stripOf(html);
-  assert.ok(s.indexOf('<div class="crew-d">') > s.indexOf('</ul>'), 'the panel is under the lines');
+  assert.ok(s.indexOf('<li class="crew-dl"><div class="cd" id="cd-1">') === s.indexOf('</li>', s.indexOf('aria-controls="cd-1"')) + '</li>\n  '.length, 'the panel is right under its line');
   const cd = (s.match(/<div class="cd" id="cd-1">[\s\S]*?<\/div>/) || [''])[0];
   assert.match(cd, /<p>kısa taslak hazır<\/p>/);
   assert.match(cd, /<p class="nx"><span>sonraki<\/span> siz gönderin<\/p>/);
@@ -815,4 +815,44 @@ test('every strip line is clickable; a waiting line leads its panel with the dec
   assert.match(stripOf(html), new RegExp('<div class="cd bare" id="' + id(bare) + '"><b>Row-less, no url</b></div>'));
   // a run row with nothing more to show still opens its title
   assert.match(cdOf(ls.find((l) => l.includes('Bare run'))), /^<b>Bare run<\/b>$/);
+});
+
+// Owner, 2026-10-05: clicking the first strip line opened its detail under another line. Every detail
+// was emitted in one shared panel after the whole list, so it always showed below the last line. Each
+// line's detail now sits directly under that line, and its button controls exactly that element.
+test('strip: each line opens its detail directly under itself, never under another line', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [
+    { state: 'you', title: 'Yeni ekip', parent: 'Joserah', small: 'test bitti · sonraki: karar', time: '09:00' },
+    { state: 'you', title: 'Peplink planı', parent: 'Zenger', small: 'plan hazır', time: '09:05' },
+    { state: 'run', title: 'Trail', parent: 'Joserah', small: 'yazılıyor', time: '09:10' },
+    { state: 'ok', title: 'Joserah', time: '08:00' },
+    { state: 'ok', title: 'Zenger', time: '08:00' },
+  ]);
+  assert.strictEqual(crew(dir, ['--role', 'lead', '--job', 'Joserah karar', '--state', 'owner', '--reason', 'decision', '--row', 'Yeni ekip', '--url', 'https://example.com/a']).status, 0);
+  crew(dir, ['--role', 'lead', '--job', 'CTRL', '--state', 'owner', '--reason', 'approval', '--row', 'Peplink planı']);
+  crew(dir, ['--role', 'lead', '--job', 'Trail', '--state', 'work', '--row', 'Trail']);
+  crew(dir, ['--role', 'builder', '--job', 'No row', '--state', 'work']);
+  const s = stripOf(page(dir));
+  const ul = (s.match(/<ul>([\s\S]*?)<\/ul>/) || [])[1] || '';
+  // the list's items in order: each line, then (when it opens a panel) its own detail
+  const items = ul.match(/<li[\s\S]*?<\/li>/g) || [];
+  const lines = items.filter((l) => l.startsWith('<li class="crew-line'));
+  assert.strictEqual(lines.length, 4);
+  for (const l of lines) {
+    const id = l.match(/aria-controls="([^"]+)"/)[1];
+    const next = items[items.indexOf(l) + 1] || '';
+    assert.match(next, new RegExp(`^<li class="crew-dl"><div class="cd[^"]*" id="${id}">`), `the detail ${id} follows its own line`);
+    assert.strictEqual(s.split(`id="${id}"`).length, 2, `${id} once`);
+  }
+  assert.match(items[items.indexOf(lines[0]) + 1], /<b>Joserah · Yeni ekip<\/b>/);
+  assert.doesNotMatch(s, /<div class="crew-d">/, 'no shared panel after the list');
+  // the first of several lines: its panel is the second item, nothing of it after the last line
+  assert.match(items[1], /id="cd-1"/);
+  assert.ok(ul.lastIndexOf('id="cd-1"') < ul.indexOf(lines[1]), 'the first line\'s detail comes before the second line');
+  assert.strictEqual(s.split('<script id="panel">').length, 2, 'one panel script');
+  // attached to its line as a child is: the children's indent and left rule
+  const { STRIP_CSS } = require('../tools/tracker.js');
+  assert.ok(STRIP_CSS.some((c) => c.includes('.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}')));
+  assert.ok(page(dir).includes('.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}'), 'the page carries it');
 });
