@@ -188,3 +188,11 @@ test('the prompt version was bumped with the prompt text', () => {
   assert.match(text, /^<!-- joserah:prompt-version 27 -->$/m,
     'templates/AGENTS.md changed, so its version line has to change with it');
 });
+
+// 0.18.0 (owner, 2026-10-05): with the crew on, Lead runs every wave; the
+// Manager is kept for workspaces with the crew off.
+test('the manager is for crew off only', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'agents', 'manager.md'), 'utf8');
+  const description = /^description: (.*)$/m.exec(text)[1];
+  assert.match(description, /crew off/);
+});
