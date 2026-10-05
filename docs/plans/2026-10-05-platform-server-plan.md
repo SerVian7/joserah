@@ -6553,3 +6553,4 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - 02:01 (Manager): Task 11 (job routes, home, job page; 350645b, a0ed52a) merged (5b53382); server suite 135/135, existing 922/922.
 - 02:22 (Manager): Task 12 server half (wiki routes; a7d820a, 801f9ea) merged (d0ee252); server suite 144/144, existing 922/922.
 - 02:23 (Manager): Task 15 (token economy; ac7c408, be7ff5a) merged (e5629d5); server suite 152/152, existing 922/922.
+- 02:34 (Manager): Task 13 (ingest and query; 88b616e, 11f7c8e) merged (7bfdcfe); server suite 160/160, existing 922/922.

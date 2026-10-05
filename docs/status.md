@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: e5629d5 · 2026-10-06 02:23 +0300 · merge task/t15-tokens (T15)
+Last change: 7bfdcfe · 2026-10-06 02:34 +0300 · merge task/t13-ingest (T13)
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
