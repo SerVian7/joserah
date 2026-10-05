@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { assess, matches, GitCheckpointer } from '../src/checkpoint.ts';
+import { spawn } from 'node:child_process';
+import { Store } from '../src/store.ts';
+import { EventBus } from '../src/events.ts';
 import { runnerFor, git, tmpdir, tmpWorkspace } from './helpers.ts';
 
 const DAY = '2026-10-06';
@@ -108,4 +111,65 @@ test('a clean workspace adds no empty commit, the job records stay out of git, a
   assert.ok(!paths.some((p) => p.startsWith('.joserah/desk/jobs/')));
   assert.equal(git(ws, 'ls-files', '.joserah/desk/jobs').trim(), '');
   assert.deepEqual(j.flags, []);
+});
+
+// ---- reviewer follow-up ----
+
+test('a write or deletion under keys/ is seen although keys/ is gitignored', async (t) => {
+  const { ws, runner } = runnerFor(t, { git: true, env: { FAKE_CLAUDE_DELETE: 'keys/old.pem', FAKE_CLAUDE_WRITE: 'keys/new.pem:secret' }, checkpointer: true });
+  fs.mkdirSync(path.join(ws, 'keys'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'keys/old.pem'), 'k');
+  const job = runner.submit({ type: 'task', text: 'x' });
+  await runner.idle();
+  const j = runner.get(job.id)!;
+  assert.ok(j.flags!.includes('deleted keys/old.pem'), JSON.stringify(j.flags));
+  assert.ok(j.flags!.includes('wrote outside its area: keys/new.pem'), JSON.stringify(j.flags));
+});
+
+test('the server\'s own uploads during a job are not flagged against it', (t) => {
+  const ws = tmpWorkspace(t, { git: true });
+  const store = new Store(ws, new EventBus());
+  const cp = new GitCheckpointer(ws, store);
+  const job = { id: 'j-5', type: 'ingest' } as never as import('../src/jobs.ts').JobRecord;
+  const b = cp.before(job);
+  assert.ok(b.ok);
+  job.checkpoint = (b as { commit: string }).commit;
+  const own = store.importVerbatim(Buffer.from('pdf'), 'imports/2026-10-06-upload/a.pdf');
+  fs.mkdirSync(path.join(ws, 'imports/2026-10-06-quarantine'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'imports/2026-10-06-quarantine/by-job.txt'), 'the job wrote this');
+  const r = cp.after(job);
+  assert.ok(!r.changed.some((c) => c.path === own), JSON.stringify(r.changed));
+  assert.deepEqual(r.flags, ['wrote outside its area: imports/2026-10-06-quarantine/by-job.txt']);
+});
+
+test('a stale index.lock that goes away is retried once', async (t) => {
+  const ws = tmpWorkspace(t, { git: true });
+  fs.writeFileSync(path.join(ws, 'pending.md'), 'x');
+  const lock = path.join(ws, '.git', 'index.lock');
+  fs.writeFileSync(lock, '');
+  const child = spawn(process.execPath, ['-e', `setTimeout(()=>require('fs').rmSync(${JSON.stringify(lock)},{force:true}),150)`], { stdio: 'ignore' });
+  t.after(() => child.kill());
+  const r = new GitCheckpointer(ws).before({ id: 'j-6' } as never);
+  assert.ok(r.ok, JSON.stringify(r));
+});
+
+test('a lock that stays refuses the job with git\'s own words, not "not a git repository"', (t) => {
+  const ws = tmpWorkspace(t, { git: true });
+  fs.writeFileSync(path.join(ws, 'pending.md'), 'x');
+  fs.writeFileSync(path.join(ws, '.git', 'index.lock'), '');
+  const r = new GitCheckpointer(ws).before({ id: 'j-7' } as never);
+  assert.equal(r.ok, false);
+  assert.match((r as { reason: string }).reason, /index\.lock/);
+  assert.doesNotMatch((r as { reason: string }).reason, /not a git repository/);
+});
+
+test('git that cannot run is reported as such, not as a missing repository', (t) => {
+  const ws = tmpWorkspace(t, { git: true });
+  const saved = process.env.PATH; const savedP = process.env.Path;
+  process.env.PATH = ''; delete process.env.Path;
+  let r;
+  try { r = new GitCheckpointer(ws).before({ id: 'j-8' } as never); } finally { process.env.PATH = saved; if (savedP !== undefined) process.env.Path = savedP; }
+  assert.equal(r.ok, false);
+  assert.doesNotMatch((r as { reason: string }).reason, /not a git repository/);
+  assert.match((r as { reason: string }).reason, /git/i);
 });

@@ -103,7 +103,7 @@ export function runnerFor(t: TestContext, o: { env?: Record<string, string>; con
   const cfg: ServerConfig = { ...DEFAULT_CONFIG, ...(o.config ?? {}) };
   const deps = baseDeps(t, { workspace: ws, config: () => cfg });
   const runner = new JobRunner({ workspace: ws, store: deps.store, bus: deps.bus, engine: fakeEngine(o.env), config: () => cfg,
-    tracker: cliTracker(ws, 'en'), checkpoint: o.checkpointer ? new GitCheckpointer(ws) : o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
+    tracker: cliTracker(ws, 'en'), checkpoint: o.checkpointer ? new GitCheckpointer(ws, deps.store) : o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
   deps.jobs = runner;
   return { runner, deps, ws };
 }

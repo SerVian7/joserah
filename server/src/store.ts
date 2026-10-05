@@ -38,6 +38,7 @@ export class Store {
   #pollMs: number;
   #pollDirs: () => string[];
   #timer: NodeJS.Timeout | null = null;
+  #importListeners = new Set<(relPath: string) => void>();
 
   constructor(root: string, bus: EventBus, opts: { pollMs?: number; pollDirs?: () => string[] } = {}) {
     this.root = path.resolve(root);
@@ -84,6 +85,9 @@ export class Store {
     this.#changed(p);
   }
 
+  /** Calls `fn` with the path of each file `importVerbatim` writes (so a job's change check can tell the server's own uploads from the job's). Returns the unsubscribe. */
+  onImport(fn: (relPath: string) => void): () => void { this.#importListeners.add(fn); return () => { this.#importListeners.delete(fn); }; }
+
   /** Copies bytes under `imports/` without ever overwriting; returns the path actually used (` (2)`, ` (3)` before the extension). */
   importVerbatim(bytes: Uint8Array, relPath: string): string {
     if (!relPath.startsWith('imports/')) throw new OutsideWorkspace(relPath);
@@ -95,7 +99,9 @@ export class Store {
       fs.mkdirSync(path.dirname(p), { recursive: true });
       try { fs.writeFileSync(p, bytes, { flag: 'wx' }); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'EEXIST') continue; throw e; }
       this.#remember(rel(this.root, p), p);
-      return rel(this.root, p);
+      const used = rel(this.root, p);
+      for (const fn of this.#importListeners) { try { fn(used); } catch { /* a listener never breaks an upload */ } }
+      return used;
     }
     throw new Error(`no free name for ${relPath}`);
   }
