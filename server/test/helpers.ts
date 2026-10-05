@@ -7,6 +7,12 @@ import type { AppDeps } from '../src/deps.ts';
 import { DEFAULT_CONFIG } from '../src/config.ts';
 import { newAuthFile, writeAuth, RateLimiter, type AuthFile } from '../src/auth.ts';
 import type { App } from '../src/app.ts';
+import type { ServerConfig } from '../src/config.ts';
+import { EventBus } from '../src/events.ts';
+import { Store } from '../src/store.ts';
+import { ClaudeCliEngine } from '../src/engines/claude-cli.ts';
+import { JobRunner, type Checkpointer } from '../src/jobs.ts';
+import { cliTracker } from '../src/tracker-bridge.ts';
 
 export const SERVER_ROOT = path.resolve(import.meta.dirname, '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
@@ -41,8 +47,14 @@ export function tmpWorkspace(t: TestContext, opts: { git?: boolean } = {}): stri
 export function baseDeps(t: TestContext, over: Partial<AppDeps> = {}): AppDeps {
   const workspace = over.workspace ?? tmpWorkspace(t);
   const stateDir = over.stateDir ?? path.join(tmpdir(t), 'state');
-  return { workspace, stateDir, config: () => DEFAULT_CONFIG, baseUrl: ORIGIN, health: { signedIn: null, lastJobOk: null },
-    auth: { state: { kind: 'setup' } }, limiter: new RateLimiter(), secureCookies: false, ...over } as AppDeps;
+  const bus = over.bus ?? new EventBus();
+  const store = over.store ?? new Store(workspace, bus);
+  const engine = over.engine ?? fakeEngine();
+  const deps = { workspace, stateDir, config: () => DEFAULT_CONFIG, baseUrl: ORIGIN, health: { signedIn: null, lastJobOk: null },
+    auth: { state: { kind: 'setup' } }, limiter: new RateLimiter(), secureCookies: false, bus, store, engine, engineHealth: null, ...over } as AppDeps;
+  // Route tests get a runner on the fake engine; it reads the config through the deps, so a test may swap it.
+  if (!over.jobs) deps.jobs = new JobRunner({ workspace, store, bus, engine, config: () => deps.config(), tracker: cliTracker(workspace, 'en'), jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
+  return deps;
 }
 
 /** Writes auth.json into the state directory and switches the holder to ready. */
@@ -58,4 +70,21 @@ export async function login(app: App, password = 'pw-0123456789'): Promise<strin
   const r = await app.request('/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN }, body: new URLSearchParams({ password }).toString() }, ADDR);
   if (r.status !== 303) throw new Error(`login failed: ${r.status}`);
   return (r.headers.get('set-cookie') ?? '').split(';')[0];
+}
+
+/** The fake claude CLI (fixtures/fake-claude.mjs) behind the real engine: tests never call the real CLI. */
+export const FAKE_CLAUDE = path.join(SERVER_ROOT, 'test', 'fixtures', 'fake-claude.mjs');
+export function fakeEngine(extraEnv: Record<string, string> = {}): ClaudeCliEngine {
+  return new ClaudeCliEngine({ command: process.execPath, prefixArgs: [FAKE_CLAUDE], extraEnv });
+}
+
+/** A job runner on a fresh workspace with the fake engine; `deps.jobs` is that runner. */
+export function runnerFor(t: TestContext, o: { env?: Record<string, string>; config?: Partial<ServerConfig>; git?: boolean; checkpoint?: Checkpointer } = {}) {
+  const ws = tmpWorkspace(t, { git: o.git });
+  const cfg: ServerConfig = { ...DEFAULT_CONFIG, ...(o.config ?? {}) };
+  const deps = baseDeps(t, { workspace: ws, config: () => cfg });
+  const runner = new JobRunner({ workspace: ws, store: deps.store, bus: deps.bus, engine: fakeEngine(o.env), config: () => cfg,
+    tracker: cliTracker(ws, 'en'), checkpoint: o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
+  deps.jobs = runner;
+  return { runner, deps, ws };
 }

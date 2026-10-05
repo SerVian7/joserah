@@ -7,6 +7,12 @@ import { stateDir } from './src/paths.ts';
 import { createApp } from './src/app.ts';
 import { loadAuth, AuthFileError, setupToken, RateLimiter, type AuthState } from './src/auth.ts';
 import type { AppDeps } from './src/deps.ts';
+import { EventBus } from './src/events.ts';
+import { Store } from './src/store.ts';
+import { ClaudeCliEngine } from './src/engines/claude-cli.ts';
+import { JobRunner, ensureJobIgnores, rotateLogs } from './src/jobs.ts';
+import { cliTracker } from './src/tracker-bridge.ts';
+import { workspaceLang } from './src/config.ts';
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; }
 function fail(message: string): never { console.error(`joserah: ${message}`); process.exit(1); }
@@ -43,10 +49,25 @@ if (cfg.proxy && !cfg.publicOrigin) fail('server.json: "proxy": true needs "publ
 const host = listen.hostname === '0.0.0.0' ? '127.0.0.1' : listen.hostname.includes(':') ? `[${listen.hostname}]` : listen.hostname;
 // The scheme this process speaks: https only with our own certificate. `listen.secure` (proxy too) is for the cookie flag.
 const baseUrl = `${tls ? 'https' : 'http'}://${host}:${listen.port}`;
-const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure };
+// Task 6 owns the bus and the store (its poll dirs and store.start()); the job runner needs both now.
+const bus = new EventBus();
+const store = new Store(workspace, bus);
+const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude' });
+const lang = workspaceLang(workspace);
+const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker: cliTracker(workspace, lang), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
+const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure,
+  store, bus, engine, jobs, engineHealth: null };
+jobs.onEnd((j) => { deps.health.lastJobOk = j.state === 'done'; });
 const app = createApp(deps);
 const ready = () => {
   console.log(`Joserah server: ${baseUrl}/`);
+  if (ensureJobIgnores(workspace)) console.log('Added the job-log lines to the workspace .gitignore.');
+  rotateLogs(store, cfg.rawLogDays);
+  setInterval(() => rotateLogs(store, cfg.rawLogDays), 24 * 3600000).unref(); // and once a day while it runs
+  // A job that was running when the server stopped becomes interrupted (owner row); queued jobs run.
+  jobs.recover();
+  const refresh = async () => { const h = await engine.health(); deps.health.signedIn = h.signedIn; deps.engineHealth = h; };
+  void refresh(); setInterval(() => void refresh(), 5 * 60000).unref();
   if (deps.auth.state.kind === 'setup') console.log(`First start — open ${baseUrl}/setup?token=${setupToken(state)} to set the password.`);
 };
 if (tls) serve({ fetch: app.fetch, port: listen.port, hostname: listen.hostname, createServer: https.createServer, serverOptions: tls }, ready);
