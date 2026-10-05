@@ -22,7 +22,7 @@ function editConfig(dir, mutate) {
 
 // The notes are matched by filename, so a note named anything else is not a
 // note that doctor skips — it is a note nobody will ever be told about.
-test('every structure note is named for a version, and none is from the future', () => {
+test('every structure note is named for a version, and none is past the next release', () => {
   const version = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
   const files = fs.readdirSync(MIGRATIONS);
   assert.ok(files.length, 'docs/migrations is empty — the check reads it and would stay silent forever');
@@ -31,10 +31,14 @@ test('every structure note is named for a version, and none is from the future',
     for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i];
     return 0;
   };
+  // A note may be staged for the next release before its version bump (doctor
+  // asks for it only once that version is installed), but no further ahead
+  // than the next minor: a mistyped version would sit unread for years.
+  const [maj, min] = version.split('.').map(Number);
   for (const f of files) {
     assert.match(f, /^\d+\.\d+\.\d+\.md$/, `${f} is not named <version>.md and will never be read`);
-    assert.ok(cmp(f.slice(0, -3), version) <= 0,
-      `${f} is newer than the plugin's own version ${version} — every workspace would report itself behind`);
+    assert.ok(cmp(f.slice(0, -3), `${maj}.${min + 1}.0`) <= 0,
+      `${f} is past the next release after the plugin's own version ${version}`);
     assert.ok(fs.readFileSync(path.join(MIGRATIONS, f), 'utf8').trim().length > 200, `${f} says nothing`);
   }
 });
@@ -96,4 +100,18 @@ test('doctor asks for a sweep after a week, or after five journal days', (t) => 
   assert.doesNotMatch(runTool('doctor.js', [dir]).stdout, /knowledge sweep/);
   note(5);
   assert.match(runTool('doctor.js', [dir]).stdout, /warn\s+knowledge sweep.*5 journal days/);
+});
+
+// 0.18.0 (crew plan, Task 6.4): the crew turns on with the update that ships it.
+test('the 0.18.0 note names crew.js, the optional crew block, devMode off by default and the restart case', () => {
+  const p = path.join(MIGRATIONS, '0.18.0.md');
+  assert.ok(fs.existsSync(p), 'docs/migrations/0.18.0.md exists');
+  const text = fs.readFileSync(p, 'utf8');
+  assert.ok(text.includes('crew.js'), 'the generator run');
+  assert.match(text, /`crew` block/, 'the crew block in config');
+  assert.match(text, /optional/i, 'the block is optional');
+  assert.ok(text.includes('devMode'), 'developer mode');
+  assert.match(text, /off by default|absent means off/i, 'devMode off by default');
+  assert.match(text, /\.claude\/agents\//);
+  assert.match(text, /restart/i, 'a first-ever .claude/agents/ needs a restart');
 });

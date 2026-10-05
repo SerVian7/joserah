@@ -827,7 +827,17 @@ const CHECKS = [
     run({ cfg, pluginDir }) {
       const dir = path.join(pluginDir, '..', 'docs', 'migrations');
       if (!fs.existsSync(dir)) return null;
-      const notes = fs.readdirSync(dir).filter((f) => /^\d+\.\d+\.\d+\.md$/.test(f)).map((f) => f.slice(0, -3));
+      // A note newer than the installed plugin is staged for a release that has
+      // not shipped (written before its version bump): the code it describes is
+      // not installed, and update stamps `migratedTo` at the installed version,
+      // so asking for it now would leave it pending forever. It counts from the
+      // release that ships it.
+      let installed = null;
+      try {
+        installed = JSON.parse(fs.readFileSync(path.join(pluginDir, '..', '.claude-plugin', 'plugin.json'), 'utf8')).version;
+      } catch { /* unknown: every note counts */ }
+      const notes = fs.readdirSync(dir).filter((f) => /^\d+\.\d+\.\d+\.md$/.test(f)).map((f) => f.slice(0, -3))
+        .filter((v) => !installed || versionAtLeast(installed, v));
       if (!notes.length) return null;
       // No `migratedTo` yet: fall back to the version that created the
       // workspace, so a workspace scaffolded by this very release is not told
