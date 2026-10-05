@@ -1453,6 +1453,9 @@ function answerDom(ids, { choice = true } = {}) {
       getAttribute(k) { return k in a ? a[k] : null; }, setAttribute(k, v) { a[k] = String(v); },
       addEventListener(ev, f) { (ls[ev] = ls[ev] || []).push(f); }, fire(ev, e = {}) { for (const f of ls[ev] || []) f({ preventDefault() {}, target: this, ...e }); } };
   };
+  const node = (tag) => { const n = el({}); n.tag = tag; n.className = ''; n.children = [];
+    n.appendChild = (c) => { n.children.push(c); return c; }; n.removeChild = (c) => { n.children.splice(n.children.indexOf(c), 1); return c; };
+    Object.defineProperty(n, 'firstChild', { get: () => n.children[0] || null }); return n; };
   const forms = []; const tags = []; const rps = []; const byId = {};
   const root = el({}); root.lang = 'tr';
   for (const id of ids) {
@@ -1463,6 +1466,7 @@ function answerDom(ids, { choice = true } = {}) {
     const cd = el({ id: `d-${id}` }, { hidden: true });
     cd.querySelectorAll = (s) => (s === 'ul.opt li[data-k]' ? keys : []);
     cd.querySelector = (s) => (s === 'form.ans input' ? input : null);
+    cd.inserted = []; cd.insertBefore = (n, ref) => { cd.inserted.push([n, ref]); return n; };
     f.parentNode = cd; byId[`d-${id}`] = cd;
     const tx = el({ 'aria-expanded': 'false' }, { clicks: 0, click() { this.clicks++; this.a['aria-expanded'] = 'true'; cd.hidden = false; } });
     const rp = el({ 'data-rp': `d-${id}`, 'data-nt': id }, { hidden: true });
@@ -1470,7 +1474,7 @@ function answerDom(ids, { choice = true } = {}) {
     f.keys = keys; f.input = input; f.send = send; f.err = err; f.tx = tx; f.rp = rp; f.cd = cd;
     forms.push(f); rps.push(rp); tags.push(el({ 'data-an': id }, { hidden: true }));
   }
-  const document = { documentElement: root, getElementById: (i) => byId[i] || null,
+  const document = { documentElement: root, getElementById: (i) => byId[i] || null, createElement: node,
     querySelectorAll: (s) => (s === 'form.ans[data-ans]' ? forms : s === '[data-an]' ? (choice ? tags : []) : s === 'button.rp[data-rp]' ? rps : []) };
   return { document, forms, tags, rps, root };
 }
@@ -1555,6 +1559,38 @@ test('answers: an answer already stored shows on load; a stored note marks its r
   assert.strictEqual(dom.tags[0].hidden, true, 'a note is not an answer');
   assert.strictEqual(dom.rps[0].getAttribute('data-done'), '1', 'the note marks its row');
   assert.match(dom.tags[2].textContent, /^cevaplandı: A/, 'an id ending in "-n…" is still a row\'s own answer');
+});
+// Owner, 2026-10-05: "orada chat geçmiş de görünmeli. sen de cevap verebiliyorsun dimi."
+const thread = (f) => { const th = f.cd.inserted.map(([n]) => n).find((n) => n.className === 'th'); return th ? th.children.map((li) => [li.className, ...li.children.map((c) => c.textContent)]) : null; };
+test('answers: a row\'s conversation shows above its note box, oldest first, who and when; the assistant\'s replies included, live', async () => {
+  const dom = answerDom(['a-q1', 'a-q2']);
+  const fdb = fakeDb({ existing: {
+    'a-q1--r2': { row: 'row a-q1', from: 'assistant', note: 'Tamam, A ile başlıyorum.', at: '2026-10-05T11:50:00.000Z', state: 'reply' },
+    'a-q1': { row: 'row a-q1', key: 'A', label: 'İki aşama', note: 'hemen', at: '2026-10-05T11:40:00.000Z', state: 'new' },
+    'a-q1--nk1': { row: 'row a-q1', key: '', note: '<b>bir not</b>', at: '2026-10-05T11:45:00.000Z', state: 'new' },
+  } });
+  runAnswer(dom, () => Promise.resolve(fdb.db));
+  await flush();
+  const f = dom.forms[0];
+  const th = f.cd.inserted.find(([n]) => n.className === 'th');
+  assert.ok(th && th[1] === f, 'the conversation stands right above the note box');
+  const t = thread(f);
+  assert.deepStrictEqual(t.map((x) => x[0]), ['me', 'me', 'as'], 'oldest first');
+  assert.deepStrictEqual([t[0][1], t[0][3], t[0][4]], ['Siz', 'A · İki aşama', 'hemen'], 'a choice and its note');
+  assert.match(t[0][2], /^\d\d:\d\d$/, 'its time');
+  assert.deepStrictEqual([t[1][1], t[1][3]], ['Siz', '<b>bir not</b>'], 'a note, as text, never markup');
+  assert.deepStrictEqual([t[2][1], t[2][3]], ['Joserah', 'Tamam, A ile başlıyorum.'], 'the assistant\'s reply');
+  assert.strictEqual(dom.rps[0].getAttribute('data-reply'), '1', 'the reply icon says the assistant answered');
+  assert.match(dom.tags[0].textContent, /^cevaplandı: A/, 'a reply never takes the answered tag');
+  assert.strictEqual(thread(dom.forms[1]), null, 'a row with nothing stored has no conversation');
+  // live: a new reply arrives through the subscription; a sent note shows at once
+  fdb.listener()({ docs: [...Object.entries({ 'a-q2--r9': { from: 'assistant', note: 'Bakıyorum.', at: '2026-10-05T12:00:00.000Z', state: 'reply' } })].map(([id, d]) => ({ id, exists: true, data: () => d })) });
+  assert.deepStrictEqual(thread(dom.forms[1]).map((x) => [x[0], x[1], x[3]]), [['as', 'Joserah', 'Bakıyorum.']]);
+  dom.forms[1].input.value = 'teşekkürler'; dom.forms[1].input.fire('input'); dom.forms[1].fire('submit');
+  await flush();
+  assert.deepStrictEqual(thread(dom.forms[1]).map((x) => [x[0], x[3]]), [['as', 'Bakıyorum.'], ['me', 'teşekkürler']]);
+  const { CONSOLE_CSS } = require('../tools/tracker.js');
+  assert.match(CONSOLE_CSS, /\.cd ol\.th\{/, 'the conversation has its calm style');
 });
 test('answers: without the capability, or with no write right, the row reads as before; nothing throws', async () => {
   for (const use of [undefined, () => Promise.resolve(null), () => Promise.reject(new Error('x'))]) {

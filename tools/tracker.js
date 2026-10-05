@@ -217,7 +217,11 @@ const STRIP_CSS = [
   '.cd ul.opt em{margin-left:8px;padding:0 5px;font:600 10px/1.6 var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--you);border:1px solid currentColor}',
   '.cd ul.opt li.pk{cursor:pointer}.cd ul.opt li.pk:hover .ol{color:var(--link)}.cd ul.opt li.pk[aria-pressed="true"] .k{background:var(--you);color:var(--bg);border-color:var(--you)}.cd ul.opt li.pk[aria-pressed="true"] .ol{color:var(--you)}.cd ul.opt li.pk:focus-visible{outline:1px solid var(--link);outline-offset:3px}',
   // the reply icon: above the line's own click area, quiet until pointed at; a sent note marks it
-  `${LN}>.rp{position:relative;z-index:1;display:inline-flex;align-items:center;margin-left:10px;padding:3px;color:var(--faint);background:none;border:0;cursor:pointer}${LN}>.rp svg{width:14px;height:14px}${LN}>.rp:hover,${LN}>.rp:focus-visible{color:var(--link)}${LN}>.rp:focus-visible{outline:1px solid var(--link);outline-offset:1px}${LN}>.rp[data-done]{color:var(--ok)}${LN}>.rp[hidden]{display:none}`,
+  `${LN}>.rp{position:relative;z-index:1;display:inline-flex;align-items:center;margin-left:10px;padding:3px;color:var(--faint);background:none;border:0;cursor:pointer}${LN}>.rp svg{width:14px;height:14px}${LN}>.rp:hover,${LN}>.rp:focus-visible{color:var(--link)}${LN}>.rp:focus-visible{outline:1px solid var(--link);outline-offset:1px}${LN}>.rp[data-done]{color:var(--ok)}${LN}>.rp[data-reply]{color:var(--link)}${LN}>.rp[hidden]{display:none}`,
+  // a row's conversation, oldest first, above its note box: who and when, then the words
+  '.cd ol.th{list-style:none;margin:10px 0 0;padding:0 0 0 10px;border-left:2px solid var(--line)}.cd ol.th[hidden]{display:none}',
+  '.cd ol.th>li{display:block;margin:0;padding:3px 0 5px;background:none;border:0;text-align:left}.cd ol.th .who{font:600 11.5px var(--sans);color:var(--ink)}.cd ol.th .as .who{color:var(--link)}',
+  '.cd ol.th time{display:inline;margin-left:8px;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}.cd ol.th p{display:block;margin:1px 0 0;text-align:left;color:var(--ink);overflow-wrap:anywhere}.cd ol.th p.ch{font-weight:500}',
   'form.ans{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 2px}form.ans[hidden]{display:none}',
   'form.ans input{flex:1 1 160px;min-width:0;min-height:34px;padding:0 8px;font:400 13px var(--sans);color:var(--ink);background:none;border:1px solid var(--line)}',
   'form.ans .send{min-height:34px;padding:0 14px;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--bg);background:var(--ink);border:0;cursor:pointer}form.ans .send[disabled]{opacity:.4;cursor:default}',
@@ -284,24 +288,38 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0,W=t
 // <style id="console"> and every render puts it back last, so it wins over a page's older styles and a
 // re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
 // The answer (owner, 2026-10-05: "textbox ve seçim yetenekleri getirelim"; "şıklar direk seçilebilmeli altta
-// niye ayrı buton var"; "her satıra cevap verebilmeliyim. aslında küçük bir ikonla"): with the artifact's
-// database (capability `db`, declared on publish as {db: {}}) every row's note form shows, and so does each
-// line's reply icon, which opens the row's detail and puts the cursor in the note. In a question row the
-// option lines themselves are the choice (one at a time, aria-pressed, Enter or Space too); Send writes
-// answers/<id> = {row, key, label, note, at, state: "new"} and the line says "cevaplandı: A · HH:MM". A note
-// with no choice is its own document, answers/<id>--n<time> with key "", and marks the line's reply icon
-// with its time ("--" never stands in an id made by slugId). One subscription marks what is already stored,
-// also after a reload. No database, no right to write, or any failure to reach it: forms and icons stay
+// niye ayrı buton var"; "her satıra cevap verebilmeliyim. aslında küçük bir ikonla"; "orada chat geçmiş de
+// görünmeli. sen de cevap verebiliyorsun dimi"): with the artifact's database (capability `db`, declared on
+// publish as {db: {}}) every row's note form shows, and so does each line's reply icon, which opens the row's
+// detail and puts the cursor in the note. In a question row the option lines themselves are the choice (one
+// at a time, aria-pressed, Enter or Space too); Send writes answers/<id> = {row, key, label, note, at,
+// state: "new"} and the line says "cevaplandı: A · HH:MM". A note with no choice is its own document,
+// answers/<id>--n<time> with key "". The assistant answers in the same collection, answers/<id>--r<time> =
+// {row, from: "assistant", note, at, state: "reply"}. Everything stored for a row ("<id>" or "<id>--…"; "--"
+// never stands in an id made by slugId) is its conversation, shown oldest first above the note box, each
+// message with who wrote it (Siz / Joserah) and its time, live through one subscription, also after a
+// reload; the reply icon is marked when the owner wrote and when the assistant answered. Every text goes in
+// through textContent. No database, no right to write, or any failure to reach it: forms and icons stay
 // hidden and the row reads as before.
 const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans[data-ans]");if(!forms.length)return;'
   + 'var W=typeof window!=="undefined"?window:{};if(!W.claude||typeof W.claude.use!=="function")return;'
-  + 'var tr=D.documentElement.lang==="tr",T=tr?{done:"cevaplandı",note:"not gönderildi",fail:"gönderilemedi, tekrar deneyin"}:{done:"answered",note:"note sent",fail:"could not send, try again"};'
+  + 'var tr=D.documentElement.lang==="tr",T=tr?{done:"cevaplandı",note:"not gönderildi",reply:"Joserah cevap verdi",me:"Siz",as:"Joserah",fail:"gönderilemedi, tekrar deneyin"}'
+  + ':{done:"answered",note:"note sent",reply:"Joserah replied",me:"You",as:"Joserah",fail:"could not send, try again"};'
   + 'function each(l,f){Array.prototype.forEach.call(l||[],f)}'
   + 'function hm(iso){var d=new Date(iso);if(isNaN(d.getTime()))return"";return("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)}'
-  + 'var rps=D.querySelectorAll("button.rp[data-rp]");'
-  + 'function mark(id,a){var at=hm(a.at)?" · "+hm(a.at):"";if(a.key){each(D.querySelectorAll("[data-an]"),function(e){if(e.getAttribute("data-an")===id){e.textContent=T.done+": "+a.key+at;e.hidden=false}});'
-  + 'each(forms,function(f){if(f.getAttribute("data-ans")===id&&f.getAttribute("data-choice"))f.hidden=true});return}'
-  + 'each(rps,function(b){if(b.getAttribute("data-nt")!==id)return;var w=String(a.at||"");if(w<(b.getAttribute("data-at")||""))return;var t=T.note+at;b.setAttribute("data-at",w);b.setAttribute("data-done","1");b.setAttribute("title",t);b.setAttribute("aria-label",t)})}'
+  + 'var rps=D.querySelectorAll("button.rp[data-rp]"),docs={};'
+  + 'function baseOf(id){var i=String(id).indexOf("--");return i<0?String(id):String(id).slice(0,i)}'
+  + 'function mark(id,a){var at=hm(a.at)?" · "+hm(a.at):"",as=a.from==="assistant";if(a.key&&!as){each(D.querySelectorAll("[data-an]"),function(e){if(e.getAttribute("data-an")===id){e.textContent=T.done+": "+a.key+at;e.hidden=false}});'
+  + 'each(forms,function(f){if(f.getAttribute("data-ans")===id&&f.getAttribute("data-choice"))f.hidden=true})}'
+  + 'each(rps,function(b){if(b.getAttribute("data-nt")!==id)return;var w=String(a.at||"");if(w<(b.getAttribute("data-at")||""))return;var t=(as?T.reply:a.key?T.done+": "+a.key:T.note)+at;'
+  + 'b.setAttribute("data-at",w);if(as)b.setAttribute("data-reply","1");else b.setAttribute("data-done","1");b.setAttribute("title",t);b.setAttribute("aria-label",t)})}'
+  + 'function el(t,c,x){var e=D.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}'
+  + 'function draw(){var by={};Object.keys(docs).forEach(function(id){var b=baseOf(id);(by[b]=by[b]||[]).push(docs[id])});'
+  + 'each(forms,function(f){var xs=(by[f.getAttribute("data-ans")]||[]).slice().sort(function(x,y){var p=String(x.at||""),q=String(y.at||"");return p<q?-1:p>q?1:0}),th=f.__th;'
+  + 'if(!xs.length){if(th)th.hidden=true;return}if(!th&&f.parentNode){th=el("ol","th");f.parentNode.insertBefore(th,f);f.__th=th}if(!th)return;'
+  + 'while(th.firstChild)th.removeChild(th.firstChild);'
+  + 'xs.forEach(function(a){var as=a.from==="assistant",li=el("li",as?"as":"me");li.appendChild(el("span","who",as?T.as:T.me));li.appendChild(el("time","",hm(a.at)));'
+  + 'if(a.key&&!as)li.appendChild(el("p","ch",String(a.key)+(a.label?" · "+a.label:"")));if(a.note)li.appendChild(el("p","",String(a.note)));th.appendChild(li)});th.hidden=false})}'
   + 'function off(){each(forms,function(f){f.hidden=true});each(rps,function(b){b.hidden=true})}'
   + 'var p;try{p=W.claude.use("db")}catch(e){return}Promise.resolve(p).then(function(db){if(!db)return;var col=db.collection("answers"),R=D.documentElement;if(R.classList)R.classList.add("js-ans");'
   + 'each(forms,function(f){var ch=!!f.getAttribute("data-choice"),box=f.parentNode,keys=ch&&box&&box.querySelectorAll?box.querySelectorAll("ul.opt li[data-k]"):[],note=f.querySelector("input"),send=f.querySelector(".send"),err=f.querySelector(".err"),pick=null;'
@@ -311,12 +329,12 @@ const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans
   + 'if(note&&note.addEventListener)note.addEventListener("input",ready);'
   + 'f.addEventListener("submit",function(e){e.preventDefault();var n=txt();if(!pick&&!n)return;var base=f.getAttribute("data-ans"),c=pick,id=c?base:base+"--n"+Date.now().toString(36),'
   + 'a={row:f.getAttribute("data-row"),key:c?c.getAttribute("data-k"):"",label:c?c.getAttribute("data-l"):"",note:n,at:new Date().toISOString(),state:"new"};'
-  + 'send.disabled=true;err.hidden=true;col.doc(id).set(a).then(function(){mark(base,a);if(!c&&note)note.value="";ready()},function(x){var k=x&&x.code;'
+  + 'send.disabled=true;err.hidden=true;col.doc(id).set(a).then(function(){docs[id]=a;mark(base,a);draw();if(!c&&note)note.value="";ready()},function(x){var k=x&&x.code;'
   + 'if(k==="invalid_argument"||k==="not_granted"||k==="revoked"||k==="capability_disabled"||k==="capability_removed"){off();return}err.textContent=T.fail;err.hidden=false;send.disabled=false})});'
   + 'f.hidden=false});'
   + 'each(rps,function(b){b.hidden=false;b.addEventListener("click",function(){var id=b.getAttribute("data-rp"),tx=b.parentNode&&b.parentNode.querySelector("button.tx");if(tx&&tx.getAttribute("aria-expanded")!=="true"&&tx.click)tx.click();'
   + 'var d=D.getElementById(id),i=d&&d.querySelector("form.ans input");if(i&&i.focus)i.focus()})});'
-  + 'col.onSnapshot(function(snap){each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(a)mark(String(d.id).replace(/--n[0-9a-z]+$/,""),a)})},function(){})},function(){})})();';
+  + 'col.onSnapshot(function(snap){docs={};each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(!a)return;docs[d.id]=a;mark(baseOf(d.id),a)});draw()},function(){})},function(){})})();';
 
 // Motion (owner, 2026-10-05: "sayfayı sürekli yeniden çizme satırı güncelle güzelce. animatik düşün temiz
 // neat."). A publish reloads every open view (artifact runtime 0.2.67: "every open view live-reloads to it";
