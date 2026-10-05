@@ -3,7 +3,7 @@ import https from 'node:https';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { loadServerConfig, resolveListen, ConfigError } from './src/config.ts';
-import { stateDir } from './src/paths.ts';
+import { stateDir, localDay, now } from './src/paths.ts';
 import { createApp } from './src/app.ts';
 import { loadAuth, AuthFileError, setupToken, RateLimiter, type AuthState } from './src/auth.ts';
 import type { AppDeps } from './src/deps.ts';
@@ -49,9 +49,13 @@ if (cfg.proxy && !cfg.publicOrigin) fail('server.json: "proxy": true needs "publ
 const host = listen.hostname === '0.0.0.0' ? '127.0.0.1' : listen.hostname.includes(':') ? `[${listen.hostname}]` : listen.hostname;
 // The scheme this process speaks: https only with our own certificate. `listen.secure` (proxy too) is for the cookie flag.
 const baseUrl = `${tls ? 'https' : 'http'}://${host}:${listen.port}`;
-// Task 6 owns the bus and the store (its poll dirs and store.start()); the job runner needs both now.
+// The bus and the only file writer. The store polls today's and yesterday's pages and the knowledge folder for edits
+// made elsewhere (a terminal session, a tool a job ran), so an open page hears them; it starts once the server listens.
 const bus = new EventBus();
-const store = new Store(workspace, bus);
+const store = new Store(workspace, bus, { pollDirs: () => {
+  const d = now(); const y = new Date(d.getTime() - 86400000);
+  return [`.joserah/desk/artifacts/${localDay(d)}`, `.joserah/desk/artifacts/${localDay(y)}`, '.joserah/knowledge'];
+} });
 const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude' });
 const lang = workspaceLang(workspace);
 const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker: cliTracker(workspace, lang), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
@@ -63,6 +67,7 @@ const ready = () => {
   console.log(`Joserah server: ${baseUrl}/`);
   // First: a job that was running when the server stopped becomes interrupted (owner row); queued jobs run.
   jobs.recover();
+  store.start();   // the first poll records what exists; later polls publish edits made outside the server
   const chore = (name: string, fn: () => unknown) => { try { fn(); } catch (e) { console.error(`joserah: ${name} failed: ${(e as Error).message}`); } };
   chore('job-log ignore lines', () => { if (ensureJobIgnores(workspace)) console.log('Added the job-log lines to the workspace .gitignore.'); });
   chore('raw log rotation', () => rotateLogs(store, cfg.rawLogDays));

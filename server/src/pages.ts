@@ -96,9 +96,9 @@ export function todayTrackerPage(ws: string): { day: string; folder: string } | 
   return d ? { day, folder: path.basename(d) } : null;
 }
 
-/** Marks a served page (page id, mode), adds a viewport when the page has none, and the TV styles in `tv` mode. */
+/** Marks a served page (page id, mode) and loads the artifact shim before any page script; adds a viewport when the page has none, and the TV styles in `tv` mode. */
 export function preparePage(html: string, o: { page: string; mode: 'page' | 'tv' }): string {
-  let head = `<meta name="joserah-page" content="${esc(o.page)}"><meta name="joserah-mode" content="${o.mode}">`;
+  let head = `<meta name="joserah-page" content="${esc(o.page)}"><meta name="joserah-mode" content="${o.mode}"><script src="/_/shim.js"></script>`;
   if (!/<meta[^>]+name=["']?viewport["'\s>]/i.test(html)) head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + head;
   if (o.mode === 'tv') head += `<style id="tv">${TV_CSS}</style>`;
   const HEAD = /<head(?:\s[^>]*)?>/i;   // not <header>

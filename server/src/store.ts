@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { EventBus, BusEvent } from './events.ts';
 import { rel } from './paths.ts';
+import { answersLib, type AnswerDoc } from './cjs.ts';
 
 export class OutsideWorkspace extends Error {
   constructor(relPath: string) { super(`outside the workspace: ${JSON.stringify(relPath)}`); this.name = 'OutsideWorkspace'; }
@@ -98,6 +99,20 @@ export class Store {
       return rel(this.root, p);
     }
     throw new Error(`no free name for ${relPath}`);
+  }
+
+  /**
+   * The owner's answer from a page (`page` is "<day>/<folder>"), merged by tools/lib/answers.js under the lock the terminal
+   * takes too; owner writes only, so an assistant reply is never replaced. Published once as an `answers` event.
+   * Throws when the library does (lock held too long or taken over, an unreadable file): the route answers JSON.
+   */
+  putAnswer(page: string, id: string, doc: unknown): { ok: true; doc: AnswerDoc } | { ok: false; code: string } {
+    if (!/^\d{4}-\d{2}-\d{2}\/[^/\\]+$/.test(page)) return { ok: false, code: 'bad-page' };
+    const relFile = `.joserah/desk/artifacts/${page}/answers.json`;
+    const file = this.abs(relFile);
+    const r = answersLib.put(path.dirname(file), id, doc, 'owner');
+    if (r.ok) { this.#remember(relFile, file); this.#bus.publish({ type: 'answers', page }); }
+    return r.ok ? { ok: true, doc: r.doc } : r;
   }
 
   /** Records the Store's own write so the poll does not report it again, then publishes it once. */
