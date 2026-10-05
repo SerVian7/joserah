@@ -421,11 +421,22 @@ of that role is working (e.g. magnifier ·2). Under it, **one line each:** `<ico
 - `rows.json` gains a `crew` array: `{ role, job, state: work|owner|idle, reason?, url?, time }`, one entry per
   role + job, updated in place like rows.
 - `tools/tracker.js` gains a `crew` subcommand that upserts one entry and re-renders, same contract as `row`.
-- Lead runs `tracker.js crew` for each worker it opens, at start, waiting and end; a worker that opens
-  sub-workers does the same for them. This is a local file write, never a publish.
+- **The session that sees the event writes the entry, at every start and end** (decision, owner, 2026-10-05).
+  Completion notices reach the main session, so **Voice** writes the crew entries: at a worker's start when
+  Lead's one-line reply says `started: <role> <job> · agent <id> · <model> <effort> · <log path>` (Voice
+  passes `--agent <id>`, `--model`, `--effort`), at waiting on Lead's `owner ·` line, and at the end when the
+  completion notice arrives. Lead does not run `tracker.js crew`. A worker that opens sub-workers sees their
+  start and writes their entries (with `--agent`); **a worker never writes its own entry.** A local file
+  write, never a publish.
+  - [decision] Crew strip writer -> the session that sees the event: Voice for Lead's workers (start from
+    Lead's `started:` line, end from the completion notice), the opener for sub-workers; hooks only the backstop
+    date: 2026-10-05
+    by: Serkan
+    source: owner via Lead, 2026-10-05: the strip stayed stale for over an hour because no one wrote entries
+    at spawn or end
 - **Safety net:** the SubagentStart/SubagentStop hooks add, or dim, an entry for any subagent that has none, so
-  nothing running is invisible if a crew member forgets. What the hook input carries (agent type,
-  description) is checked at build; the hook writes only what it actually receives.
+  nothing running is invisible if a crew member forgets; at the stop they also dim an entry tagged with that
+  agent's id (`agent`). The hook writes only what it actually receives (agent type and id).
 - **Publishing is Voice's:** Voice republishes in the turn the strip or a row changed, one publish per reply
   (orchestrate, "Pages under work"). The strip is therefore as fresh as Voice's last publish; a page that
   updates itself without a republish is future work.
@@ -482,7 +493,7 @@ its Lead or workers; CTRL's crew never addresses this owner.
 
 | File | Change |
 |---|---|
-| `templates/crew/{lead,architect,builder,scout,sentry}.md` | New: each role's agent body — job, limits, brief template, reply shape, log-path rule, the Tracker `crew` calls (Lead and any opener). Lead's also: the Ledger lines, the Delivery check and journal line, Distill, the post-compact fallback. |
+| `templates/crew/{lead,architect,builder,scout,sentry}.md` | New: each role's agent body — job, limits, brief template, reply shape, log-path rule, the Tracker `crew` calls for sub-workers (any opener; never its own entry), Lead's `started:` line. Lead's also: the Ledger lines, the Delivery check and journal line, Distill, the post-compact fallback. |
 | `tools/crew.js` | New: reads `crew` from config, writes the five stamped definitions into the workspace's `.claude/agents/`; `--check` reports drift without writing. |
 | `tools/tracker.js` | `crew` subcommand; `crew` array in `rows.json`; `row --parent` and grouped rendering (Tracker row groups); strip rendering (inline SVG role icons, count badges, three states, reduced motion, click target); strip shown in both modes; role names and agent wording only when the workspace config has `devMode: true` (read at render). |
 | `templates/tracker/` | Strip styles and markup in the page template, icon colours from the theme tokens; group fold styles. |
@@ -588,7 +599,7 @@ from the numbers whether crew stays the default.
 - **Log compression:** old crew logs compressed or summarised during sweep — deferred, not designed here.
 - **Context size, what is left** (plan Task 4.6, built 2026-10-05): `hooks/crew.js` writes `ctx`/`ctxTime` from the
   worker's own transcript (measured above) at its tool calls, at most once a minute per agent, and the final figure
-  at SubagentStop — but only onto the entry the safety net wrote for that agent (`job` = its agent id). An entry
-  Lead wrote under the job's own words carries no agent id, so the hook cannot find it; until a link exists, such
-  an entry's figure comes from Lead's `--ctx` with what a worker reports. Not measured: the main session's own
+  at SubagentStop — onto the entry tagged with that agent's id (`--agent`, which Voice passes from Lead's
+  `started:` line), else the one the safety net wrote (`job` = its agent id). An entry with neither gets no
+  figure; `--ctx` remains for one a worker reports. Not measured: the main session's own
   context for Voice's entry; whether the definition matches the runtime's own context meter; interactive terminal.

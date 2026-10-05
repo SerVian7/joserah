@@ -25,7 +25,8 @@
  *                   and, for the main session, the Daily Tracker's open rows.
  *   subagent-start / subagent-stop  the Crew strip's safety net: a crew role
  *                   with no entry on today's Daily Tracker gets one (work), and
- *                   the hook's own entry is dimmed (idle) at the stop.
+ *                   at the stop the hook's own entry, or one tagged with that
+ *                   agent's id (`--agent`), is dimmed (idle).
  *   post-tool-use   a worker's tool call (payload with agent_id): its entry's
  *                   context size (`ctx`, `ctxTime`) from its own transcript, at
  *                   most once a minute; SubagentStop writes the final figure.
@@ -185,7 +186,7 @@ function reinject(root, input) {
  * The Crew strip's safety net (spec "Tracker Crew strip", Mechanics): a crew
  * worker with no entry for its role on today's Daily Tracker gets one at start,
  * `{ role, job: <agent_id>, state: work }`, dimmed to `idle` at its stop. An
- * entry Lead already wrote for the role is left as is; the hook writes only
+ * entry Voice already wrote for the role is left as is; the hook writes only
  * what the payload carries (agent type and id), never for a type that is not a
  * crew role, and never publishes. Any refusal or error leaves the file alone.
  */
@@ -198,13 +199,16 @@ function stripSafetyNet(root, input, starting) {
   try {
     const tracker = require('../tools/tracker');
     const crew = tracker.readCrew(dir);
-    const mine = crew.find((e) => e && e.role === role && String(e.job).trim().toLowerCase() === agent.toLowerCase());
     if (starting) {
       if (crew.some((e) => e && e.role === role)) return;
       tracker.upsertCrew(dir, { role, job: agent, state: 'work' });
-    } else if (mine && mine.state !== 'idle') {
-      tracker.upsertCrew(dir, { role, job: agent, state: 'idle' });
+      return;
     }
+    // at the stop: the hook's own entry (job = agent id), and an entry Voice tagged
+    // with `--agent <id>` under the job's own words; its link is kept
+    const mine = crew.filter((e) => e && e.role === role && e.state !== 'idle'
+      && (e.agent === agent || String(e.job).trim().toLowerCase() === agent.toLowerCase()));
+    for (const e of mine) tracker.upsertCrew(dir, { role, job: e.job, state: 'idle', ...(e.url ? { url: e.url } : {}) });
   } catch { /* the strip is a convenience; the spawn and the stop go on */ }
 }
 

@@ -228,6 +228,17 @@ test('safety net: an existing entry for the role is left as is at start', (t) =>
   assert.strictEqual(store().crew[0].state, 'work', 'the stop of an agent the hook did not add touches no other entry');
 });
 
+test('safety net: an entry Lead tagged with --agent is dimmed at that agent\'s stop, its link kept', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work', '--agent', 'A7', '--url', 'r/report.html'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'Other job', '--state', 'work', '--agent', 'A8'], { env: { JOSERAH_NOW: '2026-10-05T08:31:00' } });
+  sub(ws, 'subagent-stop', 'scout', 'A7', '2026-10-05T09:20:00');
+  const [a, b] = store().crew;
+  assert.deepStrictEqual([a.job, a.state, a.agent, a.url, a.time], ['DOTS research', 'idle', 'A7', 'r/report.html', '09:20']);
+  assert.strictEqual(b.state, 'work', 'another agent\'s entry is untouched');
+  assert.strictEqual(store().crew.length, 2, 'no second entry under the agent id');
+});
+
 test('safety net: not a crew role, or no Tracker today, writes nothing', (t) => {
   const { ws, tr } = trackerFixture(t);
   const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');

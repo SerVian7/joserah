@@ -120,7 +120,8 @@ if (!WORKER && cfg.sharedMemoryAutoPush === true) {
 // the plugin's crew-config module: this file reads nothing outside the workspace.
 const CREW_ON = !(cfg.crew === false || (cfg.crew && typeof cfg.crew === 'object' && cfg.crew.enabled === false));
 if (!WORKER && CREW_ON) {
-  const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours.' : '';
+  // The strip is written by the session that sees the event (owner, 2026-10-05): Voice.
+  const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours. Crew strip: you write it (`tracker.js crew`): Lead\'s `started:` line -> work, `owner ·` -> owner, a completion notice -> idle.' : '';
   who.push('Crew: on — you only talk; a one-lookup question you answer, every other job goes to Lead (opened at the first job, resumed by message after).' + tracker + ' A worker\'s completion notice goes to Lead verbatim; it is done when Lead says so. How: the orchestrate skill.');
 }
 // Developer mode decides only whether the owner SEES the crew (owner, 2026-10-05:

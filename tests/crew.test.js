@@ -51,8 +51,16 @@ test('every role template carries job, limits, reply and the log rule', () => {
     assert.doesNotMatch(t, /^---/m, `${r}: no frontmatter, the generator writes it`);
   }
   const lead = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'crew', 'lead.md'), 'utf8');
-  for (const s of ['Ledger', 'ledger.js add', 'ledger.js open', 'Done today', 'Distill', 'tracker.js crew', 'Job:', 'Rules:', 'Done when:', 'Report:'])
+  for (const s of ['Ledger', 'ledger.js add', 'ledger.js open', 'Done today', 'Distill', 'started:', 'Job:', 'Rules:', 'Done when:', 'Report:'])
     assert.ok(lead.includes(s), `lead: ${s}`);
+  // the session that sees the event writes the strip (owner, 2026-10-05): Voice, told by Lead's start line
+  assert.ok(!lead.includes('tracker.js" crew'), 'lead: does not write the strip itself');
+  const started = lead.split('\n').find((l) => l.includes('started:'));
+  for (const s of ['agent <id>', '<model>', '<effort>']) assert.ok(started && started.includes(s), `lead: started line carries ${s}`);
+  for (const r of ROLES.filter((x) => x !== 'lead')) {
+    const w = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'crew', `${r}.md`), 'utf8');
+    assert.match(w, /never your own (strip )?entry/i, `${r}: a worker never writes its own entry`);
+  }
 });
 
 const ws = (t, cfgExtra = {}) => {

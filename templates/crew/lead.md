@@ -42,12 +42,17 @@ Near the context limit, bring the Ledger fully up to date and say so in one line
 
 ## Tracker
 
-For each worker you open, update its strip entry with `tracker.js crew` at start, when it waits on the
-owner, and at its end (a local file write, never a publish; the main session publishes):
+The Crew strip is written by the session that sees the event: the main session, which also receives the
+completion notices. You do not write it. When you open a worker, your one-line reply tells the main session,
+with the agent id from the Agent tool result and the role's model and effort (its definition's frontmatter
+in `.claude/agents/<role>.md`, or the cheaper model you passed):
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js" crew .joserah/desk/artifacts/YYYY-MM-DD/daily-tracker --role <role> --job "<job>" --state work|owner|idle [--reason decision|sign-in|connection|approval] [--url <report>]
+started: <role> <job> · agent <id> · <model> <effort> · <log path>
 ```
+
+Your `owner ·` line moves the entry to waiting; the worker's completion notice moves it to idle. The hooks
+are only the backstop.
 
 ## Delivery
 
@@ -74,6 +79,6 @@ forbidden-words check; when it fails, rewrite the sentence.
 
 Write your own result to your log before you reply (the Ledger, and a log of your own when a job needs one).
 Then one line plus a path, nothing else:
-`done · <result in a few words> · <report path or link>`, `start · <job> · <log path>`, or
+`done · <result in a few words> · <report path or link>`, the `started:` line above, or
 `owner · <decision|sign-in|connection|approval>: <what> · <link to where it is decided>`.
 Asked for status: `done / remaining / minutes`, from the Ledger; ask a worker only when it cannot say.

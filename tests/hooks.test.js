@@ -1219,6 +1219,18 @@ test('Voice line with crew on; developer-mode line off by default, on with devMo
   ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.doesNotMatch(ctx, /never name an agent, a role or a model/);
 });
+test('Voice line: Voice writes the Crew strip at start and end; not with the Daily Tracker off', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /Crew strip: you write it/);
+  assert.match(ctx, /Lead's `started:` line -> work/);
+  assert.match(ctx, /completion notice -> idle/);
+  const p = path.join(dir, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), dailyTracker: false }));
+  ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /Crew strip/);
+});
 test('worker line: result to the log first, then path and one line', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
