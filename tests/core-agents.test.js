@@ -185,7 +185,7 @@ test('the shipped core AGENTS.md states the character it is asking for', () => {
 
 test('the prompt version was bumped with the prompt text', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
-  assert.match(text, /^<!-- joserah:prompt-version 27 -->$/m,
+  assert.match(text, /^<!-- joserah:prompt-version 28 -->$/m,
     'templates/AGENTS.md changed, so its version line has to change with it');
 });
 

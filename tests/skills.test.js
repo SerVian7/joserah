@@ -284,3 +284,23 @@ test('feedback carries Distill', () => {
   assert.match(d, /Lead writes (both|the note)/);
   assert.match(d, /crew/);
 });
+
+// Owner, 2026-10-05: "Ya az yazıcam diye samimiyeti öldürdün bu seferde. Düzgünce özet çıkamıyomusun evladım
+// sen." and "fazla kesilmiş … Bakınca hangi konu olduğunu hatırlamam lazım.": brevity is no padding, never
+// coldness; every item names its topic with one sentence of background.
+test('orchestrate: the chat gives a warm full-sentence summary; rows and items name their topic', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(text, /Brevity means no padding, never coldness/);
+  assert.match(text, /warm, full-sentence summary: what was done, what waits on the owner, what comes next/);
+  assert.match(text, /background progress is kept on the Tracker/);
+  assert.match(text, /names its topic and gives one sentence of background/);
+  assert.match(text, /never a bare label/);
+  assert.match(text, /Row text is plain sentences, not a keyword chain/);
+  assert.doesNotMatch(text, /Row text is a short, meaningful summary/);
+  assert.doesNotMatch(text, /Chat carries one line and the link/);
+  const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  const row = agents.split('\n').find((l) => l.startsWith('|') && l.includes('`orchestrate`'));
+  assert.match(row, /warm, full-sentence summary/);
+  assert.match(row, /names its topic with one sentence of background/);
+  assert.doesNotMatch(row, /chat carries one line and the link/);
+});

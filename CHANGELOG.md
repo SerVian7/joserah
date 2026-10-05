@@ -3,6 +3,16 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## Unreleased
+
+For the next release note (owner, 2026-10-05).
+
+- **Trail.** `trail.js new|add|render|types`: one page per Case that shows its whole course — mail in, mail out, offer, options, decision, draft, note, waiting — as typed entries appended to `trail.json` and never rewritten. Open waits and unsent drafts are pinned on top, the newest entry first, past days folded; a decision on an options entry shows the chosen item with its photo, marked SELECTED. Labelled "İş akışı" on Turkish pages. New work uses a Trail instead of a Decision flow; existing Decision flow pages are left as they are.
+- **One theme.** The colour tokens, the console rules and the long-list clamp live in one place (`tools/lib/theme.js`); the Tracker and the Trail both take them from there, so a theme change reaches every page on its next render.
+- **Warmer replies.** Brevity means no padding, never coldness: a reply is a full-sentence summary of what was done, what waits on you and what comes next; every item, in chat and on the Tracker, names its topic with one sentence of background.
+
+The prompt (v28) and the orchestrate skill. Run `/joserah:update`, then `/reload-plugins`.
+
 ## 0.17.10
 
 0.17.10 — a reusable Changelog page, Plans grouped on the Tracker, relay and delivery rules. Owner, 2026-10-04.

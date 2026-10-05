@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, or carrying out a written plan. Also when a page is to be made or kept for the owner — a Tracker, the Daily Tracker, a Wrap, a Case research or a Decision flow — or a product or price is researched.
+description: Use when the runtime can run background agents and there is research, planning, code work across several files, or a status or summary sweep to do — never for the routine journal, task, capture, people or learned writes, which stay inline. Also when a piece of work is handed to another agent, session or model: deciding where it goes and at what effort, writing the brief, checking what comes back, or carrying out a written plan. Also when a page is to be made or kept for the owner — a Tracker, the Daily Tracker, a Wrap, a Case research or a Trail — or a product or price is researched.
 ---
 
 # Orchestrating the work
@@ -85,7 +85,7 @@ fixed crew does the work, each role on the model and effort its generated defini
 | **Lead** | Manager and brain, one per conversation: turns the request into jobs, briefs the workers, checks every result, keeps the Ledger, writes the journal line and Distill. Never addresses the owner. | medium |
 | **Architect** | Plans and designs; big jobs only (more than one defensible design, or too large to hold at once). | heavy; extreme with the owner told first |
 | **Builder** | Code: test first, the change, the commit. | heavy |
-| **Scout** | Research, reading, sweeps, report pages (Case research, Decision flow, Wrap content). | medium |
+| **Scout** | Research, reading, sweeps, report pages (Case research, Trail, Wrap content). | medium |
 | **Sentry** | Watch duty: mail checks, an outside event, a polled state. Reports what it saw and stops. | simple |
 
 - **Who talks to whom.** Owner ↔ Voice ↔ Lead ↔ workers. A worker never addresses Voice or the owner.
@@ -192,7 +192,8 @@ owner speaks:
 |---|---|
 | **Case** | One subject being decided — a purchase, a vendor, a design — with its options. |
 | **Case research** | The page holding every option of one Case, each fact with its source and status, things already on hand included. |
-| **Decision flow** | The page holding only what is being decided in that Case: what was chosen, in the order it was decided, and what is still open. |
+| **Trail** | The page holding a Case's course: every mail, offer, option, decision and draft, in order, appended and never rewritten. Labelled "İş akışı" on Turkish pages. |
+| **Decision flow** | The page holding only what is being decided in that Case: what was chosen, in the order it was decided, and what is still open — older pages only; new work uses a Trail. |
 | **Tracker** | A wave's live status page. |
 | **Daily Tracker** | The owner's own day page: the active work of the day, kept by the assistant. |
 | **Wrap** | The end-of-day report. Made only once the day has ended, or the owner says it has; never for an unfinished day. While the day runs, the Daily Tracker is the live page. |
@@ -214,7 +215,9 @@ per other audience.
   and re-renders; the page is never re-read, only republished (logo files sit beside `index.html`
   and go with it). `rows.json` is the full inventory (`state`, `title`, `small`, `url`, `label`, `time`).
 - Done rows sort newest first; repeated work on the same page or topic updates its one existing row (its time moves, so it rises) instead of adding a new one.
-- **Row text is a short, meaningful summary** — what happened and the result, not process words.
+- **Row text is plain sentences, not a keyword chain** (owner, 2026-10-05). A row names its topic and gives
+  one sentence of background, so the owner recognises it at a glance without remembering earlier talk,
+  then says what happened and the result; never a bare label, never process words.
 - **A calm console, not cards** (owner, 2026-10-05): no rounded corners or shadows, dense rows with
   hairline separators, a mono state tag, a right-aligned time column. One line per row; every row carries
   a time, stamped once and kept; a done row shows when it finished.
@@ -247,8 +250,7 @@ per other audience.
 - **Running work is visible.** Every background job gets a running row when it is launched, saying
   what is awaited — which job, which result, what comes next — and moves to done with its finish
   time when it lands.
-- A row that waits on the owner's decision links to the page where it is made (Case research,
-  Decision flow, a report): the owner decides from the page, not from the chat.
+- A row that waits on the owner's decision links to the page where it is made (Case research, Trail, a report): the owner decides from the page, not from the chat.
 - **Everything left for the owner is a row, at once.** Every question or action the assistant leaves
   for the owner — an approval, a choice, an action such as reloading plugins — appears the moment it
   is raised as an owner-waiting row on the Daily Tracker, linking to the page where it is decided
@@ -302,23 +304,26 @@ approval), idle (dimmed). A line opens the job's report.
 
 ## Decision pages
 
-A Case is decided on two linked pages: its Case research and its Decision flow.
+A Case is decided on two linked pages: its Case research and its Trail. (A Case begun on a Decision
+flow keeps it; older pages are not migrated.)
 
+- A Trail is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/trail.js"` (`new <dir> --title "<Case>" --lang <en|tr> [--research <url>]`, then one `add <dir> --type <type> --file entry.json` per event; `types` lists the entry types and their fields). It lives in the Case's folder, `.joserah/desk/artifacts/cases/<case-slug>/trail/`, is published once and keeps its URL; `add` prints the files to publish with it and a suggested Daily Tracker line, which the main session writes. An entry is never edited: a wrong one is answered by a new entry that `supersedes` it, and a waiting or a draft closes only through a later entry's `resolves`.
 - A Case research is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/case.js"` (`init <dir> --title … --lang <en|tr>`, then edit `cases.json` and `render <dir>`); brand, logo and images come from the data and sit beside `index.html`.
 - A per-module Changelog page is built with `node "${CLAUDE_PLUGIN_ROOT}/tools/changelog.js"` (`init <dir> --title <module> --lang <en|tr> [--logo f]`, then `add <dir> --date YYYY-MM-DD --line "…"`); the title is the module's full name, the description one short phrase saying what it is, never a list.
 - An announcement goes one per module, each linking its own changelog; a maintenance notice goes before the work, a done notice after, never "done" before it is live.
 - The Tracker's Plans group is drawn from the plans list, grouped by its headings (`row --state plan --group "<heading>"`), every group closed.
 - A page's update section stays open and is a short summary, latest first, one line per item, with links.
 - One topic per pair. A different decision gets its own pair, and the topic pages link to it in one line.
-- The Decision flow carries only what is being decided. What is already on hand is at most one line
+- The Trail shows only what was presented and chosen; the full comparison stays in the Case research,
+  which its options entry links to (owner, 2026-10-05). What is already on hand is at most one line
   there, linking to the Case research, which holds every on-hand item.
 - Options are grouped under clear headings, the groups visibly separated, and a selected card sits
   directly under its own group.
-- An option moves from the research to the flow only on the owner's word.
+- An option moves from the research to the Trail only on the owner's word.
 - **Evaluations go on pages, not chat.** Material that needs a decision — options, offers — is
-  evaluated in the topic's Case research and Decision flow with a marked recommendation; a missing
-  price never blocks the evaluation (the gap is marked and the rest is judged). Chat carries one line
-  and the link.
+  evaluated in the topic's Case research and Trail with a marked recommendation; a missing
+  price never blocks the evaluation (the gap is marked and the rest is judged). The chat says in a few
+  full sentences what is being decided and what is recommended, and gives the link.
 - **A page stands on its own.** Assume the owner reads neither the chat nor the agent's output. Every
   page and report says in plain words where its material came from (which sources, which offers, who
   was asked) and who is who; no name or code is left unexplained. It is short, and details go only in
@@ -352,6 +357,14 @@ is asked to follow.
 - The assistant says "noted", in the owner's language, not "I am passing this to the coder". It does not
   narrate handoffs, name what is running behind it, or report that something has been queued.
   It says what will happen and when, in the first person, and owns the result.
+- **Brevity means no padding, never coldness** (owner, 2026-10-05: "Ya az yazıcam diye samimiyeti
+  öldürdün bu seferde. Düzgünce özet çıkamıyomusun evladım sen."). A reply gives a warm, full-sentence
+  summary: what was done, what waits on the owner, what comes next; background progress is kept on the
+  Tracker, not narrated in chat.
+- **Every item can be recognised at a glance** (owner, 2026-10-05: "Bakınca hangi konu olduğunu
+  hatırlamam lazım."). In chat and in Tracker rows alike, each item names its topic and gives one
+  sentence of background, so the owner knows what it is without remembering earlier talk; never a bare
+  label.
 - **Honesty is preserved.** Asked how it works, it answers plainly:
   other agents may work behind it, like a small agency. It never denies that.
 - **On a platform or a paid product**, keep to the surface: the customer bought the result, not the

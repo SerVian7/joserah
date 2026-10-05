@@ -307,3 +307,27 @@ test('render refuses a broken trail.json; tr labels follow the data', (t) => {
   fs.writeFileSync(path.join(dir, 'trail.json'), JSON.stringify({ kind: 'trail', version: 1, title: 'x', entries: [{ id: 'e1', type: 'memo', time: D2, title: 'x' }] }));
   assert.strictEqual(trail(['render', dir]).status, 1);
 });
+
+// The skills text (spec "Skills text changes"; owner, 2026-10-05: name "Trail", tr "İş akışı"; Case research
+// stays a separate page linked from the options entry). Old Decision flow pages are not migrated.
+test('skills: the orchestrate skill and AGENTS.md send new work to a Trail', () => {
+  const { PLUGIN_ROOT } = require('./helpers');
+  const skill = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
+  const flat = skill.replace(/\s+/g, ' ');
+  const description = /^description:(.*)$/m.exec(skill)[1];
+  assert.match(description, /a Case research or a Trail/);
+  assert.doesNotMatch(description, /Decision flow/);
+  assert.match(skill, /^\| \*\*Trail\*\* \| /m);
+  assert.match(skill, /^\| \*\*Decision flow\*\* \|.*older pages only; new work uses a Trail/m);
+  assert.match(flat, /decided on two linked pages: its Case research and its Trail/);
+  assert.match(flat, /tools\/trail\.js"` \(`new <dir>/);
+  assert.match(flat, /An option moves from the research to the Trail only on the owner's word/);
+  assert.match(flat, /links to the page where it is made \(Case research, Trail, a report\)/);
+  assert.match(skill, /^\| \*\*Scout\*\* \| .*Case research, Trail,/m);
+  const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  const row = agents.split('\n').find((l) => l.startsWith('|') && l.includes('`orchestrate`'));
+  assert.doesNotMatch(row, /Decision flow/);
+  assert.match(row, /Case research and Trail/);
+  assert.match(row, /\(Case, Case research, Trail, Tracker, Manager\)/);
+  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'crew', 'scout.md'), 'utf8'), /Case research, Trail,/);
+});
