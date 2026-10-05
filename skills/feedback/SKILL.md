@@ -1,13 +1,13 @@
 ---
 name: feedback
-description: Use when the assistant notices a shortcoming in its own standing instructions, or in how this Joserah workspace is put together — not for a preference about the owner's own workspace, which belongs in `learn` instead.
+description: Use when the assistant notices a shortcoming in its own standing instructions, or in how this Joserah workspace is put together, or when the owner gives a correction or a decision (its distilled note, Distill) — not for a preference about the owner's own workspace as it stands, which belongs in `learn` instead.
 ---
 
 # Feedback
 
 A note is about **this software** — the assistant's own prompts, or how Joserah itself is
 structured — never about the owner's workspace. A workspace-specific preference is a `learn`
-entry, never a feedback note. One note is three short sentences and a link, not an investigation.
+entry, never a feedback note as it stands; only its distilled principle is (Distill, below). One note is three short sentences and a link, not an investigation.
 
 ## What a note is for
 
@@ -55,6 +55,14 @@ In `auto` mode, then run:
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/feedback.js" --report <file> --root <root>
 ```
+
+### Distill
+
+Every correction or decision the owner gives is written twice: in full into the workspace's own rules
+(`.joserah/learned.md`: the owner's words, the case, the date), and distilled as a note here, alongside it
+— names, systems and the case's context stripped, the principle generalised so it would also catch a
+different case, through the same forbidden-words check. With the crew on, Lead writes both, from the
+owner's words relayed verbatim; with it off, the session that heard the correction does.
 
 ## After filing
 

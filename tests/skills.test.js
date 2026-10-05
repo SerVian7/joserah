@@ -270,3 +270,17 @@ test('sweep: tool proposals come out of the ordinary sweep too, script only on t
   assert.ok(text.includes('list tool proposals in `.joserah/desk/tools-proposed.md`'));
   assert.ok(text.includes("a proposal becomes a script only on the owner's yes"));
 });
+
+// 0.18.0 (owner, 2026-10-05): Distill — an owner's correction is written here in
+// full and, distilled, as a feedback note; with the crew on, Lead writes both.
+test('feedback carries Distill', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'feedback', 'SKILL.md'), 'utf8');
+  const i = text.indexOf('### Distill');
+  assert.ok(i > text.indexOf('## Writing a note'), 'Distill sits under "Writing a note"');
+  const d = text.slice(i, text.indexOf('\n## ', i)).replace(/\s+/g, ' ');
+  assert.match(d, /correction or decision/);
+  assert.match(d, /learned\.md/);
+  assert.match(d, /alongside/);
+  assert.match(d, /Lead writes (both|the note)/);
+  assert.match(d, /crew/);
+});
