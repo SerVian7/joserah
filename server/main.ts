@@ -16,6 +16,7 @@ import { GitCheckpointer } from './src/checkpoint.ts';
 import { workspaceLang } from './src/config.ts';
 import { AnswerTrigger } from './src/answer-trigger.ts';
 import { ingestBookkeeping } from './src/wiki-books.ts';
+import { LintScheduler } from './src/lint-scheduler.ts';
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; }
 function fail(message: string): never { console.error(`joserah: ${message}`); process.exit(1); }
@@ -64,8 +65,9 @@ const lang = workspaceLang(workspace);
 const tracker = cliTracker(workspace, lang);
 const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker, checkpoint: new GitCheckpointer(workspace, store), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });
 const answers = new AnswerTrigger({ workspace, bus, jobs, config: () => cfg });
+const lint = new LintScheduler({ workspace, stateDir: state, store, bus, jobs, tracker, config: () => cfg, lang });
 const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure,
-  store, bus, engine, jobs, answers, tracker, engineHealth: null };
+  store, bus, engine, jobs, answers, lint, tracker, engineHealth: null };
 jobs.onEnd(ingestBookkeeping({ store, workspace }));   // an ingest that ends marks its source compiled, rebuilds the index and logs it
 jobs.onEnd((j) => { deps.health.lastJobOk = j.state === 'done'; });
 const app = createApp(deps);
@@ -75,6 +77,7 @@ const ready = () => {
   jobs.recover();
   answers.start();  // answers the owner leaves start a batched answers job only when answerStartsJob is on
   store.start();   // the first poll records what exists; later polls publish edits made outside the server
+  lint.start();    // lint on every knowledge change, nightly with a lock and catch-up; the model pass only when the owner asks (or nightlyLlmLint)
   const chore = (name: string, fn: () => unknown) => { try { fn(); } catch (e) { console.error(`joserah: ${name} failed: ${(e as Error).message}`); } };
   chore('job-log ignore lines', () => { if (ensureJobIgnores(workspace)) console.log('Added the job-log lines to the workspace .gitignore.'); });
   chore('raw log rotation', () => rotateLogs(store, cfg.rawLogDays));

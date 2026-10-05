@@ -6,6 +6,7 @@ import type { Engine, EngineHealth } from './engine.ts';
 import type { JobRunner } from './jobs.ts';
 import type { AnswerTrigger } from './answer-trigger.ts';
 import type { TrackerBridge } from './tracker-bridge.ts';
+import type { LintScheduler } from './lint-scheduler.ts';
 export interface HealthView { signedIn: boolean | null; lastJobOk: boolean | null }
 export interface AuthHolder { state: AuthState }
 export interface AppDeps {
@@ -22,6 +23,7 @@ export interface AppDeps {
   engine: Engine;
   jobs: JobRunner;
   answers: AnswerTrigger;
+  lint: LintScheduler;
   /** Owner rows raised by routes (a held upload); when absent the route builds the CLI bridge on first use. */
   tracker?: TrackerBridge;
   engineHealth: EngineHealth | null;
