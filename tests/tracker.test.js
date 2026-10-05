@@ -349,10 +349,43 @@ test('strip: icon, line, state class, reason; counts only working or waiting', (
   // Voice leads the summary
   assert.match(html, /<div class="crew-sum"><span[^>]*data-role="voice"/);
 });
-test('no strip with devMode off, even with crew entries', (t) => {
+// Task 3.7 (owner, 2026-10-05): "normal davranışta, ajan dememeli ve ajan isimleri olmamalı.
+// ikonları kalabilir." With devMode off the strip shows — icons, states, count badge — but no
+// role name and no agent wording anywhere on the page, aria and title text included.
+const ROLE_WORDS = /\b(voice|lead|architect|builder|scout|sentry)\b/i;
+test('devMode off: the strip shows icons and states, with no role name and no agent wording', (t) => {
+  const { ICONS } = require('../tools/lib/crew-icons');
+  for (const lang of ['tr', 'en']) {
+    const dir = tmpdir(t); init(dir, ['--lang', lang]);
+    setRows(dir, [{ state: 'run', title: 'DOTS araştırması', time: '09:00' }]);
+    crew(dir, ['--role', 'scout', '--job', 'DOTS araştırması', '--state', 'work']);
+    crew(dir, ['--role', 'scout', '--job', 'Fiyat taraması', '--state', 'owner', '--reason', 'approval']);
+    crew(dir, ['--role', 'builder', '--job', 'Sayfa düzeltmesi', '--state', 'idle']);
+    crew(dir, ['--role', 'lead', '--job', 'Konuşma', '--state', 'work']);
+    const html = page(dir);
+    assert.match(html, /<section class="crew">/, `${lang}: the strip is shown`);
+    for (const r of ['voice', 'lead', 'scout', 'builder']) assert.ok(html.includes(ICONS[r]), `${lang}: ${r} icon`);
+    assert.match(html, /class="crew-line owner"/, 'the three states stay');
+    assert.match(html, /class="crew-line work"/);
+    assert.match(html, /class="crew-line idle"/);
+    assert.match(html, /data-count="2"/, 'the count badge stays');
+    assert.match(html, /<span>DOTS araştırması<\/span>/, 'a line is the work only');
+    assert.doesNotMatch(html, ROLE_WORDS, `${lang}: no role name`);
+    assert.doesNotMatch(html, /ajan|agent/i, `${lang}: no agent wording`);
+    assert.match(html, lang === 'tr' ? /Sürüyor/ : /In progress/, `${lang}: the run label is neutral`);
+  }
+});
+test('devMode off: the owner state keeps the page\'s owner colour', (t) => {
   const dir = tmpdir(t); init(dir);
+  crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'owner', '--reason', 'decision']);
+  assert.match(page(dir), /\.crew-line\.owner svg\{[^}]*color:var\(--you\)/);
+});
+test('devMode on: the strip names the roles, as before', (t) => {
+  const dir = devWs(t);
   crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
-  assert.doesNotMatch(page(dir), /class="crew"/);
+  const html = page(dir);
+  assert.match(html, /Scout · A/);
+  assert.match(html, /data-role="scout"[^>]*title="Scout"/);
 });
 test('the template carries the strip styles and the crew slot; an old page gets them once', (t) => {
   const { CREW_CSS } = require('../tools/tracker.js');

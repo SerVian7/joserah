@@ -31,7 +31,8 @@
  *       ignored), stamps its `time` now, re-renders. reason/url not given are
  *       cleared. rows.json then becomes { rows: [...], crew: [...] }; a legacy
  *       array is read as { rows, crew: [] } and kept an array until a crew entry
- *       exists. The strip shows only in developer mode.
+ *       exists. The strip shows whenever it has entries; role names only in
+ *       developer mode.
  *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
@@ -54,9 +55,11 @@
  *       rows with the same title (case and outer spaces ignored): one job, one row.
  *
  * Developer mode (`devMode: true` in the workspace's .joserah/config.json, found
- * by walking up from <dir>) shows the crew: the run state reads "Agent working".
- * Off (the default, and outside any workspace) it reads "In progress" and the
- * page carries no agent wording.
+ * by walking up from <dir>) names the crew: the run state reads "Agent working"
+ * and each strip line reads "<Role> · <job>". Off (the default, and outside any
+ * workspace) the run state reads "In progress" (tr "Sürüyor") and the strip keeps
+ * its icons, states and counts but carries no role name and no agent wording,
+ * in text, title or data attributes: a line is the work only.
  *
  * Labels follow <html lang> (en, tr). Tests may fix the clock with
  * JOSERAH_NOW=<ISO timestamp>. No dependencies.
@@ -200,19 +203,23 @@ function checkParents(rows) {
 
 // summary: Voice first, then one icon per role with an entry, a count when 2+ of it are working or
 // waiting on the owner; then one line per entry: icon, "<Role> · <job>", the reason when owner.
-function crewStrip(crew, L) {
+// Developer mode off (owner, 2026-10-05: "ajan dememeli ve ajan isimleri olmamalı. ikonları
+// kalabilir."): the same icons, states and counts, but no role name anywhere — no "<Role> ·",
+// no title, no data-role — so a line is the work only.
+function crewStrip(crew, L, dev = true) {
+  const roleAttr = (r) => (dev ? ` data-role="${r}"` : '');
   const live = (e) => e.state === 'work' || e.state === 'owner';
   const sum = CREW_ROLES.filter((r) => r === 'voice' || crew.some((e) => e.role === r)).map((r) => {
     const mine = crew.filter((e) => e.role === r);
     const n = mine.filter(live).length;
     const st = mine.some((e) => e.state === 'owner') ? 'owner' : mine.some((e) => e.state === 'work') ? 'work' : mine.length ? 'idle' : '';
-    return `<span${st ? ` class="${st}"` : ''} data-role="${r}"${n >= 2 ? ` data-count="${n}"` : ''} title="${ROLE_NAME[r]}">${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+    return `<span${st ? ` class="${st}"` : ''}${roleAttr(r)}${n >= 2 ? ` data-count="${n}"` : ''}${dev ? ` title="${ROLE_NAME[r]}"` : ''}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
   }).join('');
   const lines = crew.map((e) => {
-    const text = `${ROLE_NAME[e.role]} · ${esc(e.job)}`;
+    const text = dev ? `${ROLE_NAME[e.role]} · ${esc(e.job)}` : esc(e.job);
     const body = /^https?:\/\//i.test(String(e.url || '')) ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${text}</a>` : text;
     const why = e.state === 'owner' && e.reason ? ` <em>${esc((L.reasons || {})[e.reason] || e.reason)}</em>` : '';
-    return `  <li class="crew-line ${e.state}" data-role="${e.role}">${ICONS[e.role]}<span>${body}${why}</span><time>${esc(e.time)}</time></li>\n`;
+    return `  <li class="crew-line ${e.state}"${roleAttr(e.role)}>${ICONS[e.role]}<span>${body}${why}</span><time>${esc(e.time)}</time></li>\n`;
   }).join('');
   return `<div class="crew-sum">${sum}</div><ul>\n${lines}</ul>`;
 }
@@ -319,11 +326,11 @@ function render(dir, { quiet = false } = {}) {
   // row groups and main-job labels get their styles the first time a page shows one, so a page
   // without any `parent` stays byte-identical to what it was before row groups existed
   if (/class="(grp|par)"/.test(section + ol) && !html.includes('.grp summary b{')) html = html.replace('</style>', `${GROUP_CSS}\n</style>`);
-  // the Crew strip: developer mode only; without it the page carries no strip at all
+  // the Crew strip: shown whenever it has entries; developer mode decides only whether roles are named
   html = html.replace(/<section class="crew">[\s\S]*?<\/section>\n?/, '');
-  if (dev && crew.length) {
+  if (crew.length) {
     if (!html.includes('.crew{')) html = html.replace('</style>', `${CREW_CSS}\n</style>`);
-    const strip = `<section class="crew">${crewStrip(crew, L)}</section>\n`;
+    const strip = `<section class="crew">${crewStrip(crew, L, dev)}</section>\n`;
     if (html.includes('<!-- crew -->\n')) html = html.replace('<!-- crew -->\n', () => `<!-- crew -->\n${strip}`);
     else html = html.replace(/<main>\n?/, (m) => `${m}${strip}`);
   }

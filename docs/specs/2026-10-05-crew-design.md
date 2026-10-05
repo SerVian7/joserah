@@ -102,10 +102,19 @@ turn it on — "like a dev mode"). A top-level key, **off by default** in every 
 ```
 
 - **Off:** the main session never names agents, roles or models to the owner. It speaks of the work in the
-  first person: "I'm working on it; two of my research jobs are still running." The Tracker shows work rows
-  only: no Crew strip, and an agent-working row reads as in progress, without the word agent.
-- **On:** the crew is shown: the Crew strip with roles, icons and counts; models where asked; Voice may say
-  which role is on what.
+  first person: "I'm working on it; two of my research jobs are still running." The Tracker shows the Crew
+  strip with its icons, states and count badges, but the word agent and the role names (Voice, Lead,
+  Architect, Builder, Scout, Sentry) appear nowhere on the page: not in the strip, not in the row state
+  labels, not in title, aria or data text. A strip line is the work only ("DOTS araştırması"); a run row reads
+  as in progress (en "In progress", tr "Sürüyor").
+  - [decision] Tracker with devMode off -> the Crew strip is shown, icons, states and counts kept, no role name
+    and no agent wording anywhere on the page; state labels neutral (tr "Sürüyor", en "In progress")
+    date: 2026-10-05
+    by: Serkan
+    source: owner in chat, 2026-10-05: "Bendeki tracker tam bir devmode tracker ı şu an. Ama normal
+    davranışta, ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir."
+- **On:** the crew is named: the Crew strip with role names, icons and counts (exactly as before the decision
+  above); models where asked; Voice may say which role is on what.
 - **Relation to `crew`:** `crew.enabled` decides whether the crew *runs*; `devMode` decides only whether the
   owner *sees* it. They are independent: crew on with devMode off is the default (work behind the scenes,
   first-person talk). With crew off, devMode off still keeps agent talk out of replies; on, the main session
@@ -324,7 +333,10 @@ to a file, session and workers on Haiku 4.5; by: Builder; source: Task 0.1 scrat
 ## Tracker Crew strip
 
 A strip on the Daily Tracker showing every agent working for the owner, directly under the one-line header and
-above the row groups. **Shown only with developer mode on**; off, the page has work rows only.
+above the row groups. **Shown in both modes** whenever it has entries (decision, owner, 2026-10-05; see
+Developer mode). Developer mode decides only whether the roles are named: on, a line reads `<Role> · <job>`
+and an icon carries its role's name as its title; off, the same icons, states and counts, with no role name and
+no agent wording anywhere (text, title, aria or data attributes).
 
 **Icons** (decision, owner, 2026-10-05; replaces the earlier geometric glyphs): real, recognisable per-role
 icons, drawn as simple inline SVG line icons (24×24 viewBox, stroke `currentColor`, no fill, no external
@@ -340,19 +352,23 @@ library), no faces, no emoji:
 | Sentry | shield |
 
 Sub-workers show with their role's icon. **Colours are calm** (decision, owner, 2026-10-05: no loud colours):
-icons take the page's own theme tokens (text, muted text, the one accent for `owner`), in light and dark;
+icons take the page's own theme tokens (text, muted text, and the page's owner colour `--you` for `owner`), in light and dark;
 no per-role palette, no bright hues.
+- [decision] Crew strip owner state colour -> the page's owner colour `--you` ("Sizde"), in both modes
+  date: 2026-10-05
+  by: Serkan
+  source: owner in chat, 2026-10-05: "A bence."
 
 **Counts:** the strip opens with one icon per role that has an entry, with a count badge when more than one
 of that role is working (e.g. magnifier ·2). Under it, **one line each:** `<icon> <Role> · <job>`, e.g.
-`[magnifier] Scout · DOTS research`.
+`[magnifier] Scout · DOTS research`; with developer mode off `<icon> <job>`, e.g. `[magnifier] DOTS araştırması`.
 
 **States:**
 
 | State | Look | Meaning |
 |---|---|---|
 | working | icon pulses slowly | an agent is running on the job |
-| owner | steady brand (accent) colour + named reason | the job waits on the owner; reason is one of **decision / sign-in / connection / approval** (borrowed from OpenAI DOTS) |
+| owner | steady owner colour (`--you`, the page's "Sizde" colour) + named reason | the job waits on the owner; reason is one of **decision / sign-in / connection / approval** (borrowed from OpenAI DOTS) |
 | idle | dimmed | the agent has finished, or Lead is between jobs |
 
 - Under `prefers-reduced-motion` there is no pulse; working shows as a static outline.
@@ -419,7 +435,7 @@ its Lead or workers; CTRL's crew never addresses this owner.
 |---|---|
 | `templates/crew/{lead,architect,builder,scout,sentry}.md` | New: each role's agent body — job, limits, brief template, reply shape, log-path rule, the Tracker `crew` calls (Lead and any opener). Lead's also: the Ledger lines, the Delivery check and journal line, Distill, the post-compact fallback. |
 | `tools/crew.js` | New: reads `crew` from config, writes the five stamped definitions into the workspace's `.claude/agents/`; `--check` reports drift without writing. |
-| `tools/tracker.js` | `crew` subcommand; `crew` array in `rows.json`; `row --parent` and grouped rendering (Tracker row groups); strip rendering (inline SVG role icons, count badges, three states, reduced motion, click target); strip and agent wording only when the workspace config has `devMode: true` (read at render). |
+| `tools/tracker.js` | `crew` subcommand; `crew` array in `rows.json`; `row --parent` and grouped rendering (Tracker row groups); strip rendering (inline SVG role icons, count badges, three states, reduced motion, click target); strip shown in both modes; role names and agent wording only when the workspace config has `devMode: true` (read at render). |
 | `templates/tracker/` | Strip styles and markup in the page template, icon colours from the theme tokens; group fold styles. |
 | `hooks/session-start.js` | Main session with crew on: a Voice line (talk only; open Lead at the first job; the Tracker is yours; relay completion notices to Lead verbatim). Developer-mode line: off (default) — name no agent, role or model, speak of the work in the first person; on — the crew may be named. Worker line (~line 182): write the result to the log first, then reply path + one line; log under `.joserah/desk/crew/`. Stays stdin-free (its header says why); everything that needs the hook payload lives in `hooks/crew.js`. |
 | `tools/ledger.js` | New: `add <kind> <job> <text> [path]` appends one line in the Ledger format; `open` prints open jobs, owner-waiting lines, last decisions and Lead's agent id; `stamp` for the hooks. |
@@ -459,7 +475,8 @@ its Lead or workers; CTRL's crew never addresses this owner.
   unknown role or effort is an error; an unstamped same-named file is not overwritten; `--check` finds drift.
 - `tracker.js crew`: upsert by role + job; unknown state or reason refused; render shows icon, line, state
   class and reason; one inline SVG per role, no emoji; count badge only when two or more of a role are working
-  or waiting; no strip and no "agent" wording with `devMode` off or absent; reduced-motion rule present;
+  or waiting; with `devMode` off or absent the strip shows its icons, states and badge but no role name and no
+  "agent"/"ajan" anywhere on the page, and the tr run label is "Sürüyor"; reduced-motion rule present;
   `rows.json` without `crew` renders as before. Icons use only theme colour tokens (no hex colour inside an
   icon). Row groups: `--parent` naming no row is refused; a parent with a parent is refused; finished sub-jobs fold
   under their main job, closed by default; an agent-working or owner row is never inside a `<details>` and
