@@ -16,10 +16,22 @@ export function headers(): MiddlewareHandler<Env> {
   };
 }
 
-export function clientAddr(c: Context<Env>): string { return c.env?.incoming?.socket?.remoteAddress ?? 'unknown'; }
-/** A local path only: no other host (`//x`, `/\x`), and never the login page itself (no sign-in loop). */
+/**
+ * The address the rate limit counts by. Behind a declared proxy (`proxy: true`) every request comes from the proxy, so the
+ * right-most `X-Forwarded-For` entry — the one the proxy itself appended — names the client; without a proxy the header is
+ * the client's own word and is ignored.
+ */
+export function clientAddr(c: Context<Env>, proxy = false): string {
+  if (proxy) {
+    const last = (c.req.header('x-forwarded-for') ?? '').split(',').map((s) => s.trim()).filter(Boolean).pop();
+    if (last) return last;
+  }
+  return c.env?.incoming?.socket?.remoteAddress ?? 'unknown';
+}
+
+/** A local path only: no other host (`//x`, `/\x`, a control character a browser drops), never the login page itself (no sign-in loop). */
 export function safeNext(next: string | undefined): string {
-  return next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') &&!/^\/login(?:[/?#]|$)/.test(next) ? next : '/';
+  return next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !/[\x00-\x1f\x7f]/.test(next) && !/^\/login(?:[/?#]|$)/.test(next) ? next : '/';
 }
 
 // Public: no session needed. /logout only clears the cookie, so a signed-out page can still use it without a redirect chain.

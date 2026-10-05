@@ -14,18 +14,20 @@ export function register(app: App, deps: AppDeps): void {
   app.get('/login', (c) => (deps.auth.state.kind === 'ready' ? c.html(page(workspaceLang(deps.workspace), safeNext(c.req.query('next')))) : c.redirect('/setup', 302)));
   app.post('/login', async (c) => {
     const lang = workspaceLang(deps.workspace); const L = LABELS[lang];
-    if (deps.auth.state.kind !== 'ready') return c.redirect('/setup', 302);
-    const addr = clientAddr(c); const t = Date.now();
+    const body = await c.req.parseBody();
+    // No await from here on: check, verify (synchronous scrypt) and fail run as one step, so parallel tries cannot all pass the gate.
+    const state = deps.auth.state;
+    if (state.kind !== 'ready') return c.redirect('/setup', 302);
+    const addr = clientAddr(c, deps.config().proxy); const t = Date.now();
     const gate = deps.limiter.check(addr, t);
     if (!gate.ok) { c.header('Retry-After', String(gate.retryAfterSec)); return c.html(page(lang, '/', L.limited.replace('{s}', String(gate.retryAfterSec))), 429); }
-    const body = await c.req.parseBody();
     const next = safeNext(typeof body.next === 'string' ? body.next : undefined);
-    if (typeof body.password !== 'string' || !verifyPassword(body.password, deps.auth.state.file.scrypt)) {
+    if (typeof body.password !== 'string' || !verifyPassword(body.password, state.file.scrypt)) {
       deps.limiter.fail(addr, t);
       return c.html(page(lang, next, L.wrong), 401);
     }
     deps.limiter.success(addr);
-    setCookie(c, COOKIE, signSession(deps.auth.state.file), { httpOnly: true, sameSite: 'Strict', path: '/', secure: deps.secureCookies, maxAge: 30 * 86400 });
+    setCookie(c, COOKIE, signSession(state.file), { httpOnly: true, sameSite: 'Strict', path: '/', secure: deps.secureCookies, maxAge: 30 * 86400 });
     return c.redirect(next, 303);
   });
   app.post('/logout', (c) => { deleteCookie(c, COOKIE, { path: '/' }); return c.redirect('/login', 303); });

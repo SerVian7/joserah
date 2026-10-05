@@ -19,8 +19,20 @@ export function loadAuth(stateDir: string): AuthState {
   if (!text.trim()) throw new AuthFileError(`${p} is empty — restore it or delete it to run setup again`);
   let j: AuthFile;
   try { j = JSON.parse(text); } catch { throw new AuthFileError(`${p} is not valid JSON`); }
-  if (j?.version !== 1 || !j.scrypt?.salt || !j.scrypt?.hash || typeof j.cookieKey !== 'string' || j.cookieKey.length < 32 || typeof j.generation !== 'number') throw new AuthFileError(`${p} is missing fields`);
+  if (j?.version !== 1 || !scryptOk(j.scrypt) || typeof j.cookieKey !== 'string' || j.cookieKey.length < 32 || !Number.isSafeInteger(j.generation) || j.generation < 1) {
+    throw new AuthFileError(`${p} is missing fields or holds bad values — restore it or delete it to run setup again`);
+  }
   return { kind: 'ready', file: j };
+}
+
+// A file that loads must also verify: parameters a login could not run with stop the server instead of failing every sign-in.
+const int = (v: unknown, lo: number, hi: number) => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
+function scryptOk(s: unknown): boolean {
+  if (!s || typeof s !== 'object') return false;
+  const o = s as Record<string, unknown>;
+  const str = (v: unknown) => typeof v === 'string' && v.length > 0;
+  return str(o.salt) && str(o.hash) && int(o.N, 1024, 1048576) && ((o.N as number) & ((o.N as number) - 1)) === 0
+    && int(o.r, 1, 32) && int(o.p, 1, 16) && int(o.keylen, 16, 128) && 128 * (o.N as number) * (o.r as number) <= 32 * 1024 * 1024;
 }
 
 export function writeAuth(stateDir: string, file: AuthFile): void {
@@ -76,7 +88,9 @@ export class RateLimiter {
 
 export function originOk(reqUrl: string, origin: string | undefined, extra: (string | null)[]): boolean {
   if (!origin) return false;
-  return origin === new URL(reqUrl).origin || extra.some((x) => !!x && x === origin);
+  // Declared origins are compared as origins, so `https://host/` from server.json matches the browser's `https://host`.
+  const norm = (x: string | null) => (x && URL.canParse(x) ? new URL(x).origin : null);
+  return origin === new URL(reqUrl).origin || extra.some((x) => { const o = norm(x); return o !== null && o !== 'null' && o === origin; });
 }
 
 export function setupToken(stateDir: string): string {

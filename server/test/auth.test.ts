@@ -67,3 +67,22 @@ test('setup token is created once and cleared', (t) => {
   clearSetupToken(d);
   assert.notEqual(setupToken(d), a);
 });
+
+test('origin: a declared public origin matches with or without a trailing slash', () => {
+  assert.ok(originOk('http://127.0.0.1:4747/api/x', 'https://w.example.invalid', ['https://w.example.invalid/']));
+  assert.ok(!originOk('http://127.0.0.1:4747/api/x', 'https://w.example.invalid.evil.example.invalid', ['https://w.example.invalid/']));
+  assert.ok(!originOk('http://127.0.0.1:4747/api/x', 'null', ['not a url', null]));
+});
+
+test('an auth file whose scrypt parameters are missing or absurd stops the server', (t) => {
+  const d = tmpdir(t);
+  const good = newAuthFile('pw-0123456789');
+  const bad = (scrypt: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
+    fs.writeFileSync(path.join(d, 'auth.json'), JSON.stringify({ ...good, scrypt: { ...good.scrypt, ...scrypt }, ...extra }));
+    assert.throws(() => loadAuth(d), AuthFileError, JSON.stringify({ scrypt, extra }));
+  };
+  bad({ keylen: undefined }); bad({ N: 1000 }); bad({ r: 0 }); bad({ p: 'x' }); bad({ keylen: 8 }); bad({ salt: 5 });
+  bad({}, { generation: 1.5 });
+  writeAuth(d, good);
+  assert.equal(loadAuth(d).kind, 'ready');
+});

@@ -37,8 +37,12 @@ if (listen.https) {
   tls = { cert: read(listen.https.cert), key: read(listen.https.key) };
 }
 
+// Behind a proxy the browser's Origin is the proxy's address, never ours: without it declared, every POST (sign-in too) is refused.
+if (cfg.proxy && !cfg.publicOrigin) fail('server.json: "proxy": true needs "publicOrigin" — the address the browser opens, such as https://host');
+
 const host = listen.hostname === '0.0.0.0' ? '127.0.0.1' : listen.hostname.includes(':') ? `[${listen.hostname}]` : listen.hostname;
-const baseUrl = `${listen.secure ? 'https' : 'http'}://${host}:${listen.port}`;
+// The scheme this process speaks: https only with our own certificate. `listen.secure` (proxy too) is for the cookie flag.
+const baseUrl = `${tls ? 'https' : 'http'}://${host}:${listen.port}`;
 const deps: AppDeps = { workspace, stateDir: state, config: () => cfg, baseUrl, health: { signedIn: null, lastJobOk: null }, auth: { state: authState }, limiter: new RateLimiter(), secureCookies: listen.secure };
 const app = createApp(deps);
 const ready = () => {
