@@ -186,7 +186,9 @@ function reinject(root, input) {
  * (no publish). Never for a type that is not a crew role; nothing without a Tracker for today; any error
  * leaves the files alone.
  */
-const pendingFile = (session) => path.join(require('os').tmpdir(), `joserah-crew-pending-${safe(session || '-')}.json`);
+// under JOSERAH_STATE_DIR when set (tests, a dry run), else the OS temp dir: two runs never share a list
+const stateDir = () => process.env.JOSERAH_STATE_DIR || require('os').tmpdir();
+const pendingFile = (session) => path.join(stateDir(), `joserah-crew-pending-${safe(session || '-')}.json`);
 const PENDING_TTL = 60 * 60 * 1000;
 function readPending(session) {
   try { const j = JSON.parse(fs.readFileSync(pendingFile(session), 'utf8')); return Array.isArray(j) ? j : []; } catch { return []; }

@@ -740,9 +740,13 @@ function render(dir, { quiet = false } = {}) {
     + css.replace(/border-radius:(?!0[;}\s!])[^;}]*;?/g, '').replace(/box-shadow:(?!none[;}\s!])[^;}]*;?/g, '') + b);
   // a page made before the strip gets its styles once
   if (crew.length && !html.includes('@keyframes crew-pulse')) html = html.replace('</style>', `${CREW_CSS}\n</style>`);
+  // the Theme's tokens (tools/lib/theme.js) before the page's own styles, so a page's own palette has the last
+  // word and the Theme fills in only what the page does not define (Lead, 2026-10-05: placed after them, they
+  // turned a page's brand links blue); the console after everything, so its layout wins
+  const first = html.search(/<style[\s>]/);
+  if (first >= 0) html = `${html.slice(0, first)}<style id="theme">\n${theme.TOKENS_CSS}\n</style>\n${html.slice(first)}`;
   const at = html.lastIndexOf('</style>') + '</style>'.length;
-  // the Theme's tokens after the page's own styles (one source for every page: tools/lib/theme.js), then the console
-  html = `${html.slice(0, at)}\n<style id="theme">\n${theme.TOKENS_CSS}\n</style>\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
+  html = `${html.slice(0, at)}${first >= 0 ? '' : `\n<style id="theme">\n${theme.TOKENS_CSS}\n</style>`}\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
   // the clamp first (a restored long list opens through its button), then the panel, then the saved state
   html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n</body>`);
   // the elapsed-time script only when a strip line has something to count

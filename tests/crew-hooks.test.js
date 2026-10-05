@@ -3,6 +3,8 @@
 const test = require('node:test'); const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const { spawnSync } = require('child_process');
 const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+// the hook's own state (the pending descriptions) in a folder of this test run alone
+process.env.JOSERAH_STATE_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'joserah-crew-test-'));
 const hook = (cwd, event, payload, now = '2026-10-05T09:00:00') => spawnSync(process.execPath,
   [path.join(PLUGIN_ROOT, 'hooks', 'crew.js'), event],
   { cwd, input: payload, encoding: 'utf8', env: { ...process.env, JOSERAH_NOW: now }, timeout: 5000 });
@@ -389,7 +391,7 @@ const strip = (tr) => (fs.readFileSync(path.join(tr, 'index.html'), 'utf8').matc
 // the captured payloads share two session ids: their pending lists are cleared before and after each test,
 // so a run that used the same payloads (a dry run, an interrupted test) cannot leave one behind
 function pendingClean(t) {
-  const clear = () => { for (const s of ['304afa0b-b958-48d9-adc9-44e178716e7f', '2fc43959-12c3-4d6f-88b3-645a48ae425b']) try { fs.rmSync(path.join(require('os').tmpdir(), `joserah-crew-pending-${s}.json`), { force: true }); } catch { /* gone */ } };
+  const clear = () => { for (const s of ['304afa0b-b958-48d9-adc9-44e178716e7f', '2fc43959-12c3-4d6f-88b3-645a48ae425b']) try { fs.rmSync(path.join(process.env.JOSERAH_STATE_DIR, `joserah-crew-pending-${s}.json`), { force: true }); } catch { /* gone */ } };
   clear();
   t.after(clear);
 }
@@ -460,4 +462,23 @@ test('A1: crew.js is registered for the Agent tool\'s PreToolUse', () => {
   const g = h.PreToolUse.find((x) => x.matcher === 'Agent|Task');
   assert.ok(g, 'a PreToolUse group for the Agent tool');
   assert.deepStrictEqual(g.hooks, [{ type: 'command', command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/crew.js" pre-tool-use', shell: 'bash' }]);
+});
+
+// Lead, 2026-10-05: one full-suite run saw "Probe job" where the agent id belonged. The pending lists sat at a
+// fixed temp path keyed by the captured session ids, so another run at the same time (a second suite, a
+// dry run) shared them. The hook keeps them under JOSERAH_STATE_DIR when it is set; these tests use their own.
+test('A1: pending descriptions live under JOSERAH_STATE_DIR — a list left elsewhere is never read', (t) => {
+  const { ws, store } = trackerFixture(t);
+  const shared = path.join(require('os').tmpdir(), 'joserah-crew-pending-2fc43959-12c3-4d6f-88b3-645a48ae425b.json');
+  const before = fs.existsSync(shared) ? fs.readFileSync(shared) : null;
+  fs.writeFileSync(shared, JSON.stringify([{ tu: 'x', role: 'builder', desc: 'Someone else\'s job', at: Date.now() }]));
+  t.after(() => { if (before) fs.writeFileSync(shared, before); else fs.rmSync(shared, { force: true }); });
+  const own = path.join(tmpdir(t), 'state');
+  fs.mkdirSync(own);
+  const p = JSON.parse(fs.readFileSync(path.join(FX, 'fg-SubagentStart1.json'), 'utf8'));
+  p.agent_type = 'builder';
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'crew.js'), 'subagent-start'],
+    { cwd: ws, input: JSON.stringify(p), encoding: 'utf8', env: { ...process.env, JOSERAH_NOW: '2026-10-05T09:00:00', JOSERAH_STATE_DIR: own }, timeout: 8000 });
+  assert.strictEqual(r.status, 0);
+  assert.deepStrictEqual(store().crew.map((e) => e.job), ['a2c4c87ea93f66eaa'], 'no description of its own: its agent id, not another run\'s');
 });

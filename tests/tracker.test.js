@@ -476,13 +476,30 @@ test('theme: tokens and base console rules come from tools/lib/theme.js; every r
   const f = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'tracker', 'index.html'), 'utf8');
   assert.ok(f.includes(`<style id="theme">\n${theme.TOKENS_CSS}\n</style>`), 'template and theme agree');
   assert.strictEqual(f.split(':root{color-scheme').length, 2, 'the tokens once, in the theme style');
-  // a page made before the move gets the theme style once, after its own style, before the console
+  // a page made before the move gets the theme style once, before its own styles (a page's own tokens win,
+  // owner's page palette, 2026-10-05: the links had turned blue), and the console last
   const dir = tmpdir(t); init(dir);
   fs.writeFileSync(path.join(dir, 'index.html'), page(dir).replace(/<style id="theme">[\s\S]*?<\/style>\n/, ''));
   render(dir); render(dir);
   const h = page(dir);
   assert.strictEqual(h.split('<style id="theme">').length, 2, 'one theme style');
-  assert.ok(h.indexOf('<style>') < h.indexOf('<style id="theme">') && h.indexOf('<style id="theme">') < h.indexOf('<style id="console">'));
+  assert.ok(h.indexOf('<style id="theme">') < h.indexOf('<style>') && h.indexOf('<style>') < h.indexOf('<style id="console">'));
+  assert.ok(f.indexOf('<style id="theme">') < f.indexOf('<style>'), 'the template has it first too');
+});
+// Lead, 2026-10-05: today's Daily Tracker turned its links blue after the Theme moved out (ef85fca). The
+// render put the shared tokens after the page's own styles, so they overrode the page's palette. A page's
+// own tokens are the last word; the Theme only fills in what the page does not define.
+test('a page\'s own colour tokens win over the Theme\'s', (t) => {
+  const theme = require('../tools/lib/theme');
+  const dir = tmpdir(t); init(dir);
+  const own = ':root{--bg:#f5f3f2;--ink:#2a2326;--link:#8B0D32;--brand:#8B0D32}';
+  fs.writeFileSync(path.join(dir, 'index.html'), page(dir).replace('<style>\n', `<style>\n${own}\n`));
+  render(dir); render(dir);
+  const h = page(dir);
+  const last = (tok) => { const all = [...h.matchAll(new RegExp(`${tok}:([^;}]+)`, 'g'))]; return all[all.length - 1][1]; };
+  assert.deepStrictEqual([last('--link'), last('--bg'), last('--ink')], ['#8B0D32', '#f5f3f2', '#2a2326'], 'in document order, the page has the last word');
+  assert.ok(h.includes(theme.TOKENS_CSS), 'the Theme is still there, for what the page does not define');
+  assert.match(last('--run'), /^#(2563a8|6ea8e6)$/, 'a token the page lacks comes from the Theme (its light or dark value)');
 });
 test('a main job with sub-jobs: a category line in each group; only a finished one folds; running shows everywhere', (t) => {
   const dir = tmpdir(t); init(dir);
