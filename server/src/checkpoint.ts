@@ -14,7 +14,8 @@ export const SERVER_WRITES = ['.joserah/desk/jobs/**', '.joserah/desk/artifacts/
 const JOB_RECORDS = '.joserah/desk/jobs/**';
 const MANIFEST_LIMIT = 20000;
 /** Folders git does not see (ignored): watched by size and mtime, contents never read. */
-const UNTRACKED_WATCH = ['imports', 'keys'];
+// keys/ first: it is small and protected, so a large imports/ cannot push it past MANIFEST_LIMIT.
+const UNTRACKED_WATCH = ['keys', 'imports'];
 const LOCK_WAIT_MS = 500;
 
 /** `dir/**` is the folder and everything under it; anything else is an exact path. */
