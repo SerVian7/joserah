@@ -148,3 +148,33 @@ test('--check: a missing definition is drift; an owner file and crew off are not
   const off = ws(t, { crew: false });
   assert.strictEqual(runTool('crew.js', [off, '--check']).status, 0);
 });
+
+// Lead decision, 2026-10-05 (plan Task 6.2 Step 6): switching the crew off
+// takes away what the generator wrote, and only that.
+test('crew off removes only stamped definitions, one line each; an unstamped file is kept', (t) => {
+  const dir = ws(t); // scaffold wrote all five, stamped
+  fs.writeFileSync(agent(dir, 'scout'), 'mine');
+  const p = path.join(dir, '.joserah', 'config.json');
+  for (const off of [false, { enabled: false }]) {
+    runTool('crew.js', [dir]);
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8')); cfg.crew = off;
+    fs.writeFileSync(p, JSON.stringify(cfg));
+    const r = runTool('crew.js', [dir]);
+    assert.strictEqual(r.status, 0, r.stderr);
+    for (const role of ROLES.filter((x) => x !== 'scout')) {
+      assert.ok(!fs.existsSync(agent(dir, role)), `${role} removed`);
+      assert.match(r.stdout, new RegExp(`^removed ${role}$`, 'm'));
+    }
+    assert.strictEqual(fs.readFileSync(agent(dir, 'scout'), 'utf8'), 'mine', 'owner file untouched');
+    assert.doesNotMatch(r.stdout, /removed scout/);
+    assert.strictEqual(runTool('crew.js', [dir]).stdout.match(/^removed /mg), null, 'a second run removes nothing');
+    delete cfg.crew; fs.writeFileSync(p, JSON.stringify(cfg));
+  }
+});
+
+test('crew off with --check removes nothing', (t) => {
+  const dir = ws(t, { crew: false });
+  const r = runTool('crew.js', [dir, '--check']);
+  assert.strictEqual(r.status, 0);
+  assert.ok(fs.existsSync(agent(dir, 'lead')), '--check never writes or removes');
+});
