@@ -103,7 +103,7 @@
  *       rows.json; a row with `time` keeps it. A `time` of DD.MM (a carried-over
  *       row, a plan's day) orders by that date, before any time of today. A page's
  *       own <main> tag and what stands in it before <!-- crew --> are kept.
- *       The console look (CONSOLE_CSS) and
+ *       The Theme's tokens (<style id="theme">, tools/lib/theme.js), the console look (CONSOLE_CSS) and
  *       the clamp, panel and state scripts are put back last on every render, and
  *       any non-zero radius or shadow in the page's styles is stripped. Only
  *       <main>, those blocks and the page's "updated" stamp (data-t) change.
@@ -137,6 +137,7 @@ const CREW_STATES = ['work', 'owner', 'idle'];
 const CREW_REASONS = ['decision', 'sign-in', 'connection', 'approval'];
 const CREW_EFFORTS = ['low', 'medium', 'high'];
 const { ICONS } = require('./lib/crew-icons');
+const theme = require('./lib/theme');
 const ROLE_NAME = { voice: 'Voice', lead: 'Lead', architect: 'Architect', builder: 'Builder', scout: 'Scout', sentry: 'Sentry' };
 // The strip's look, theme tokens only (owner, 2026-10-05: calm, no new hues): icons in the muted text
 // token; working pulses slowly; owner takes the page's owner colour; idle is dimmed; reduced motion,
@@ -247,46 +248,22 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0;'
 // rounded corners, no shadows; hairline lines, mono group heads with their counts, a tabular
 // right-aligned time column; a long list shows its first lines, fades, and opens in place as a bounded
 // scroll area; Done today is one fold; Plans stand alone below a faint rule. Theme tokens only.
-// The template carries it as <style id="console"> and every render puts it back last, so it wins over
-// a page's older styles and a re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
+// The shared part (mono font, no radius or shadow, group heads, the clamp) is the Theme's BASE_CSS
+// (tools/lib/theme.js); the board's own layout follows it. The template carries it as
+// <style id="console"> and every render puts it back last, so it wins over a page's older styles and a
+// re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
 const CONSOLE_CSS = [
-  ':root{--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}',
-  '*,*::before,*::after{border-radius:0;box-shadow:none}',
+  theme.BASE_CSS,
   'main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}',
   'main ol,main ul{list-style:none;margin:0;padding:0}',
   'main li{margin:0;padding:0;background:none;border:0}',
   'main>ol{display:grid;gap:28px}',
   'li.sec{display:block}li.sec.pl{padding-top:20px;border-top:1px solid var(--faint)}',
-  '.hd{display:flex;align-items:baseline;gap:8px;padding:0 0 8px;font:600 10.5px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--faint)}',
-  '.hd span{font-weight:500;letter-spacing:.04em;color:var(--faint);font-variant-numeric:tabular-nums}',
-  'summary.hd{cursor:pointer;list-style:none}summary.hd::-webkit-details-marker{display:none}',
-  'summary.hd::before{content:"\\25B8";width:14px;letter-spacing:0;color:var(--faint)}details[open]>summary.hd::before{content:"\\25BE"}',
-  'summary.hd .lt{margin-left:auto}summary.hd:hover{color:var(--ink)}summary.hd:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
-  '.clip{position:relative}',
-  '.clip.clamp{max-height:20rem;overflow:hidden}',
-  '.clip.clamp.open{max-height:min(64vh,560px);overflow-y:auto;overscroll-behavior:contain;border-bottom:1px solid var(--faint)}',
-  '@media (prefers-reduced-motion: no-preference){.clip.clamp{transition:max-height .22s ease}}',
-  '.fade{position:relative;height:64px;margin-top:-64px;background:linear-gradient(to bottom,transparent,var(--bg) 88%);cursor:pointer}',
-  '.clip.open+.fade{display:none}',
-  '.more{display:block;width:100%;margin:0;padding:9px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--muted);text-align:left;cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.06em}',
-  '.more::before{content:"\\25BE";display:inline-block;width:14px;color:var(--faint)}',
-  '.more[aria-expanded="true"]::before{content:"\\25B4"}',
-  '.more:hover{color:var(--ink)}',
-  '.more:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
   ...STRIP_CSS,
   '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}}',
 ].join('\n');
-// The clamp: a long list shows its first rows plus a slice of the next (measured; a CSS max-height
-// stands in without script); the button, or a click on the fade, opens it in place as a bounded scroll
-// area and closes it again without moving the page; focus stays on the button.
-const CLIP_JS = [
-  '(function(){var N=5;function fit(c){if(c.classList.contains("open"))return;var l=c.querySelectorAll(":scope>ol>li:not(.crew-dl)");if(l.length<=N)return;var t=c.getBoundingClientRect().top,b=l[N-1].getBoundingClientRect().bottom,n=l[N].getBoundingClientRect().height;c.style.maxHeight=Math.round(b-t+Math.min(30,n/2))+"px"}',
-  'function all(){document.querySelectorAll(".clip.clamp").forEach(fit)}',
-  'function toggle(b){var c=document.getElementById(b.getAttribute("aria-controls")),o=b.getAttribute("aria-expanded")!=="true",r=c.getBoundingClientRect(),h0=r.height;b.setAttribute("aria-expanded",String(o));c.classList.toggle("open",o);if(o){c.style.maxHeight=""}else{c.scrollTop=0;fit(c);if(r.top<0){var h1=parseFloat(c.style.maxHeight)||h0;window.scrollBy(0,h1-h0)}}b.textContent=o?b.dataset.less:b.dataset.label}',
-  'document.addEventListener("click",function(e){var b=e.target.closest(".more");if(b){toggle(b);return}var f=e.target.closest(".fade");if(f){var m=f.parentNode.querySelector(".more");if(m)toggle(m)}});',
-  'document.addEventListener("toggle",function(e){var t=e.target;if(t.querySelectorAll)t.querySelectorAll(".clip.clamp").forEach(fit);var c=t.closest&&t.closest(".clip.clamp");if(c)fit(c)},true);',
-  'var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(all,120)});all();window.addEventListener("load",all)})();',
-].join('\n');
+// The clamp's script is the Theme's (tools/lib/theme.js).
+const { CLIP_JS } = theme;
 const CLAMP = 5;
 // The strip's elapsed time (owner, 2026-10-05: "10 dk dır hiçbir şey olmadı mı abi?"): a working or
 // waiting line's <time data-since> reads how long it has been in that state, from the page's own clock,
@@ -711,8 +688,9 @@ function render(dir, { quiet = false } = {}) {
     return `${open}${at >= 0 ? inner.slice(0, at) : '\n'}<!-- crew -->\n${strip}${ol}\n</main>`;
   })
     .replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
-  // the console style and the clamp script are rebuilt last; no rounded corner or shadow survives in any style
-  html = html.replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
+  // the theme and console styles and the clamp script are rebuilt last; no rounded corner or shadow
+  // survives in any style
+  html = html.replace(/\n<style id="theme">[\s\S]*?<\/style>/, '').replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
     .replace(/<script id="since">[\s\S]*?<\/script>\n/, '')
     .replace(/<script id="panel">[\s\S]*?<\/script>\n/, '').replace(/<script id="state">[\s\S]*?<\/script>\n/, '');
   html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) => a
@@ -720,7 +698,8 @@ function render(dir, { quiet = false } = {}) {
   // a page made before the strip gets its styles once
   if (crew.length && !html.includes('@keyframes crew-pulse')) html = html.replace('</style>', `${CREW_CSS}\n</style>`);
   const at = html.lastIndexOf('</style>') + '</style>'.length;
-  html = `${html.slice(0, at)}\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
+  // the Theme's tokens after the page's own styles (one source for every page: tools/lib/theme.js), then the console
+  html = `${html.slice(0, at)}\n<style id="theme">\n${theme.TOKENS_CSS}\n</style>\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
   // the clamp first (a restored long list opens through its button), then the panel, then the saved state
   html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n</body>`);
   // the elapsed-time script only when a strip line has something to count

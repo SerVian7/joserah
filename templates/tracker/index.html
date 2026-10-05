@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tracker</title>
 <style>
-:root{color-scheme:light dark;--bg:#f6f6f5;--card:#ffffff;--line:#dcdcd9;--ink:#222222;--muted:#5c5c59;--faint:#797976;--run:#2563a8;--you:#b4232a;--ok:#2f7d55;--wait:#a8650f;--link:#2563a8;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}}
-:root[data-theme="dark"]{--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--sans)}
 .top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
@@ -16,14 +13,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--sans)}
 .top .upd{color:var(--faint);white-space:nowrap}
 .crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}.crew-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:2px 0 6px}.crew-sum span{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}.crew svg{width:18px;height:18px;flex:none;color:var(--muted)}.crew ul{list-style:none;margin:0;padding:0}.crew li.crew-line{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;background:none;border:0;border-radius:0;font-size:13px}.crew-line span{flex:1;min-width:0;overflow-wrap:anywhere}.crew-line a{color:inherit}.crew-line em{font-style:normal;color:var(--you)}.crew-line.work svg,.crew-sum .work svg{animation:crew-pulse 2.4s ease-in-out infinite}.crew-line.owner svg{color:var(--you)}.crew-sum .owner svg{color:var(--you)}.crew-line.idle,.crew-sum .idle{opacity:.5}@keyframes crew-pulse{50%{opacity:.4}}@media (prefers-reduced-motion: reduce){.crew-line.work svg,.crew-sum .work svg{animation:none}}
 </style>
+<style id="theme">
+:root{color-scheme:light dark;--bg:#f6f6f5;--card:#ffffff;--line:#dcdcd9;--ink:#222222;--muted:#5c5c59;--faint:#797976;--run:#2563a8;--you:#b4232a;--ok:#2f7d55;--wait:#a8650f;--link:#2563a8;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}}
+:root[data-theme="dark"]{--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac;--faint:#8f8f8b;--run:#6ea8e6;--you:#ef7b80;--ok:#5fbf8f;--wait:#e0a24f;--link:#6ea8e6}
+</style>
 <style id="console">
 :root{--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
 *,*::before,*::after{border-radius:0;box-shadow:none}
-main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}
-main ol,main ul{list-style:none;margin:0;padding:0}
-main li{margin:0;padding:0;background:none;border:0}
-main>ol{display:grid;gap:28px}
-li.sec{display:block}li.sec.pl{padding-top:20px;border-top:1px solid var(--faint)}
 .hd{display:flex;align-items:baseline;gap:8px;padding:0 0 8px;font:600 10.5px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--faint)}
 .hd span{font-weight:500;letter-spacing:.04em;color:var(--faint);font-variant-numeric:tabular-nums}
 summary.hd{cursor:pointer;list-style:none}summary.hd::-webkit-details-marker{display:none}
@@ -40,6 +37,11 @@ summary.hd .lt{margin-left:auto}summary.hd:hover{color:var(--ink)}summary.hd:foc
 .more[aria-expanded="true"]::before{content:"\25B4"}
 .more:hover{color:var(--ink)}
 .more:focus-visible{outline:1px solid var(--link);outline-offset:2px}
+main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}
+main ol,main ul{list-style:none;margin:0;padding:0}
+main li{margin:0;padding:0;background:none;border:0}
+main>ol{display:grid;gap:28px}
+li.sec{display:block}li.sec.pl{padding-top:20px;border-top:1px solid var(--faint)}
 section.crew{padding:0;border:0}
 .crew .hd{flex-wrap:wrap}
 .crew .hd .crew-sum{display:flex;flex-wrap:wrap;margin-left:auto;gap:14px;padding:0;border:0;letter-spacing:0}

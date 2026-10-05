@@ -463,6 +463,27 @@ test('console look: no rounded corners and no shadows, a page made before it inc
   assert.strictEqual(page(dir).split('<style id="console">').length, 2, 'one console style');
   assert.strictEqual(page(dir).split('<script id="clip">').length, 2, 'one clamp script');
 });
+// The Theme (Trail spec, 2026-10-05, option A): tokens and the base console rules live in tools/lib/theme.js,
+// one source for the Tracker, the Trail and every later page.
+test('theme: tokens and base console rules come from tools/lib/theme.js; every render puts the theme back', (t) => {
+  const theme = require('../tools/lib/theme.js');
+  assert.match(theme.TOKENS_CSS, /^:root\{color-scheme:light dark;--bg:/);
+  assert.match(theme.TOKENS_CSS, /\n@media \(prefers-color-scheme: dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
+  assert.match(theme.TOKENS_CSS, /\n:root\[data-theme="dark"\]\{/);
+  assert.ok(CONSOLE_CSS.startsWith(`${theme.BASE_CSS}\n`), 'the console style opens with the shared base');
+  assert.strictEqual(CLIP_JS, theme.CLIP_JS);
+  assert.strictEqual(theme.css(), `${theme.TOKENS_CSS}\n${theme.BASE_CSS}`);
+  const f = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'tracker', 'index.html'), 'utf8');
+  assert.ok(f.includes(`<style id="theme">\n${theme.TOKENS_CSS}\n</style>`), 'template and theme agree');
+  assert.strictEqual(f.split(':root{color-scheme').length, 2, 'the tokens once, in the theme style');
+  // a page made before the move gets the theme style once, after its own style, before the console
+  const dir = tmpdir(t); init(dir);
+  fs.writeFileSync(path.join(dir, 'index.html'), page(dir).replace(/<style id="theme">[\s\S]*?<\/style>\n/, ''));
+  render(dir); render(dir);
+  const h = page(dir);
+  assert.strictEqual(h.split('<style id="theme">').length, 2, 'one theme style');
+  assert.ok(h.indexOf('<style>') < h.indexOf('<style id="theme">') && h.indexOf('<style id="theme">') < h.indexOf('<style id="console">'));
+});
 test('a main job with sub-jobs: a category line in each group; only a finished one folds; running shows everywhere', (t) => {
   const dir = tmpdir(t); init(dir);
   setRows(dir, [
