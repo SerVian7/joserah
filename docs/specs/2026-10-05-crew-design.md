@@ -113,8 +113,7 @@ turn it on — "like a dev mode"). A top-level key, **off by default** in every 
 - **Relation to `ownerIsDeveloper`:** none. That key was removed in 0.15.0 (`migrate.js` deletes it) because
   no config key should decide how technical the talk is in general. `devMode` is narrower: it governs the
   crew's visibility only, never how internals are named otherwise; that stays the owner's directive.
-- **Name:** `devMode` / "Developer mode" is proposed; no calmer term in the naming theme says it as plainly.
-  Awaits the owner's confirmation (Open/future).
+- **Name:** `devMode` / "Developer mode" (decision, owner, 2026-10-05: "Dev mode iyi ya").
 
 **Why a generator.** Effort can be set only in an agent definition's frontmatter; the Agent call can override
 the model but not the effort. So a tool writes the five agent definitions from config, and every config change
@@ -489,7 +488,8 @@ from the numbers whether crew stays the default.
 
 ## Open/future
 
-- **Developer mode's name:** `devMode` / "Developer mode" proposed; awaits the owner's confirmation before build.
+- ~~**Developer mode's name:** `devMode` / "Developer mode" proposed; awaits the owner's confirmation before build.~~
+  resolved: owner, 2026-10-05, kept devMode.
 - ~~**Model ids:** which id each default alias resolves to at build; pin full ids where needed.~~
   resolved: measured 2026-10-05, every alias matches the owner's choice; see Config.
 - ~~**Hook input:** the documented fields (agent_id, agent_type, transcript_path, source) are checked against a
