@@ -1,6 +1,8 @@
 # Crew orchestration — design
 
-**Status:** design, approved by the owner on 2026-10-05; not built.
+**Status:** design, approved by the owner on 2026-10-05; not built. Gaps closed the same day (Delivery,
+Distill, one log location, completion notices, Ledger), and developer mode, calm role icons and Tracker row
+groups added; plan: `docs/plans/2026-10-05-crew-plan.md`.
 **Source:** Serkan (owner, developer of Joserah), in chat, 2026-10-05. Names: CONTRIBUTING.md "Naming".
 
 ## Goal
@@ -25,14 +27,14 @@ Owner
             └─ Sentry   (each may open its own sub-workers under the same rules)
 ```
 
-| Role | Glyph | Does | Does not |
+| Role | Icon | Does | Does not |
 |---|---|---|---|
-| **Voice** | — | Talks to the owner, in their language; shields them from noise. Answers a one-lookup question itself (AGENTS.md §2). Keeps the Daily Tracker: rows, links, the Crew strip, publishing. Relays to and from Lead. Talks to the other side's Voice (CTRL). | Prepare pages or reports, research, edit files other than the Tracker's, plan, think about a job's content. |
-| **Lead** | ◆ | Manager and brain. Turns the owner's request into jobs, picks the role for each, writes the briefs, checks every result (diffs removed-lines-first), decides what goes back to Voice. Keeps one state file. | Talk to the owner. Do a worker's job itself beyond a quick check. |
-| **Architect** | △ | Plans and designs. Big jobs only: more than one defensible design, or work too large to hold at once (AGENTS.md §6). | Build. Get opened for a two-line change. |
-| **Builder** | ■ | Code: test first, the change, the commit. | Research beyond the code it touches. |
-| **Scout** | ● | Research, reading, sweeps, report pages (Case research, Decision flow, Wrap content). | Decide for the owner. |
-| **Sentry** | ◎ | Watch duty: mail checks, waiting on an outside event, polling a state. | Judge content; it reports what it saw and stops. |
+| **Voice** | speech bubble | Talks to the owner, in their language; shields them from noise. Answers a one-lookup question itself (AGENTS.md §2). Keeps the Daily Tracker: rows, links, the Crew strip, publishing. Relays to and from Lead. Talks to the other side's Voice (CTRL). With developer mode off (default) names no agent, role or model and speaks of the work in the first person. | Prepare pages or reports, research, edit files other than the Tracker's, plan, think about a job's content. |
+| **Lead** | brain | Manager and brain. Turns the owner's request into jobs, picks the role for each, writes the briefs, checks every result (diffs removed-lines-first), decides what goes back to Voice. Keeps the Ledger. Writes the journal line of finished work and both halves of Distill. | Talk to the owner. Do a worker's job itself beyond a quick check. |
+| **Architect** | compass | Plans and designs. Big jobs only: more than one defensible design, or work too large to hold at once (AGENTS.md §6). | Build. Get opened for a two-line change. |
+| **Builder** | wrench | Code: test first, the change, the commit. | Research beyond the code it touches. |
+| **Scout** | magnifier | Research, reading, sweeps, report pages (Case research, Decision flow, Wrap content). | Decide for the owner. |
+| **Sentry** | shield | Watch duty: mail checks, waiting on an outside event, polling a state. | Judge content; it reports what it saw and stops. |
 
 **Who talks to whom.** Owner ↔ Voice ↔ Lead ↔ workers. A worker never addresses Voice or the owner; Lead
 never addresses the owner. Nesting stays allowed (owner, 2026-10-01): any worker may open sub-workers with the
@@ -47,8 +49,8 @@ Sentry watches. Judgement belongs to Lead and the workers.
 - Kept for the whole conversation and resumed by message for every later job. A new job on a topic Lead
   already holds is a message, never a fresh brief.
 - One Lead at a time per conversation.
-- Near the context limit (the same ~300k threshold as the main session) Lead brings its state file fully up to
-  date and says so in one line; Voice opens a fresh Lead whose brief is the state file's path. The old Lead is
+- Near the context limit (the same ~300k threshold as the main session) Lead brings its Ledger fully up to
+  date and says so in one line; Voice opens a fresh Lead whose brief is the Ledger's path. The old Lead is
   not resumed again.
 - A worker that has finished is resumed by Lead for the next job on the same topic rather than briefed fresh.
 
@@ -83,6 +85,28 @@ with defaults.
 - `"enabled": false` (or `"crew": false`) switches the crew off: the workspace runs as today (orchestrate
   skill as it stands, Manager for waves).
 
+**Developer mode** (decision, owner, 2026-10-05: owners need not know about subagents; whoever wants to can
+turn it on — "like a dev mode"). A top-level key, **off by default** in every workspace:
+
+```json
+"devMode": false
+```
+
+- **Off:** the main session never names agents, roles or models to the owner. It speaks of the work in the
+  first person: "I'm working on it; two of my research jobs are still running." The Tracker shows work rows
+  only: no Crew strip, and an agent-working row reads as in progress, without the word agent.
+- **On:** the crew is shown: the Crew strip with roles, icons and counts; models where asked; Voice may say
+  which role is on what.
+- **Relation to `crew`:** `crew.enabled` decides whether the crew *runs*; `devMode` decides only whether the
+  owner *sees* it. They are independent: crew on with devMode off is the default (work behind the scenes,
+  first-person talk). With crew off, devMode off still keeps agent talk out of replies; on, the main session
+  may name the agents it opens as today, and there is no strip.
+- **Relation to `ownerIsDeveloper`:** none. That key was removed in 0.15.0 (`migrate.js` deletes it) because
+  no config key should decide how technical the talk is in general. `devMode` is narrower: it governs the
+  crew's visibility only, never how internals are named otherwise; that stays the owner's directive.
+- **Name:** `devMode` / "Developer mode" is proposed; no calmer term in the naming theme says it as plainly.
+  Awaits the owner's confirmation (Open/future).
+
 **Why a generator.** Effort can be set only in an agent definition's frontmatter; the Agent call can override
 the model but not the effort. So a tool writes the five agent definitions from config, and every config change
 is followed by a regeneration.
@@ -93,8 +117,9 @@ is followed by a regeneration.
   `model`, `effort` from config.
 - Each generated file carries a stamp line: generated from config, do not hand-edit. The generator overwrites
   only stamped files; a same-named file without the stamp is the owner's and is reported, never overwritten.
-- Whether a regenerated definition is picked up mid-session or needs a restart or plugin reload is checked at
-  build; if a restart is needed, Voice says so in one line.
+- Reload (Claude Code docs, "Subagents", read 2026-10-05): `.claude/agents/` is watched and an edited file
+  applies to the next delegation with no restart — except when the directory did not exist at session start.
+  So a first-ever generation in a workspace without `.claude/agents/` needs a restart; Voice says so in one line.
 
 **Weight tiers kept.** The four tiers (orchestrate, "Placing the work") stay the vocabulary for how much care
 a job needs. Each role carries a default tier:
@@ -135,14 +160,51 @@ Voice knows (an earlier answer in chat). No paraphrase that narrows it.
 
 **Voice → owner:** what was done, the one thing the owner must do or "nothing", the next step, the Tracker
 link (AGENTS.md §2). Voice opens a log only when the one line cannot tell the owner the result, and then only
-that log.
+that log. With developer mode off, the reply is in the first person and names no agent, role or model.
 
 **Status request.** Owner asks → Voice asks Lead → Lead answers in one line, `done / remaining / minutes`, from
-its state file, asking a worker only when the state file cannot say. Voice relays it and never estimates.
+its Ledger, asking a worker only when the Ledger cannot say. Voice relays it and never estimates.
 
 **Silence between brief and result.** A worker sends nothing until its result, except one `owner · <reason>`
 line when it is blocked on the owner. Lead sends Voice one line when a worker starts, waits on the owner, and
 ends: the Crew strip's three update points, and Voice's cue to republish.
+
+**Completion notices.** Where a background worker's completion notice lands is the runtime's choice, not ours
+(Claude Code docs, "Subagents", read 2026-10-05): in an interactive session a subagent that launched background
+subagents waits for them, and a resumed agent reports to whoever resumed it; in non-interactive mode and the
+Agent SDK the launcher does not wait, so a worker that finishes after its launcher's turn ended reports to the
+main conversation. That is what happened on 2026-10-05: Scout's notice reached Voice, not Lead. So:
+- A worker writes its result to its log **before** it replies; the log, not the notice, is the result.
+- Lead does not hold its turn open to wait for a worker.
+- A notice that reaches Voice is relayed to Lead **verbatim**, one line, by message (which resumes Lead). Voice
+  does not act on it, open its log, or tell the owner the job is done until Lead says so.
+- A notice that reaches Lead directly needs no relay.
+
+## Delivery
+
+Finished work reaches the owner three ways, **in the same turn**:
+1. **The report** — the worker's page that stands on its own (orchestrate, page rules): it says what was done,
+   the result and the evidence, without chat or the log beside it. A job that makes no page (most Builder and
+   Sentry jobs) has its log as the report, published beside the Tracker, written to the same standard.
+2. **The Tracker** — Voice moves the job's row to done, linking the report, and republishes.
+3. **The journal** — Lead appends one line with the report's link under `## Done today` in today's journal,
+   before it replies `done` to Voice.
+
+Voice's reply to the owner carries the report link. **A bare repository, commit or file link is not a report.**
+Lead checks the report against this before it passes `done` on; a job missing any of the three is not done.
+
+## Distill
+
+Every correction or decision the owner gives is written **twice**:
+- **Here, in full** — into the workspace's own rules (`.joserah/learned.md`, AGENTS.md §5 correction row),
+  with the owner's words, the case and the date.
+- **For Joserah, distilled** — as a feedback note (`feedback` skill, `.joserah/feedback/<area>/`): personal
+  data, names, systems and the case's context stripped, the principle generalised so it would also catch a
+  different case. The note goes through the skill's forbidden-words check; when it fails, the sentence is
+  rewritten, never the check worked around.
+
+Lead writes both. Voice relays the owner's words to Lead **verbatim**, with nothing added or narrowed, and
+writes neither.
 
 ## Logs & folders
 
@@ -152,42 +214,94 @@ Every worker writes its result to a dated file; the reply is only that path and 
 .joserah/desk/crew/
   YYYY-MM-DD/
     lead/
-      state-HHMM.md          Lead's running state; HHMM = when this Lead was opened
+      ledger-HHMM.md         the Ledger; HHMM = when this Lead was opened
     architect/  builder/  scout/  sentry/
       HHMM-<slug>.md         one job's result; HHMM = start time, slug = short English job name
       HHMM-<slug>.progress   checkpoint of a long job, one line per finished unit
 ```
 
-- Under `.joserah/desk/`, beside the Daily Tracker's artifacts; carried by the backup with the rest of
-  `.joserah/`.
+- **One location: `.joserah/desk/crew/YYYY-MM-DD/<role>/`.** Reason: the desk already holds the day's working
+  material, and the Tracker that links and publishes these logs lives beside them under `desk/artifacts/`.
+  The `.joserah/crew/logs/YYYY-MM-DD/` used by hand on 2026-10-05 is not continued; those files stay where
+  they are.
+- Carried by the backup with the rest of `.joserah/`.
 - A sub-worker writes under its own role's folder; its opener's log links to it.
 - Structure in English; content the owner dictated stays in their language (conventions.md).
 - No secret ever lands in a log: the vault rule (AGENTS.md §8 rule 3) binds workers too.
-- Lead's state file holds open jobs (role, log path, state), decisions taken this conversation, what waits on
-  the owner, and each open job's next step. It is what a fresh Lead reads to continue.
-- Unlike the Manager's state file today, Lead's state file is **kept** when the conversation ends: it is the
-  conversation's work record.
 - Compressing old logs during sweep is future work (see Open/future).
+
+### The Ledger
+
+Lead's state file is called the **Ledger**: not a role, a record. It is written **at the event**, not on a
+clock and not only near the context limit: one line when a decision is taken (the owner's, relayed by Voice,
+or Lead's own), a job starts, a job ends, or something comes to wait on the owner.
+
+```
+HH:MM · <kind> · <job> · <text> · <log path or ->
+kind: open | decision | start | owner | end | compact | session-end
+```
+
+- `job` is the job's slug (the log's), or `-` for a decision that belongs to no job. A job is **open** while
+  its last line is `start` or `owner`; `end` closes it. `owner` lines carry the reason
+  (decision / sign-in / connection / approval) and the next step.
+- Lead appends through `tools/ledger.js add`, never by rewriting the file; a fresh Lead's first line names
+  the Ledger it continues.
+- The Ledger is **kept** when the conversation ends (unlike the Manager's state file today): it is the
+  conversation's work record, and what a fresh Lead reads to continue.
+
+**Safety net — hooks, no model, no tokens.**
+- **Opening:** the SubagentStart hook, matched on agent type `lead`, creates the Ledger with its `open` line
+  (session id, Lead's `agent_id`, time) and tells Lead its path through `additionalContext`. So the Ledger
+  exists and carries the id Voice needs to resume Lead even if Lead never writes a line.
+- **PreCompact** and **SessionEnd** append a stamp line to the Ledger whose `open` line carries this session's
+  id: `compact` or `session-end`, with the trigger or reason and the session's `transcript_path`. They add
+  nothing to context (the runtime gives them no way to).
+- **SessionStart with source `compact`** re-injects, through `additionalContext`, the Ledger's open jobs, its
+  owner-waiting lines, its last decisions and Lead's agent id; for Voice also the Daily Tracker's open rows.
+  The detail a compaction dropped comes back from the file, at about 1–2k tokens once per compaction
+  (estimate, not a measurement).
+- What each hook receives is from the Claude Code hooks reference (read 2026-10-05): PreCompact matcher
+  `manual|auto`, SessionEnd reason, SessionStart `source` and `additionalContext`, SubagentStart `agent_id`,
+  `agent_type` and `additionalContext`. Whether these hooks also fire when **Lead** (a subagent) compacts is
+  not documented; until measured, Lead's role body carries the fallback: when a message mentions a job Lead
+  cannot place, it reads `ledger.js open` before acting.
 
 ## Tracker Crew strip
 
 A strip on the Daily Tracker showing every agent working for the owner, directly under the one-line header and
-above the row groups.
+above the row groups. **Shown only with developer mode on**; off, the page has work rows only.
 
-**Glyphs:** Lead ◆, Architect △, Builder ■, Scout ●, Sentry ◎. Simple geometry, no faces, no human mimicry:
-deliberately machine-like. Sub-workers show with their role's glyph.
+**Icons** (decision, owner, 2026-10-05; replaces the earlier geometric glyphs): real, recognisable per-role
+icons, drawn as simple inline SVG line icons (24×24 viewBox, stroke `currentColor`, no fill, no external
+library), no faces, no emoji:
 
-**One line each:** `<glyph> <Role> · <job>`, e.g. `● Scout · DOTS research`.
+| Role | Icon |
+|---|---|
+| Voice | speech bubble — leads the strip: the session the owner talks to |
+| Lead | brain — so the owner sees at a glance how many brains are working |
+| Architect | compass |
+| Builder | wrench |
+| Scout | magnifier |
+| Sentry | shield |
+
+Sub-workers show with their role's icon. **Colours are calm** (decision, owner, 2026-10-05: no loud colours):
+icons take the page's own theme tokens (text, muted text, the one accent for `owner`), in light and dark;
+no per-role palette, no bright hues.
+
+**Counts:** the strip opens with one icon per role that has an entry, with a count badge when more than one
+of that role is working (e.g. magnifier ·2). Under it, **one line each:** `<icon> <Role> · <job>`, e.g.
+`[magnifier] Scout · DOTS research`.
 
 **States:**
 
 | State | Look | Meaning |
 |---|---|---|
-| working | glyph pulses slowly | an agent is running on the job |
+| working | icon pulses slowly | an agent is running on the job |
 | owner | steady brand (accent) colour + named reason | the job waits on the owner; reason is one of **decision / sign-in / connection / approval** (borrowed from OpenAI DOTS) |
 | idle | dimmed | the agent has finished, or Lead is between jobs |
 
 - Under `prefers-reduced-motion` there is no pulse; working shows as a static outline.
+- The count badge counts `working` and `owner` entries only; idle ones do not count.
 - **Click** opens the job's result: the published page when the job made one; otherwise the job's log,
   published beside the Tracker page as a supporting file.
 - **Updated at start, at waiting, at end.** Every running subagent appears, including one a worker opened.
@@ -208,6 +322,23 @@ deliberately machine-like. Sub-workers show with their role's glyph.
   (orchestrate, "Pages under work"). The strip is therefore as fresh as Voice's last publish; a page that
   updates itself without a republish is future work.
 
+## Tracker row groups
+
+Decision, owner, 2026-10-05: sub-jobs belong under their main job, in every state section, done included.
+
+- A row may carry an optional `parent`: the title of its main job's row. `tracker.js row --parent "<title>"`
+  sets it; the parent must be an existing row (case and outer spaces ignored), otherwise the command is
+  refused. One level only: a row that has a parent cannot itself be a parent.
+- **Set only when certain.** Whoever writes the row (Voice, or Lead for its jobs) sets `parent` only once it is
+  sure which main job the sub-job belongs to; until then the row stays ungrouped. A wrong parent is corrected
+  by re-running `row` with the right one (or `--parent ""` to ungroup).
+- **Rendering:** inside each state section, the sub-jobs of one main job form one more fold, closed by
+  default, headed by the main job's title and the count of its sub-jobs; one fold open at a time on the page
+  (the existing page rule). When the main job's own row is in the same section it heads the fold; when it is
+  in another section (main job still running, a sub-job done) the fold carries its title and its state.
+- Rows without `parent` render as today. A `rows.json` with no `parent` anywhere renders byte-identical to
+  before.
+
 ## Voice ↔ CTRL
 
 CTRL is the session of the shared-memory sweeper's assistant. This Voice talks only to CTRL's Voice, never to
@@ -226,25 +357,30 @@ its Lead or workers; CTRL's crew never addresses this owner.
 
 | File | Change |
 |---|---|
-| `templates/crew/{lead,architect,builder,scout,sentry}.md` | New: each role's agent body — job, limits, brief template, reply shape, log-path rule, the Tracker `crew` calls (Lead and any opener). |
+| `templates/crew/{lead,architect,builder,scout,sentry}.md` | New: each role's agent body — job, limits, brief template, reply shape, log-path rule, the Tracker `crew` calls (Lead and any opener). Lead's also: the Ledger lines, the Delivery check and journal line, Distill, the post-compact fallback. |
 | `tools/crew.js` | New: reads `crew` from config, writes the five stamped definitions into the workspace's `.claude/agents/`; `--check` reports drift without writing. |
-| `tools/tracker.js` | `crew` subcommand; `crew` array in `rows.json`; strip rendering (glyphs, three states, reduced motion, click target). |
-| `templates/tracker/` | Strip styles and markup in the page template. |
-| `hooks/session-start.js` | Main session with crew on: a Voice line (talk only; open Lead at the first job; the Tracker is yours). Worker line (~line 182): reply is path + one line, log under `.joserah/desk/crew/`. |
-| SubagentStart/SubagentStop hook | Safety-net strip entry; new or extended hook script plus its registration in the plugin's hooks config. |
-| `skills/orchestrate/SKILL.md` | "Placing the work": roles mapped to tiers when crew is on. "A manager for a wave" → "Lead", Manager kept for crew off. "Briefing": `Verified by` → `Done when`, `Report` = log path. Status requests via Lead. "Trackers": the Crew strip. "One voice": Voice and Lead. |
-| `templates/AGENTS.md` | §5 orchestrate row: with crew on, the main session only talks and work goes to Lead; message economy and the Crew strip, one clause each. Prompt version bump. |
+| `tools/tracker.js` | `crew` subcommand; `crew` array in `rows.json`; `row --parent` and grouped rendering (Tracker row groups); strip rendering (inline SVG role icons, count badges, three states, reduced motion, click target); strip and agent wording only when the workspace config has `devMode: true` (read at render). |
+| `templates/tracker/` | Strip styles and markup in the page template, icon colours from the theme tokens; group fold styles. |
+| `hooks/session-start.js` | Main session with crew on: a Voice line (talk only; open Lead at the first job; the Tracker is yours; relay completion notices to Lead verbatim). Developer-mode line: off (default) — name no agent, role or model, speak of the work in the first person; on — the crew may be named. Worker line (~line 182): write the result to the log first, then reply path + one line; log under `.joserah/desk/crew/`. Stays stdin-free (its header says why); everything that needs the hook payload lives in `hooks/crew.js`. |
+| `tools/ledger.js` | New: `add <kind> <job> <text> [path]` appends one line in the Ledger format; `open` prints open jobs, owner-waiting lines, last decisions and Lead's agent id; `stamp` for the hooks. |
+| `hooks/crew.js`, `hooks/hooks.json` | New, one script for every crew event, reading the payload with the idle-timer stdin read the other hooks use. SubagentStart/SubagentStop: safety-net strip entry; for agent type `lead`, SubagentStart also creates the Ledger and passes its path. PreCompact, SessionEnd: append a `compact` / `session-end` stamp with `transcript_path` to this session's Ledger. SessionStart `compact`: re-inject the Ledger's open items and, for Voice, the Tracker's open rows. Registered for SubagentStart, SubagentStop, PreCompact, SessionEnd and SessionStart `compact`. |
+| `skills/orchestrate/SKILL.md` | "Placing the work": roles mapped to tiers when crew is on. "A manager for a wave" → "Lead", Manager kept for crew off. "Briefing": `Verified by` → `Done when`, `Report` = log path. Status requests via Lead. "Trackers": the Crew strip. "One voice": Voice and Lead. New: Delivery (three ways, same turn), Distill, completion-notice relay, the Ledger. |
+| `skills/feedback/SKILL.md` | Distill: a correction from the owner also yields a distilled note, written by Lead. |
+| `templates/AGENTS.md` | §5 orchestrate row: with crew on, the main session only talks and work goes to Lead; message economy, Delivery and the Crew strip, one clause each; §5 correction row: Distill, one clause. Prompt version bump. |
 | `agents/manager.md` | Kept for crew off; its description says so. |
 | `skills/setup`, `skills/update`, `skills/doctor`, `tools/doctor.js` | Setup and update run `crew.js`; doctor runs `crew.js --check` and reports a missing or stale definition. |
-| `tools/scaffold.js` | New workspaces get the generated definitions (no `crew` block needed; defaults apply). |
+| `tools/scaffold.js` | New workspaces get the generated definitions (no `crew` block needed; defaults apply); `devMode` absent means off. |
 | `CHANGELOG.md`, `docs/status.md` | Release entry. |
 | `tests/` | See Tests. |
 
 ## Migration
 
 - **Every workspace:** crew turns on with the update that ships it. `/joserah:update` runs `crew.js`, which
-  writes the five definitions. The owner is told in one line that work now runs behind the scenes and that it
-  can be switched off; the config key is named only to a developer owner.
+  writes the five definitions. With developer mode off (every workspace, by default) the owner is told nothing
+  about agents; the update's one line speaks of the work only. An owner who asks how the work is done, or asks
+  to see it, is told developer mode exists and can be turned on.
+- **Developer mode:** absent means off; nothing is migrated. An owner who wants the crew shown sets
+  `"devMode": true` (the developer's own workspace does, at build).
 - **Prompt:** version bump; `refresh-prompt.js` carries the new §5 row; the migration note names the optional
   config block and the generator run.
 - **Manager waves in flight** finish as they are; new work goes to Lead.
@@ -261,10 +397,28 @@ its Lead or workers; CTRL's crew never addresses this owner.
 **Unit, written first and seen failing:**
 - `crew.js`: defaults with no block; per-role override; `enabled: false` and `crew: false` write nothing;
   unknown role or effort is an error; an unstamped same-named file is not overwritten; `--check` finds drift.
-- `tracker.js crew`: upsert by role + job; unknown state or reason refused; render shows glyph, line, state
-  class and reason; reduced-motion rule present; `rows.json` without `crew` renders as before.
-- `session-start.js`: Voice line only with crew on; worker line carries the reply and log rule.
+- `tracker.js crew`: upsert by role + job; unknown state or reason refused; render shows icon, line, state
+  class and reason; one inline SVG per role, no emoji; count badge only when two or more of a role are working
+  or waiting; no strip and no "agent" wording with `devMode` off or absent; reduced-motion rule present;
+  `rows.json` without `crew` renders as before. Icons use only theme colour tokens (no hex colour inside an
+  icon). Row groups: `--parent` naming no row is refused; a parent with a parent is refused; sub-jobs fold
+  under their main job in each section, closed by default, done included; no `parent` anywhere renders
+  byte-identical to before.
+- `session-start.js`: Voice line only with crew on; worker line carries the reply and log rule; developer-mode
+  line says off (first person, no agent names) with the key absent or false, on with `devMode: true`.
 - `prompt.test.js`: the new §5 clauses.
+- `ledger.js`: `add` appends one well-formed line and refuses an unknown kind; `open` lists a job whose last
+  line is `start` or `owner` and omits one closed by `end`; `stamp` appends a hook stamp line.
+- Hooks: SubagentStart with agent type `lead` creates the Ledger and returns its path; PreCompact and
+  SessionEnd append a stamp with `transcript_path` to the Ledger of the matching session id, and to nothing
+  when none matches.
+
+**Post-compact, written first and seen failing.** A fixture Ledger with one open job, one closed job, one
+owner-waiting line and a decision, plus a `rows.json` with one open and one done row; `hooks/crew.js` run
+with `source: "compact"` returns `additionalContext` that carries the open job, the owner line, the decision,
+Lead's agent id and the open row, and carries neither the closed job nor the done row. Then once live: start a
+job, run `/compact` in the main session, ask Voice what is open — it answers from the injected lines without
+opening a file, and resumes the same Lead by its id.
 
 **Comparison, last (owner, 2026-10-05).** Run the same jobs on the old structure (crew off) and the new (crew
 on), same machine, same day, same session model for the main session:
@@ -279,9 +433,15 @@ from the numbers whether crew stays the default.
 
 ## Open/future
 
+- **Developer mode's name:** `devMode` / "Developer mode" proposed; awaits the owner's confirmation before build.
 - **Model ids:** which id each default alias resolves to at build; pin full ids where needed.
-- **Hot reload:** whether regenerated agent definitions apply without a restart.
-- **Hook input:** what SubagentStart/SubagentStop actually receive; this bounds the safety net.
+- **Hook input:** the documented fields (agent_id, agent_type, transcript_path, source) are checked against a
+  live payload at build; this bounds the safety net. Also whether `session_id` inside a SubagentStart call is
+  the main session's, which the Ledger lookup relies on (fallback: the newest Ledger of the day).
+- **Lead's own compaction:** whether PreCompact and SessionStart (`compact`) fire when a subagent compacts is
+  not documented; measured at build. Until then Lead's fallback is reading `ledger.js open`.
+- **Notice routing:** the docs describe interactive vs non-interactive/SDK behaviour; which one each runtime
+  Joserah runs on (terminal, desktop, Remote Control) shows is recorded at build. The relay rule holds either way.
 - **CTRL transport:** recorded at build from what is set up.
 - **Lead's context measure:** how Lead knows it is near the limit, if the runtime does not report it.
 - **Live page:** a strip that updates without Voice republishing (artifact runtime state).
