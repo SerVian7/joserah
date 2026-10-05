@@ -259,10 +259,11 @@ const safe = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
 const ctxStampFile = (session, agent) => path.join(require('os').tmpdir(), `joserah-crew-ctx-${safe(session)}-${safe(agent)}`);
 
 /**
- * Sets `ctx` / `ctxTime` on the Crew strip entry the safety net wrote for this
- * agent (role + job = agent id) on today's Daily Tracker; no other entry. A
- * worker's PostToolUse reads at most once a minute per agent (`force` at its
- * stop). A local rows.json write: no re-render, no publish.
+ * Sets `ctx` / `ctxTime` on this agent's Crew strip entry on today's Daily
+ * Tracker: the one tagged with `--agent <id>` first, else the one the safety
+ * net wrote (role + job = agent id); no other entry. A worker's PostToolUse
+ * reads at most once a minute per agent (`force` at its stop). A local
+ * rows.json write: no re-render, no publish.
  */
 function recordContext(root, input, force) {
   const role = roleOf(input.agent_type);
@@ -286,7 +287,8 @@ function recordContext(root, input, force) {
   let j;
   try { j = JSON.parse(fs.readFileSync(rowsPath, 'utf8')); } catch { return; }
   if (!j || Array.isArray(j) || !Array.isArray(j.crew)) return; // no crew entry yet, so not this agent's
-  const e = j.crew.find((x) => x && x.role === role && String(x.job).trim().toLowerCase() === agent.toLowerCase());
+  const e = j.crew.find((x) => x && x.role === role && x.agent === agent)
+    || j.crew.find((x) => x && x.role === role && String(x.job).trim().toLowerCase() === agent.toLowerCase());
   if (!e || (e.ctx === fig.ctx && e.ctxTime === fig.ctxTime)) return;
   e.ctx = fig.ctx;
   e.ctxTime = fig.ctxTime;

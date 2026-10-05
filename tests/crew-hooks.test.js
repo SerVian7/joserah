@@ -349,3 +349,12 @@ test('ctx: crew.js is registered for PostToolUse, one command string', () => {
   assert.strictEqual(c.shell, 'bash');
   assert.ok(h.PostToolUse.some((e) => e.hooks.includes(c) && (e.matcher === '' || e.matcher === undefined)), 'every tool');
 });
+
+test('ctx: an entry Lead wrote with --agent is matched by its agent id first', (t) => {
+  const f = ctxFixture(t);
+  runTool('tracker.js', ['crew', f.tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work', '--agent', f.agent], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  sub(f.ws, 'subagent-start', 'scout', f.agent); // the role has an entry: the hook adds none
+  f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
+  f.post('2026-10-05T09:05:00');
+  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.agent, e.ctx]), [['DOTS research', f.agent, 101]]);
+});
