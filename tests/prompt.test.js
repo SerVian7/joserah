@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 26);
+  assert.strictEqual(cfg.promptVersion, 27);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 26);
+  assert.strictEqual(cfg.promptVersion, 27);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,7 +262,7 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 26);
+  assert.strictEqual(prompt.readPromptVersion(text), 27);
   assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
   assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
   assert.ok(text.includes("the verdict is \"none fits — we don't choose\" plus the one question that would change it"), '§5 (v24): no recommendation for its own sake (owner, 2026-10-02)');
@@ -365,4 +365,21 @@ test('the prompt does not send a session to open the two layers it is already gi
   assert.match(head, /JOSERAH-ROLE\.md/);
   assert.match(head, /directives\.md/);
   assert.match(head, /Directives win/, 'which layer wins is still stated');
+});
+
+// 0.18.0 (owner, 2026-10-05): the crew. §5 carries one clause each; the detail
+// lives in the orchestrate skill.
+test('v27: crew clauses in §5', () => {
+  const t = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
+  assert.match(t, /^<!-- joserah:prompt-version 27 -->/);
+  assert.match(t, /the main session only talks/);
+  assert.match(t, /report page, the Tracker row moved to done, and one journal line/);
+  assert.match(t, /a bare link is not a report/);
+  assert.match(t, /written twice/);
+  assert.match(t, /completion notice .*relayed to Lead verbatim/);
+  assert.match(t, /Ledger/);
+  assert.match(t, /devMode/);
+  assert.match(t, /first person/);
+  assert.match(t, /Crew strip/);
+  assert.ok(t.split('\n').length < 160);
 });
