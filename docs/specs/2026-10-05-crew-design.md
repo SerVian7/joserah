@@ -180,6 +180,12 @@ main conversation. That is what happened on 2026-10-05: Scout's notice reached V
   does not act on it, open its log, or tell the owner the job is done until Lead says so.
 - A notice that reaches Lead directly needs no relay.
 
+- [measurement] Notice of a worker launched by a background agent whose turn had already ended -> arrived in the
+  main conversation (the main session took a new turn and reported it); the launcher's own notice arrived there too
+  condition: Claude Code 2.1.289 · print mode (`claude -p`, stream-json) · Windows 11 · Haiku 4.5 · interactive
+  terminal, desktop and Remote Control not measured
+  date: 2026-10-05 · by: Builder · source: Task 0.1 scratch capture (not kept)
+
 ## Delivery
 
 Finished work reaches the owner three ways, **in the same turn**:
@@ -265,6 +271,47 @@ kind: open | decision | start | owner | end | compact | session-end
   `agent_type` and `additionalContext`. Whether these hooks also fire when **Lead** (a subagent) compacts is
   not documented; until measured, Lead's role body carries the fallback: when a message mentions a job Lead
   cannot place, it reads `ledger.js open` before acting.
+
+**Measured payloads** (live capture, 2026-10-05). Every line below shares one condition: Claude Code 2.1.289,
+print mode (`claude -p`, stream-json), Windows 11, project-settings hooks with `"shell": "bash"` appending stdin
+to a file, session and workers on Haiku 4.5; by: Builder; source: Task 0.1 scratch capture (not kept).
+
+- [measurement] SubagentStart payload fields -> `session_id`, `transcript_path`, `cwd`, `prompt_id`, `agent_id`,
+  `agent_type`, `hook_event_name`; no `source`, `trigger` or parent-agent field
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] SubagentStart `session_id` -> the main session's id, also for an agent launched by another
+  background agent (depth 2); so the Ledger lookup by session id holds and the newest-Ledger fallback is not needed
+  for it
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] SubagentStop payload fields -> SubagentStart's plus `permission_mode`, `stop_hook_active`,
+  `agent_transcript_path`, `last_assistant_message`, `background_tasks` (the stopping agent still listed as
+  `running`), `session_crons`
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] Compaction's summariser -> fires SubagentStop with `agent_type` `""` (empty) and an `agent_id` of
+  its own, with no SubagentStart before it; `hooks/crew.js` therefore matches `agent_type` exactly and ignores an
+  empty one
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5, manual `/compact` · date: 2026-10-05 · by: Builder
+- [measurement] PreCompact payload fields -> `session_id`, `transcript_path`, `cwd`, `prompt_id`,
+  `hook_event_name`, `trigger` (`manual` for `/compact`), `custom_instructions` (`null`); no `agent_id`
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5, `/compact` sent as the print-mode prompt on a resumed session · date: 2026-10-05 · by: Builder
+- [measurement] Compaction hook order -> PreCompact, then the summariser's SubagentStop, then SessionStart
+  `compact`, all under the same `session_id`; context 30261 -> 3515 tokens
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] SessionStart payload fields -> `session_id`, `transcript_path`, `cwd`, `hook_event_name`,
+  `source` (`startup`, `resume`, `compact` seen); `resume` adds `seconds_since_last_response`, `context_tokens`,
+  `prompt_cache_likely_expired`, `estimated_cache_write_usd`; `compact` adds `prompt_id` and `model`
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] SessionEnd payload fields -> `session_id`, `transcript_path`, `cwd`, `prompt_id`,
+  `hook_event_name`, `reason` (`other` when a print-mode run exits)
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] SessionEnd when the run exits with a background shell still running (killed at exit) -> no
+  SessionEnd payload captured, 2 of 2 runs; captured in 4 of 4 runs that exited with nothing running. The
+  `session-end` stamp is therefore best-effort; nothing may depend on it
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
+- [measurement] `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=10` -> no compaction anywhere: neither the main session (~30k
+  context) nor a subagent that reached 59111 context tokens compacted; whether hooks fire on a subagent's own
+  compaction stays unmeasured (Open/future)
+  condition: Claude Code 2.1.289 · print mode · Windows 11 · Haiku 4.5 · date: 2026-10-05 · by: Builder
 
 ## Tracker Crew strip
 
@@ -435,13 +482,19 @@ from the numbers whether crew stays the default.
 
 - **Developer mode's name:** `devMode` / "Developer mode" proposed; awaits the owner's confirmation before build.
 - **Model ids:** which id each default alias resolves to at build; pin full ids where needed.
-- **Hook input:** the documented fields (agent_id, agent_type, transcript_path, source) are checked against a
+- ~~**Hook input:** the documented fields (agent_id, agent_type, transcript_path, source) are checked against a
   live payload at build; this bounds the safety net. Also whether `session_id` inside a SubagentStart call is
-  the main session's, which the Ledger lookup relies on (fallback: the newest Ledger of the day).
+  the main session's, which the Ledger lookup relies on (fallback: the newest Ledger of the day).~~
+  resolved: measured 2026-10-05 in print mode, see "Measured payloads" under The Ledger (session id is the main
+  session's). Still open: the same payloads in an interactive terminal session.
 - **Lead's own compaction:** whether PreCompact and SessionStart (`compact`) fire when a subagent compacts is
-  not documented; measured at build. Until then Lead's fallback is reading `ledger.js open`.
-- **Notice routing:** the docs describe interactive vs non-interactive/SDK behaviour; which one each runtime
-  Joserah runs on (terminal, desktop, Remote Control) shows is recorded at build. The relay rule holds either way.
+  not documented; still unmeasured. Tried 2026-10-05: `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=10` compacted nothing
+  (see "Measured payloads"); the next way, driving a subagent past `--autocompact`'s 100k minimum, costs several
+  hundred thousand tokens and was not run. Until measured, Lead's fallback is reading `ledger.js open`.
+- **Notice routing:** the docs describe interactive vs non-interactive/SDK behaviour. Measured 2026-10-05 for
+  print mode only (a nested worker's notice reaches the main conversation; claim line under Message protocol,
+  "Completion notices"). Interactive terminal, desktop and Remote Control are still to be recorded. The relay rule
+  holds either way.
 - **CTRL transport:** recorded at build from what is set up.
 - **Lead's context measure:** how Lead knows it is near the limit, if the runtime does not report it.
 - **Live page:** a strip that updates without Voice republishing (artifact runtime state).
