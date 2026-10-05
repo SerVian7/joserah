@@ -3,15 +3,27 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
-## Unreleased
+## 0.18.0
 
-For the next release note (owner, 2026-10-05).
+0.18.0 — the crew: the work runs behind the scenes, and the Daily Tracker becomes a board you can answer on. Owner, 2026-10-05.
 
+- **Work behind the scenes.** The assistant you talk to now only talks; the work goes to a crew of five agents (Lead, Architect, Builder, Scout, Sentry), each with its own model and effort. Nothing to learn: you ask as before, and the assistant speaks of the work in the first person ("two of my research jobs are still running"). The Daily Tracker shows a Crew strip while jobs run.
+- **Developer mode shows it.** Off by default. Add `"devMode": true` to `.joserah/config.json` to see the crew named: role names on the Tracker strip, and the assistant may say which role is on what.
+- **Switching the crew off.** `"crew": false` (or `"crew": { "enabled": false }`) in `.joserah/config.json` brings back the way it worked before; the agent definitions the crew wrote are removed, your own agents never. An optional `crew` block sets a role's model or effort; after any change, `/joserah:update` (or `crew.js`) rewrites the definitions.
+- **Install paths.** New workspaces get the five definitions in `.claude/agents/`; `/joserah:update` writes them in existing ones and never overwrites a same-named file of yours (it says so). If that folder is new, restart Claude Code once. Doctor checks the definitions (`crew definitions current`).
+- **Memory across compaction.** Lead keeps a Ledger of open jobs, decisions and what waits on you; after a `/compact` the open items come back on their own.
+- **Agents on the Tracker by themselves.** A hook puts every agent on the Tracker when it starts and dims it when it ends, with its role, job, model and effort. A second hook (`tracker-guard.js`) holds a reply once when today's Tracker has changed but was not published, when a decision waits on you without options, a recommendation and a reason, or when the reply is a long block with no page link.
+- **Tracker board.** Rows sit in groups: running, waiting on you (Sizde), waiting on others, Done today (one closed fold with its count and last time), and Plans below, one closed fold per group. Several lines of one category sit under a category line. A row's link is a label on the line. A date mark such as 30.09 now orders by date, and a page keeps its own heading and palette.
+- **Crew strip.** The strip lists only what runs, and says "Nothing running right now" when nothing does. A line's detail opens directly under that line, not below the whole list. Each role icon names its activity on hover, and a running or waiting line reads how long it has been so ("running 7 min").
+- **Decision rows.** A question for you is a row with the question, keyed options (A, B, …), the recommended one marked, and one line of why. The updater refuses a decision row without them.
+- **Answer on the page.** Publish the Daily Tracker with `capabilities: {db: {}}` and a question row shows a button per option and a short note; your answer is written to the page's database and the line reads "answered: A · HH:MM". Without the database the form stays hidden and the row reads as before.
+- **In place, with motion.** After a publish only what changed moves: a new line slides in, a changed one flashes once, a finished one flashes into Done today. The open detail, folds, opened long lists and scroll position are kept across a publish; reduced motion turns the animation off.
 - **Trail.** `trail.js new|add|render|types`: one page per Case that shows its whole course — mail in, mail out, offer, options, decision, draft, note, waiting — as typed entries appended to `trail.json` and never rewritten. Open waits and unsent drafts are pinned on top, the newest entry first, past days folded; a decision on an options entry shows the chosen item with its photo, marked SELECTED. Labelled "İş akışı" on Turkish pages. New work uses a Trail instead of a Decision flow; existing Decision flow pages are left as they are.
-- **One theme.** The colour tokens, the console rules and the long-list clamp live in one place (`tools/lib/theme.js`); the Tracker and the Trail both take them from there, so a theme change reaches every page on its next render.
-- **Warmer replies.** Brevity means no padding, never coldness: a reply is a full-sentence summary of what was done, what waits on you and what comes next; every item, in chat and on the Tracker, names its topic with one sentence of background.
+- **One theme.** The colour tokens, the console rules and the long-list clamp live in one place (`tools/lib/theme.js`); the Tracker and the Trail both take them from there, so a theme change reaches every page on its next render. A page's own palette still wins over the Theme.
+- **Warmer replies.** Brevity means no padding, never coldness: a reply is a full-sentence summary of what was done, what waits on you and what comes next; every item, in chat and on the Tracker, names its topic with one sentence of background. The reply that finishes a job closes that job's Tracker row.
+- **New workspaces stay clean.** Setup copies only workspace content: `tracker/`, `case/` and `changelog/` template folders (copied to the workspace root by 0.17.0–0.17.10) are no longer created. A folder already there is yours to delete.
 
-The prompt (v28) and the orchestrate skill. Run `/joserah:update`, then `/reload-plugins`.
+The prompt (v28), the orchestrate, feedback, setup, update and doctor skills, new hooks and tools. Run `/joserah:update`, then `/reload-plugins`; restart once if it says the agents folder is new.
 
 ## 0.17.10
 
