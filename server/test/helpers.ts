@@ -6,7 +6,7 @@ import type { TestContext } from 'node:test';
 import type { AppDeps } from '../src/deps.ts';
 import { DEFAULT_CONFIG } from '../src/config.ts';
 import { newAuthFile, writeAuth, RateLimiter, type AuthFile } from '../src/auth.ts';
-import type { App } from '../src/app.ts';
+import { createApp, type App } from '../src/app.ts';
 
 export const SERVER_ROOT = path.resolve(import.meta.dirname, '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
@@ -58,4 +58,22 @@ export async function login(app: App, password = 'pw-0123456789'): Promise<strin
   const r = await app.request('/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN }, body: new URLSearchParams({ password }).toString() }, ADDR);
   if (r.status !== 303) throw new Error(`login failed: ${r.status}`);
   return (r.headers.get('set-cookie') ?? '').split(';')[0];
+}
+
+/** A Daily Tracker page made by tools/tracker.js (init, then one `row` per entry); returns the page directory. */
+export function trackerPage(ws: string, day: string, rows: Array<{ title: string; state: string; small?: string }> = []): string {
+  const dir = path.join(ws, '.joserah', 'desk', 'artifacts', day, 'daily-tracker');
+  const tool = path.join(REPO_ROOT, 'tools', 'tracker.js');
+  const run = (args: string[]) => { const r = spawnSync(process.execPath, [tool, ...args], { encoding: 'utf8' }); if (r.status !== 0) throw new Error(r.stderr); };
+  run(['init', dir, '--title', 'Daily Tracker', '--lang', 'en']);
+  for (const r of rows) run(['row', dir, '--title', r.title, '--state', r.state, ...(r.small ? ['--small', r.small] : [])]);
+  return dir;
+}
+
+/** An app with auth ready and a signed-in session cookie. */
+export async function signedIn(t: TestContext, over: Partial<AppDeps> = {}): Promise<{ app: App; deps: AppDeps; cookie: string }> {
+  const deps = baseDeps(t, over);
+  readyAuth(deps);
+  const app = createApp(deps);
+  return { app, deps, cookie: await login(app) };
 }
