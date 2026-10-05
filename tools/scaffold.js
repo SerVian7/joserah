@@ -376,8 +376,8 @@ if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
 // templates/ holds two kinds of thing: what a workspace is made of, and what
 // the plugin's own tools read from the plugin root — roles/ (one supplement is
 // picked by kind and written as JOSERAH-ROLE.md below), memory/ (the memory
-// kind's tree, tools/lib/memory.js), case/, changelog/ and tracker/ (page
-// templates for tools/case.js, changelog.js, tracker.js) and crew/ (role
+// kind's tree, tools/lib/memory.js), case/, changelog/, tracker/ and trail/ (page
+// templates for tools/case.js, changelog.js, tracker.js, trail.js) and crew/ (role
 // bodies for tools/crew.js). Only the top-level entries named here are copied
 // — an allow-list, not a skip-list, so a new plugin-side template cannot leak
 // into every workspace by default (0.17.0–0.17.10 copied tracker/, case/ and
