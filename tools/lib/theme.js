@@ -14,8 +14,9 @@ const TOKENS_CSS = [
 ].join('\n');
 
 // The base console rules any page shares: the mono font, no radius or shadow, group heads (a plain one
-// and a fold's summary), and the clamp — a long list shows its first lines, fades, and opens in place
-// as a bounded scroll area.
+// and a fold's summary), and the clamp — a long list shows its first lines, cut cleanly after the last
+// one shown (no fade: owner, 2026-10-05, "bu altı şeffaflık durumu saçma sapan"), and opens in place as a
+// bounded scroll area.
 const BASE_CSS = [
   ':root{--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}',
   '*,*::before,*::after{border-radius:0;box-shadow:none}',
@@ -28,8 +29,6 @@ const BASE_CSS = [
   '.clip.clamp{max-height:20rem;overflow:hidden}',
   '.clip.clamp.open{max-height:min(64vh,560px);overflow-y:auto;overscroll-behavior:contain;border-bottom:1px solid var(--faint)}',
   '@media (prefers-reduced-motion: no-preference){.clip.clamp{transition:max-height .22s ease}}',
-  '.fade{position:relative;height:64px;margin-top:-64px;background:linear-gradient(to bottom,transparent,var(--bg) 88%);cursor:pointer}',
-  '.clip.open+.fade{display:none}',
   '.more{display:block;width:100%;margin:0;padding:9px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--muted);text-align:left;cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.06em}',
   '.more::before{content:"\\25BE";display:inline-block;width:14px;color:var(--faint)}',
   '.more[aria-expanded="true"]::before{content:"\\25B4"}',
@@ -37,14 +36,14 @@ const BASE_CSS = [
   '.more:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
 ].join('\n');
 
-// The clamp's script: a long list (a .clip.clamp holding an <ol>) shows its first rows plus a slice of
-// the next (measured; the CSS max-height stands in without script); the .more button, or a click on the
-// fade, opens it in place as a bounded scroll area and closes it again without moving the page.
+// The clamp's script: a long list (a .clip.clamp holding an <ol>) shows its first rows whole, cut where the
+// next one starts (measured; the CSS max-height stands in without script); the .more button opens it in
+// place as a bounded scroll area and closes it again without moving the page.
 const CLIP_JS = [
-  '(function(){var N=5;function fit(c){if(c.classList.contains("open"))return;var l=c.querySelectorAll(":scope>ol>li:not(.crew-dl)");if(l.length<=N)return;var t=c.getBoundingClientRect().top,b=l[N-1].getBoundingClientRect().bottom,n=l[N].getBoundingClientRect().height;c.style.maxHeight=Math.round(b-t+Math.min(30,n/2))+"px"}',
+  '(function(){var N=5;function fit(c){if(c.classList.contains("open"))return;var l=c.querySelectorAll(":scope>ol>li:not(.crew-dl)");if(l.length<=N)return;var t=c.getBoundingClientRect().top,b=l[N].getBoundingClientRect().top;c.style.maxHeight=Math.round(b-t)+"px"}',
   'function all(){document.querySelectorAll(".clip.clamp").forEach(fit)}',
   'function toggle(b){var c=document.getElementById(b.getAttribute("aria-controls")),o=b.getAttribute("aria-expanded")!=="true",r=c.getBoundingClientRect(),h0=r.height;b.setAttribute("aria-expanded",String(o));c.classList.toggle("open",o);if(o){c.style.maxHeight=""}else{c.scrollTop=0;fit(c);if(r.top<0){var h1=parseFloat(c.style.maxHeight)||h0;window.scrollBy(0,h1-h0)}}b.textContent=o?b.dataset.less:b.dataset.label}',
-  'document.addEventListener("click",function(e){var b=e.target.closest(".more");if(b){toggle(b);return}var f=e.target.closest(".fade");if(f){var m=f.parentNode.querySelector(".more");if(m)toggle(m)}});',
+  'document.addEventListener("click",function(e){var b=e.target.closest(".more");if(b)toggle(b)});',
   'document.addEventListener("toggle",function(e){var t=e.target;if(t.querySelectorAll)t.querySelectorAll(".clip.clamp").forEach(fit);var c=t.closest&&t.closest(".clip.clamp");if(c)fit(c)},true);',
   'var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(all,120)});all();window.addEventListener("load",all)})();',
 ].join('\n');

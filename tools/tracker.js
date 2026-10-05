@@ -73,19 +73,23 @@
  *       two or more, keys unique; recommend, one of the keys; why, one line. Else
  *       render, row and crew refuse it before writing (checkDecisions). Its detail
  *       shows the question, one option per line with its key as a tag, the
- *       recommended one marked with its why, then a hidden answer form (a
- *       button per option, a note, Send) that ANSWER_JS shows when the page has
- *       its database (published with capabilities {db: {}}): Send writes
- *       answers/<slugId('a', title)> = {row, key, label, note, at, state: "new"}
- *       and the line says "cevaplandı: A · HH:MM", also after a reload. Active work and Owner oldest first,
- *       the rest newest first; ties keep file order; an empty group is left out.
- *       In a group, two or more lines of one category (a row's parent, by name)
- *       sit under one category line, indented; one alone reads
- *       "<category> · <title>"; a parent in the same group is the category line
- *       itself; a category with a running member says "running"/"sürüyor".
+ *       recommended one marked with its why. With the page's database (published
+ *       with capabilities {db: {}}) ANSWER_JS makes the option lines the choice
+ *       and shows a note and Send: Send writes answers/<slugId('a', title)> =
+ *       {row, key, label, note, at, state: "new"} and the line says
+ *       "cevaplandı: A · HH:MM", also after a reload. Every row's detail ends with
+ *       the same note form (a note alone: answers/<id>--n<time>, key ""), and every
+ *       row's line has a small reply icon that opens the detail at the note; a
+ *       sent note marks the icon. A row with nothing more to show has no detail of
+ *       its own: its title is never repeated under it. Active work and Owner oldest
+ *       first, the rest newest first; ties keep file order; an empty group is left out.
+ *       In a group, the lines of one category (a row's parent, else its group, by
+ *       name) sit under one category line, indented, however few; no line repeats
+ *       its category; a parent in the same group is the category line itself.
  *       Done today is one closed <details name="trk"> with its count and last
  *       time, its categories closed folds inside; Plans one closed fold per group
- *       (no group: Other). Waiting and Done today clamp after 5 units.
+ *       (its group, else its parent; neither: Other). Waiting and Done today
+ *       clamp after 5 units, cut cleanly at a line, no fade.
  *       Each entry carries `since` (ISO): when its state began. It is set when the
  *       state changes and kept on an update that keeps it, so a working or waiting
  *       line can say how long it has been so: its <time> carries data-since and a
@@ -130,8 +134,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', send: 'Send', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', send: 'Gönder', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', write: 'write a note', send: 'Send', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', write: 'not yazın', send: 'Gönder', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -169,19 +173,24 @@ const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
 // so they outweigh the strip's older CREW_CSS on any page, the plugin's or an outside updater's.
 const LN = ':is(.crew,main) li.crew-line';
 const STRIP_CSS = [
-  'section.crew{padding:0;border:0}',
+  // each section is its own area (owner, 2026-10-05: "Aktif çalışma gibi alanların ayrı gözükmesi lazım
+  // stilde … çocuklar için de geçerli"): a quiet surface, a hairline frame, a top band in its state's colour
+  'section.crew,main .blk{padding:14px 16px 4px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--faint)}',
+  'section.crew{border-top-color:var(--run)}main .blk[data-k="you"]{border-top-color:var(--you)}main .blk[data-k="wait"]{border-top-color:var(--wait)}main .blk[data-k="ok"]{border-top-color:var(--ok)}',
+  'main .blk>details>summary.hd{border-bottom:0;padding-bottom:10px}main .blk>details[open]>summary.hd{border-bottom:1px solid var(--muted)}',
   '.crew .hd{flex-wrap:wrap}',
   '.crew .hd .crew-sum{display:flex;flex-wrap:wrap;margin-left:auto;gap:14px;padding:0;border:0;letter-spacing:0}',
   '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
   `.crew svg,${LN} svg{width:16px;height:16px}`,
-  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto minmax(46px,auto);grid-template-areas:"m x l t";gap:0 12px;align-items:center;margin:0;padding:8px 0;background:none;border:0;border-bottom:1px solid var(--line);font-size:13.5px}`,
-  `${LN}>.ic{grid-area:m}${LN}>.tx{grid-area:x}${LN}>.lk{grid-area:l}${LN}>time{grid-area:t}`,
+  // the columns carry no gap of their own: each part brings its margin, so a part that is not there (no link,
+  // a reply icon still hidden) leaves no hole
+  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto minmax(46px,auto);grid-template-areas:"m x r l t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
+  `${LN}>.ic{grid-area:m;margin-right:12px}${LN}>.tx{grid-area:x}${LN}>.rp{grid-area:r}${LN}>.lk{grid-area:l;margin-left:12px}${LN}>time{grid-area:t;margin-left:12px}`,
   `${LN} .ic,${LN} .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}`,
   `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
   `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
   `${LN} .tx{display:block;width:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;color:var(--ink)}`,
-  `${LN} .ct{flex:none;color:var(--muted)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
-  `${LN} .tx em,li.cat .jh em,li.cat summary em{margin-left:8px;font:600 10.5px var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--run)}`,
+  `${LN} .ct{font:500 11px var(--mono);color:var(--faint)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx[aria-expanded="true"]::before{content:"\\25BE"}`,
   `${LN} .tx::after{content:"";position:absolute;inset:0}`,
@@ -191,39 +200,46 @@ const STRIP_CSS = [
   `${LN}>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}`,
   ':is(.crew,main) li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;background:none;border:0;border-left:1px solid var(--line)}',
   '.cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
-  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.js-cd .cd:not(.bare)>b{display:none}',
+  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.js-cd .cd>b{display:none}',
+  // a row with nothing more to show has no panel; with the database its panel is the note alone
+  '.cd.bare{display:none}html.js-ans .cd.bare.fm:not([hidden]){display:block}html.js-ans .cd.bare.fm{padding-top:4px}',
+  `${LN}:has(+li.crew-dl>.cd.bare) .tx::before{visibility:hidden}html.js-ans ${LN}:has(+li.crew-dl>.cd.fm) .tx::before{visibility:visible}`,
   '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}.cd .dl em{font-style:normal;color:var(--you)}',
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
   '.cd[hidden]{display:none}',
   '@keyframes mv-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}@keyframes mv-flash{0%,25%{background:color-mix(in srgb,var(--link) 14%,transparent)}100%{background:transparent}}',
   '@media (prefers-reduced-motion: no-preference){li.crew-line.mv-new{animation:mv-in .45s ease-out both}li.crew-line.mv-changed,li.crew-line.mv-done,summary.mv-changed{animation:mv-flash 2.2s ease-out}}',
-  '.cd .ask{color:var(--ink);font-weight:500}',
   '.cd ul.opt{list-style:none;margin:6px 0 2px;padding:0}',
   '.cd ul.opt>li{display:block;margin:0;padding:5px 0 5px 30px;position:relative;background:none;border:0;border-top:1px solid var(--line);overflow-wrap:anywhere}',
   '.cd ul.opt .k{position:absolute;left:0;top:6px;min-width:18px;padding:0 4px;font:600 10.5px/1.5 var(--mono);text-align:center;color:var(--muted);border:1px solid var(--line)}',
   '.cd ul.opt .ol{color:var(--ink);font-weight:500}.cd ul.opt .ot{display:block}.cd ul.opt .ol+.ot{margin-top:1px}',
   '.cd ul.opt em{margin-left:8px;padding:0 5px;font:600 10px/1.6 var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--you);border:1px solid currentColor}',
+  '.cd ul.opt li.pk{cursor:pointer}.cd ul.opt li.pk:hover .ol{color:var(--link)}.cd ul.opt li.pk[aria-pressed="true"] .k{background:var(--you);color:var(--bg);border-color:var(--you)}.cd ul.opt li.pk[aria-pressed="true"] .ol{color:var(--you)}.cd ul.opt li.pk:focus-visible{outline:1px solid var(--link);outline-offset:3px}',
+  // the reply icon: above the line's own click area, quiet until pointed at; a sent note marks it
+  `${LN}>.rp{position:relative;z-index:1;display:inline-flex;align-items:center;margin-left:10px;padding:3px;color:var(--faint);background:none;border:0;cursor:pointer}${LN}>.rp svg{width:14px;height:14px}${LN}>.rp:hover,${LN}>.rp:focus-visible{color:var(--link)}${LN}>.rp:focus-visible{outline:1px solid var(--link);outline-offset:1px}${LN}>.rp[data-done]{color:var(--ok)}${LN}>.rp[hidden]{display:none}`,
   'form.ans{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 2px}form.ans[hidden]{display:none}',
-  'form.ans .ak{display:flex;gap:6px}form.ans .ak button{min-width:36px;min-height:34px;padding:0 10px;font:600 12px var(--mono);color:var(--ink);background:none;border:1px solid var(--line);cursor:pointer}',
-  'form.ans .ak button.rec{border-color:var(--you);color:var(--you)}form.ans .ak button[aria-pressed="true"]{background:var(--you);border-color:var(--you);color:var(--bg)}',
   'form.ans input{flex:1 1 160px;min-width:0;min-height:34px;padding:0 8px;font:400 13px var(--sans);color:var(--ink);background:none;border:1px solid var(--line)}',
   'form.ans .send{min-height:34px;padding:0 14px;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--bg);background:var(--ink);border:0;cursor:pointer}form.ans .send[disabled]{opacity:.4;cursor:default}',
   'form.ans button:focus-visible,form.ans input:focus-visible{outline:1px solid var(--link);outline-offset:2px}form.ans .err{flex-basis:100%;color:var(--you)}form.ans .err[hidden]{display:none}',
   ':is(.crew,main) li.crew-line .tx .an{margin-left:8px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ok)}:is(.crew,main) li.crew-line .tx .an[hidden]{display:none}',
   '.cd ul.opt>li.rec .k{color:var(--you);border-color:currentColor}.cd ul.opt .why{display:block;margin-top:2px;color:var(--you)}',
-  ':is(.crew,main) li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
-  // a category line: its title (and "running" when a member runs) and the member count; a done one folds
+  ':is(.crew,main) li.crew-none{display:block;padding:9px 0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans);color:var(--muted)}',
+  // a category line (a project group): its name and the member count, a label over its indented lines,
+  // quieter than the section title above it and than the lines under it; a done or plan one folds
   'li.cat{display:block}li.cat>ul.ch,li.cat>ol{list-style:none;margin:0;padding:0}',
-  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:10px 0 9px;border-bottom:1px solid var(--line);font:600 13.5px/1.4 var(--sans);color:var(--ink)}',
+  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:14px 0 6px;font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}',
+  'li.cat>details>summary{padding:10px 0 9px;border-bottom:1px solid var(--line)}li.cat>details[open]>summary{border-bottom:0;padding-bottom:6px}',
   '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
   'li.cat>details>summary{cursor:pointer;list-style:none}li.cat>details>summary::-webkit-details-marker{display:none}',
   'li.cat>details>summary .jt::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}li.cat>details[open]>summary .jt::before{content:"\\25BE"}',
   'li.cat>details>summary:hover .jt{color:var(--link)}li.cat>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
-  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{font-weight:600}`,
-  'li.cat>ol,li.cat>details>ol{margin:0 0 0 2px;padding-left:16px;border-left:1px solid var(--line)}',
+  // a row heading its own category reads as the category's name, still a line that opens
+  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{padding:14px 0 6px;border-bottom:0}li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')} .tx{font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}`,
+  // the lines of a group: an evident indented block under its name
+  'li.cat>ol,li.cat>details>ol{margin:0 0 8px 3px;padding-left:14px;border-left:2px solid var(--line)}',
   // phone width: mark, text and time on the first row, the link label under the text
-  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto;grid-template-areas:"m x t" ". l .";gap:2px 12px}${LN}>.lk{justify-self:start}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:12px}}`,
+  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
 ];
 // The panel: with script, every detail starts closed; a line's button opens its own and closes every
 // other on the page; a second click closes it. aria-expanded follows; no scrolling, focus stays on the
@@ -267,26 +283,40 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0,W=t
 // (tools/lib/theme.js); the board's own layout follows it. The template carries it as
 // <style id="console"> and every render puts it back last, so it wins over a page's older styles and a
 // re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
-// The answer (owner, 2026-10-05: "textbox ve seçim yetenekleri getirelim"): with the artifact's database
-// (capability `db`, declared on publish as {db: {}}) a question row's form shows; a key button chooses (one
-// at a time, aria-pressed), Send writes answers/<id> = {row, key, label, note, at, state: "new"} and the row
-// says "cevaplandı: A · HH:MM"; one subscription marks answers already stored, also after a reload. No
-// database, no right to write, or any failure to reach it: the form stays hidden, the row reads as before.
+// The answer (owner, 2026-10-05: "textbox ve seçim yetenekleri getirelim"; "şıklar direk seçilebilmeli altta
+// niye ayrı buton var"; "her satıra cevap verebilmeliyim. aslında küçük bir ikonla"): with the artifact's
+// database (capability `db`, declared on publish as {db: {}}) every row's note form shows, and so does each
+// line's reply icon, which opens the row's detail and puts the cursor in the note. In a question row the
+// option lines themselves are the choice (one at a time, aria-pressed, Enter or Space too); Send writes
+// answers/<id> = {row, key, label, note, at, state: "new"} and the line says "cevaplandı: A · HH:MM". A note
+// with no choice is its own document, answers/<id>--n<time> with key "", and marks the line's reply icon
+// with its time ("--" never stands in an id made by slugId). One subscription marks what is already stored,
+// also after a reload. No database, no right to write, or any failure to reach it: forms and icons stay
+// hidden and the row reads as before.
 const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans[data-ans]");if(!forms.length)return;'
   + 'var W=typeof window!=="undefined"?window:{};if(!W.claude||typeof W.claude.use!=="function")return;'
-  + 'var tr=D.documentElement.lang==="tr",T=tr?{done:"cevaplandı",fail:"gönderilemedi, tekrar deneyin"}:{done:"answered",fail:"could not send, try again"};'
-  + 'function each(l,f){Array.prototype.forEach.call(l,f)}'
+  + 'var tr=D.documentElement.lang==="tr",T=tr?{done:"cevaplandı",note:"not gönderildi",fail:"gönderilemedi, tekrar deneyin"}:{done:"answered",note:"note sent",fail:"could not send, try again"};'
+  + 'function each(l,f){Array.prototype.forEach.call(l||[],f)}'
   + 'function hm(iso){var d=new Date(iso);if(isNaN(d.getTime()))return"";return("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)}'
-  + 'function mark(id,a){var t=T.done+": "+a.key+(hm(a.at)?" · "+hm(a.at):"");each(D.querySelectorAll("[data-an]"),function(e){if(e.getAttribute("data-an")===id){e.textContent=t;e.hidden=false}});'
-  + 'each(forms,function(f){if(f.getAttribute("data-ans")===id)f.hidden=true})}'
-  + 'var p;try{p=W.claude.use("db")}catch(e){return}Promise.resolve(p).then(function(db){if(!db)return;var col=db.collection("answers");'
-  + 'each(forms,function(f){var keys=f.querySelectorAll(".ak button"),note=f.querySelector("input"),send=f.querySelector(".send"),err=f.querySelector(".err"),pick=null;'
-  + 'each(keys,function(b){b.addEventListener("click",function(){pick=b;each(keys,function(x){x.setAttribute("aria-pressed",String(x===b))});send.disabled=false})});'
-  + 'f.addEventListener("submit",function(e){e.preventDefault();if(!pick)return;var id=f.getAttribute("data-ans"),a={row:f.getAttribute("data-row"),key:pick.getAttribute("data-k"),label:pick.getAttribute("data-l"),note:String(note&&note.value||"").trim().slice(0,500),at:new Date().toISOString(),state:"new"};'
-  + 'send.disabled=true;err.hidden=true;col.doc(id).set(a).then(function(){mark(id,a)},function(x){var c=x&&x.code;'
-  + 'if(c==="invalid_argument"||c==="not_granted"||c==="revoked"||c==="capability_disabled"||c==="capability_removed"){f.hidden=true;return}err.textContent=T.fail;err.hidden=false;send.disabled=false})});'
+  + 'var rps=D.querySelectorAll("button.rp[data-rp]");'
+  + 'function mark(id,a){var at=hm(a.at)?" · "+hm(a.at):"";if(a.key){each(D.querySelectorAll("[data-an]"),function(e){if(e.getAttribute("data-an")===id){e.textContent=T.done+": "+a.key+at;e.hidden=false}});'
+  + 'each(forms,function(f){if(f.getAttribute("data-ans")===id&&f.getAttribute("data-choice"))f.hidden=true});return}'
+  + 'each(rps,function(b){if(b.getAttribute("data-nt")!==id)return;var w=String(a.at||"");if(w<(b.getAttribute("data-at")||""))return;var t=T.note+at;b.setAttribute("data-at",w);b.setAttribute("data-done","1");b.setAttribute("title",t);b.setAttribute("aria-label",t)})}'
+  + 'function off(){each(forms,function(f){f.hidden=true});each(rps,function(b){b.hidden=true})}'
+  + 'var p;try{p=W.claude.use("db")}catch(e){return}Promise.resolve(p).then(function(db){if(!db)return;var col=db.collection("answers"),R=D.documentElement;if(R.classList)R.classList.add("js-ans");'
+  + 'each(forms,function(f){var ch=!!f.getAttribute("data-choice"),box=f.parentNode,keys=ch&&box&&box.querySelectorAll?box.querySelectorAll("ul.opt li[data-k]"):[],note=f.querySelector("input"),send=f.querySelector(".send"),err=f.querySelector(".err"),pick=null;'
+  + 'function txt(){return String(note&&note.value||"").trim().slice(0,500)}function ready(){send.disabled=!pick&&!txt()}'
+  + 'each(keys,function(b){b.setAttribute("role","button");b.setAttribute("tabindex","0");b.setAttribute("aria-pressed","false");if(b.classList)b.classList.add("pk");'
+  + 'function go(){pick=b;each(keys,function(x){x.setAttribute("aria-pressed",String(x===b))});ready()}b.addEventListener("click",go);b.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}})});'
+  + 'if(note&&note.addEventListener)note.addEventListener("input",ready);'
+  + 'f.addEventListener("submit",function(e){e.preventDefault();var n=txt();if(!pick&&!n)return;var base=f.getAttribute("data-ans"),c=pick,id=c?base:base+"--n"+Date.now().toString(36),'
+  + 'a={row:f.getAttribute("data-row"),key:c?c.getAttribute("data-k"):"",label:c?c.getAttribute("data-l"):"",note:n,at:new Date().toISOString(),state:"new"};'
+  + 'send.disabled=true;err.hidden=true;col.doc(id).set(a).then(function(){mark(base,a);if(!c&&note)note.value="";ready()},function(x){var k=x&&x.code;'
+  + 'if(k==="invalid_argument"||k==="not_granted"||k==="revoked"||k==="capability_disabled"||k==="capability_removed"){off();return}err.textContent=T.fail;err.hidden=false;send.disabled=false})});'
   + 'f.hidden=false});'
-  + 'col.onSnapshot(function(snap){each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(a&&a.key)mark(d.id,a)})},function(){})},function(){})})();';
+  + 'each(rps,function(b){b.hidden=false;b.addEventListener("click",function(){var id=b.getAttribute("data-rp"),tx=b.parentNode&&b.parentNode.querySelector("button.tx");if(tx&&tx.getAttribute("aria-expanded")!=="true"&&tx.click)tx.click();'
+  + 'var d=D.getElementById(id),i=d&&d.querySelector("form.ans input");if(i&&i.focus)i.focus()})});'
+  + 'col.onSnapshot(function(snap){each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(a)mark(String(d.id).replace(/--n[0-9a-z]+$/,""),a)})},function(){})},function(){})})();';
 
 // Motion (owner, 2026-10-05: "sayfayı sürekli yeniden çizme satırı güncelle güzelce. animatik düşün temiz
 // neat."). A publish reloads every open view (artifact runtime 0.2.67: "every open view live-reloads to it";
@@ -309,7 +339,9 @@ const CONSOLE_CSS = [
   'main ol,main ul{list-style:none;margin:0;padding:0}',
   'main li{margin:0;padding:0;background:none;border:0}',
   'main>ol{display:grid;gap:28px}',
-  'li.sec{display:block}li.sec.pl{padding-top:20px;border-top:1px solid var(--faint)}',
+  // the section title is the top of the order: section > project group > line > time and link
+  'main .blk>.hd,main .blk>details>summary.hd,main .crew>.hd{padding:0 0 9px;font:700 12px/1.2 var(--mono);letter-spacing:.14em;color:var(--ink);border-bottom:1px solid var(--muted)}',
+  'li.sec{display:block}li.sec.pl{padding-top:12px}',
   ...STRIP_CSS,
   '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}}',
 ].join('\n');
@@ -507,10 +539,25 @@ function slugId(prefix, text, hashOf = text) {
   return `${prefix}-${slug ? `${slug}-` : ''}${h.toString(36)}`;
 }
 
+// Answered on the page (owner, 2026-10-05: "şıklar direk seçilebilmeli altta niye ayrı buton var"; "her
+// satıra cevap verebilmeliyim. aslında küçük bir ikonla"): a question's option lines are themselves the
+// choice; every row's detail ends with a short note and Send. Hidden until the page's database is there
+// (ANSWER_JS); its id is made from the title, so it survives a move.
+const isChoice = (r) => !!r && r.state === 'you' && optionsOf(r).some((o) => o.key && (o.label || o.text));
+const REPLY_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 3.5h11v7.5H6.5l-3 2.5V11h-1z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+function formOf(r, L) {
+  const id = slugId('a', r.title);
+  const ph = esc(isChoice(r) ? (L.note || LABELS.en.note) : (L.write || LABELS.en.write));
+  return `<form class="ans" data-ans="${id}" data-row="${esc(r.title)}"${isChoice(r) ? ' data-choice="1"' : ''} hidden>`
+    + `<input type="text" id="n-${id}" name="note" maxlength="500" placeholder="${ph}" aria-label="${ph}">`
+    + `<button type="submit" class="send" disabled>${esc(L.send || LABELS.en.send)}</button><span class="err" role="status" hidden></span></form>`;
+}
+
 // A line's detail: the small text, the next step ("sonraki: …" / "next: …" parts of the small line) on
 // its own line, the crew entries' links, and in developer mode their model tail. A line waiting on the
 // owner leads with the link to where it is decided (an owner entry's url, else the row's, with its
-// label) and the entries' reason words. Empty when there is nothing to show (the panel shows the title).
+// label) and the entries' reason words. Empty when there is nothing to show: the line's title is never
+// repeated as the detail's only content (owner, 2026-10-05: "neden başlık açıklama ile aynı").
 function detailOf(r, es, L, { dev = false, decide = false } = {}) {
   const parts = String((r && r.small) || '').split(' · ').map((x) => x.trim()).filter(Boolean);
   const nextRe = /^(sonraki|next)\s*:\s*/i;
@@ -529,28 +576,19 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
   const urls = [];
   for (const e of es) if (isUrl(e.url) && e.url !== lead && !urls.includes(e.url)) urls.push(e.url);
   const tail = dev ? crewTail(es) : '';
-  // a decision: the question, then one option per line (its key a small tag), the recommended one
-  // marked, its why under it
+  // a decision: one option per line (its key a small tag), the recommended one marked, its why under it;
+  // the question is the line's own title, never repeated here
   const os = optionsOf(r).filter((o) => o.key && (o.label || o.text));
-  const ask = os.length ? `<p class="ask">${esc(r.title)}</p><ul class="opt">${os.map((o) => {
+  const ask = os.length ? `<ul class="opt">${os.map((o) => {
     const rec = key(o.key) === key(r.recommend);
-    return `<li${rec ? ' class="rec"' : ''}><span class="k">${esc(o.key)}</span>`
+    return `<li${rec ? ' class="rec"' : ''} data-k="${esc(o.key)}" data-l="${esc(o.label || o.text)}"><span class="k">${esc(o.key)}</span>`
       + (o.label ? `<span class="ol">${esc(o.label)}</span>` : '')
       + (rec ? ` <em>${esc(L.rec || LABELS.en.rec)}</em>` : '')
       + (o.text ? `<span class="ot">${esc(o.text)}</span>` : '')
       + (rec && String(r.why ?? '').trim() ? `<span class="why">${esc(String(r.why).trim())}</span>` : '')
       + '</li>';
   }).join('')}</ul>` : '';
-  // answered on the page (owner, 2026-10-05): one button per option, a short note, Send — hidden until the
-  // page's database is there (ANSWER_JS); the answer's id is made from the title, so it survives a move
-  const form = os.length && r.state === 'you'
-    ? `<form class="ans" data-ans="${slugId('a', r.title)}" data-row="${esc(r.title)}" hidden><div class="ak" role="group" aria-label="${esc(L.choice || LABELS.en.choice)}">${os.map((o) => {
-      const rec = key(o.key) === key(r.recommend);
-      const t = (o.label || o.text) + (rec ? ` · ${L.rec || LABELS.en.rec}` : '');
-      return `<button type="button"${rec ? ' class="rec"' : ''} data-k="${esc(o.key)}" data-l="${esc(o.label || o.text)}" aria-pressed="false" title="${esc(t)}">${esc(o.key)}</button>`;
-    }).join('')}</div><input type="text" id="n-${slugId('a', r.title)}" name="note" maxlength="500" placeholder="${esc(L.note || LABELS.en.note)}" aria-label="${esc(L.note || LABELS.en.note)}"><button type="submit" class="send" disabled>${esc(L.send || LABELS.en.send)}</button><span class="err" role="status" hidden></span></form>`
-    : '';
-  return dl + ask + form
+  return dl + ask
     + (rest ? `<p>${esc(rest)}</p>` : '')
     + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
     + (urls.length ? `<p class="ln">${urls.map((u) => a(u, L.link)).join(' · ')}</p>` : '')
@@ -562,8 +600,9 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
 // groups — Active work (run rows and the rows crew entries are working on, plus working entries with no
 // row; never what waits on the owner), Owner (you rows and the entries waiting on the owner), Waiting,
 // Done today (one closed fold) — and Plans below, one closed fold per group. In a group, two or more
-// lines of one category (a row's parent) sit under one category line; one is prefixed "<category> ·";
-// a parent in the same group is the category line itself; a category with a running member says so.
+// lines of one category (a row's parent, else its group) sit under one category line, one or many
+// (owner, 2026-10-05: "NEden joserah zenger gibi grup ismi değil?"); a parent in the same group is the
+// category line itself.
 // Active work and Owner oldest first, the rest newest first. Developer mode on: an icon's title names the
 // role and what it is doing; off: only what it is doing, no role name anywhere (owner, 2026-10-05:
 // "ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir."; "ikonların üstüne gelince planning
@@ -581,11 +620,6 @@ function board(rows, crew, L, dev) {
     const s = esc(n ? `${n} · ${t}` : t);
     return ` role="img" title="${s}" aria-label="${s}"`;
   };
-  // the categories with a running member: run rows and the rows a working entry names
-  const named = new Set(working.map((e) => key(e.row)).filter(Boolean));
-  const running = new Set();
-  for (const r of rows) if (r.state === 'run' || named.has(key(r.title))) { running.add(key(r.title)); if (hasParent(r)) running.add(key(r.parent)); }
-
   const G = { run: [], you: [], wait: [], ok: [], plan: [] };
   // a time sorts as a time of today; a day mark DD.MM (a carried-over row, a plan's day) by its date and
   // before any time of today (the year is not known: a December mark after a January one sorts wrong)
@@ -622,18 +656,21 @@ function board(rows, crew, L, dev) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
       time = elapsedTime({ state: 'work', since, time: es.map((e) => String(e.time)).sort().pop() });
     }
-    const answerable = r && g === 'you' && optionsOf(r).some((o) => o.key && (o.label || o.text));
+    const answerable = isChoice(r);
     const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
     const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const d = detailOf(r, es, L, { dev, decide: g === 'you' });
+    const form = r ? formOf(r, L) : '';
+    // a reply icon on every row's line: it opens the detail and puts the cursor in the note (ANSWER_JS)
+    const nt = r ? `<button type="button" class="rp" data-rp="${id}" data-nt="${slugId('a', r.title)}" title="${esc(L.write || LABELS.en.write)}" aria-label="${esc(L.write || LABELS.en.write)}" hidden>${REPLY_SVG}</button>` : '';
     // motion (owner, 2026-10-05): a stable key from the title and a signature of what the line shows, so the
     // page can tell after a reload what is new, changed or finished
     const sig = sigOf(JSON.stringify([g, title, cat, r && r.small, r && r.url, r && r.label, it.t, r && r.options, r && r.recommend, r && r.why, es.map((e) => [e.role, e.job, e.state])]));
     const mk = ` data-key="${slugId('k', title)}" data-sig="${sig}"`;
     const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}${mk}`
       : `data-st="${g}" class="crew-line ${g}"${mk}`;
-    return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${time}</li>\n`
-      + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}</div></li>\n`;
+    return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${time}${nt}</li>\n`
+      + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}${!d && form ? ' fm' : ''}" id="${id}">${d ? `<b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}` : ''}${form}</div></li>\n`;
   };
   const NEWEST = new Set(['wait', 'ok', 'plan']);
   const order = (g) => (a, b) => (NEWEST.has(g) ? -1 : 1) * a.k.localeCompare(b.k) || a.i - b.i;
@@ -642,7 +679,7 @@ function board(rows, crew, L, dev) {
   // plugin's own page), else the name alone (an outside updater's rows may name a category no row has).
   const units = (g, list) => {
     const its = [...list].sort(order(g));
-    const catOf = (it) => (it.r && hasParent(it.r) ? key(it.r.parent) : '');
+    const catOf = (it) => (it.r ? key(hasParent(it.r) ? it.r.parent : it.r.group) : '');
     const subs = new Map();
     for (const it of its) { const c = catOf(it); if (c) { if (!subs.has(c)) subs.set(c, []); subs.get(c).push(it); } }
     const heads = new Map(its.filter((it) => it.r && subs.has(key(it.r.title))).map((it) => [key(it.r.title), it]));
@@ -657,19 +694,17 @@ function board(rows, crew, L, dev) {
       if (seen.has(c)) continue;
       seen.add(c);
       const ms = subs.get(c); const head = heads.get(c);
-      if (!head && ms.length < 2) { out.push(lineFor(g, ms[0])); continue; }
-      const m = { title: byTitle.has(c) ? byTitle.get(c).title : String(ms[0].r.parent).trim() };
-      const run = running.has(c) ? ` <em>${esc(L.running)}</em>` : '';
+      const m = { title: byTitle.has(c) ? byTitle.get(c).title : String(ms[0].r.parent || ms[0].r.group).trim() };
       const kids = ms.map((x) => lineFor(g, x, { prefix: false })).join('');
       if (g === 'ok') {
         // a finished category folds, closed; one open at a time inside Done today
         const all = head ? [head, ...ms] : ms;
         const last = latest(all);
-        out.push(`  <li class="cat"><details name="trk-ok" id="${slugId('f-ok', m.title)}"><summary class="jh"><span class="jt">${esc(m.title)}${run}</span><span>${all.length} · ${esc(last)}</span></summary><ol>\n${head ? lineFor(g, head, { prefix: false }) : ''}${kids}</ol></details></li>\n`);
+        out.push(`  <li class="cat"><details name="trk-ok" id="${slugId('f-ok', m.title)}"><summary class="jh"><span class="jt">${esc(m.title)}</span><span>${all.length} · ${esc(last)}</span></summary><ol>\n${head ? lineFor(g, head, { prefix: false }) : ''}${kids}</ol></details></li>\n`);
       } else if (head) {
-        out.push(`  <li class="cat"><ul class="ch">\n${lineFor(g, head, { prefix: false, extra: ` <span class="n">${ms.length}</span>${run}` })}</ul><ol>\n${kids}</ol></li>\n`);
+        out.push(`  <li class="cat"><ul class="ch">\n${lineFor(g, head, { prefix: false, extra: ` <span class="n">${ms.length}</span>` })}</ul><ol>\n${kids}</ol></li>\n`);
       } else {
-        out.push(`  <li class="cat"><div class="jh"><span class="jt">${esc(m.title)}${run}</span><span>${ms.length}</span></div><ol>\n${kids}</ol></li>\n`);
+        out.push(`  <li class="cat"><div class="jh"><span class="jt">${esc(m.title)}</span><span>${ms.length}</span></div><ol>\n${kids}</ol></li>\n`);
       }
     }
     return out;
@@ -692,7 +727,7 @@ function board(rows, crew, L, dev) {
     const head = esc(L.groups[GROUP[g]]);
     if (g === 'plan') {
       const byG = new Map();
-      for (const it of [...its].sort(order('plan'))) { const k = String(it.r.group || '').trim() || L.other; if (!byG.has(k)) byG.set(k, []); byG.get(k).push(it); }
+      for (const it of [...its].sort(order('plan'))) { const k = String(it.r.group || it.r.parent || '').trim() || L.other; if (!byG.has(k)) byG.set(k, []); byG.get(k).push(it); }
       const folds = [...byG].map(([k, xs]) => `  <li class="cat"><details name="trk" id="${slugId('f-plan', k)}"><summary class="jh"><span class="jt">${esc(k)}</span><span>${xs.length}</span></summary><ol>\n${xs.map((x) => lineFor('plan', x, { prefix: false })).join('')}</ol></details></li>\n`).join('');
       return `<li class="sec pl"><div class="blk" data-k="plan"><div class="hd">${head} <span>${its.length}</span></div><ol>\n${folds}</ol></div></li>`;
     }
@@ -700,7 +735,7 @@ function board(rows, crew, L, dev) {
     const long = (g === 'wait' || g === 'ok') && us.length > CLAMP;
     const more = `${L.more} (${its.length})`;
     const list = `<div class="clip${long ? ' clamp' : ''}" id="clip-${g}"><ol>\n${us.join('')}</ol></div>`
-      + (long ? `<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${g}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
+      + (long ? `<button type="button" class="more" aria-expanded="false" aria-controls="clip-${g}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
     if (g === 'ok') {
       const last = latest(its);
       return `<li class="sec"><div class="blk" data-k="ok"><details name="trk" id="f-ok"><summary class="hd">${head} <span>${its.length}</span><span class="lt">${esc(last)}</span></summary>${list}</details></div></li>`;

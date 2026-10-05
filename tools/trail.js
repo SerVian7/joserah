@@ -374,7 +374,7 @@ function mainHtml(D, L) {
     const long = g.es.length > CLAMP;
     const more = `${L.more} (${g.es.length})`;
     return `<div class="clip${long ? ' clamp' : ''}" id="clip-${g.d}"><ol>\n${g.es.map((e) => entryLi(e, A, D, L)).join('')}</ol></div>`
-      + (long ? `<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${g.d}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
+      + (long ? `<button type="button" class="more" aria-expanded="false" aria-controls="clip-${g.d}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
   };
   const dayHtml = days.map((g, i) => (i === 0
     ? `<div class="day" id="day-${g.d}"><div class="hd">${dm(g.d)} <span>${g.es.length}</span></div>${list(g)}</div>\n`
