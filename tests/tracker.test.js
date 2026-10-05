@@ -516,8 +516,8 @@ test('a main job with sub-jobs: a category line in each group; only a finished o
   assert.ok(!html.includes('data-k="run"'), 'no running section in the list');
   // in the strip the main job is the category line, its running sub-job under it
   const s = stripOf(html);
-  assert.match(s, /<li class="cat"><ul class="ch">\n  <li class="crew-line run">[^\n]*aria-controls="d-run-main-[0-9a-z]+">Main <span class="n">1<\/span> <em>running<\/em><\/button>/);
-  assert.match(s, /<\/ul><ol>\n  <li class="crew-line run">[^\n]*>Sub running<\/button>/);
+  assert.match(s, /<li class="cat"><ul class="ch">\n  <li class="crew-line run" data-key="[^"]+" data-sig="[^"]+">[^\n]*aria-controls="d-run-main-[0-9a-z]+">Main <span class="n">1<\/span> <em>running<\/em><\/button>/);
+  assert.match(s, /<\/ul><ol>\n  <li class="crew-line run" data-key="[^"]+" data-sig="[^"]+">[^\n]*>Sub running<\/button>/);
   // one sub-job in a group: prefixed with its category
   assert.match(secOf(html, 'you'), />\s*<span class="ct">Main ·<\/span> Ask<\/button>/);
   // done: the category folds, closed, with its count and last time; newest first inside
@@ -538,7 +538,7 @@ test('waiting categories never fold; plans fold by group', (t) => {
   render(dir);
   const w = secOf(page(dir), 'wait');
   assert.doesNotMatch(w, /<details/);
-  assert.match(w, /<li class="cat"><ul class="ch">\n  <li data-st="wait" class="crew-line wait">[^\n]*>W main <span class="n">1<\/span><\/button>[\s\S]*<\/ul><ol>\n  <li data-st="wait" class="crew-line wait">[^\n]*>W sub<\/button>/);
+  assert.match(w, /<li class="cat"><ul class="ch">\n  <li data-st="wait" class="crew-line wait" data-key="[^"]+" data-sig="[^"]+">[^\n]*>W main <span class="n">1<\/span><\/button>[\s\S]*<\/ul><ol>\n  <li data-st="wait" class="crew-line wait" data-key="[^"]+" data-sig="[^"]+">[^\n]*>W sub<\/button>/);
   assert.match(secOf(page(dir), 'plan'), /<details name="trk" id="f-plan-alpha-[0-9a-z]+"><summary class="jh"><span class="jt">Alpha<\/span><span>1<\/span><\/summary><ol>\n[^\n]*>P sub<\/button>/);
 });
 test('a long list shows its first lines: more than five units get a button and a fade, five do not', (t) => {
@@ -580,7 +580,7 @@ test('the template carries the console style and the clamp script; a re-render i
   assert.ok(f.includes(`<style id="console">\n${CONSOLE_CSS}\n</style>`), 'template and renderer agree (style)');
   const { PANEL_JS, STATE_JS } = require('../tools/tracker.js');
   const { ANSWER_JS } = require('../tools/tracker.js');
-  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n</body>`), 'template and renderer agree (scripts)');
+  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n<script id="motion">${require('../tools/tracker.js').MOTION_JS}</script>\n</body>`), 'template and renderer agree (scripts)');
   const dir = tmpdir(t); init(dir);
   const fresh = page(dir);
   render(dir, '2026-10-01T09:05:00Z');
@@ -737,7 +737,7 @@ test('active work: run rows are listed once, in the strip, never in the list', (
   assert.ok(ls[0].includes('R two'), 'oldest first');
   assert.ok(html.indexOf('<section class="crew">') < html.indexOf('<ol>'), 'the strip is above the list');
   // a run row with no crew entry: a line without an icon, so nothing running is hidden
-  assert.match(ls[1], /^<li class="crew-line run"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="(d-run-r-one-[0-9a-z]+)">R one<\/button><time>09:00<\/time><\/li>$/, 'a run row with no entry: the square mark');
+  assert.match(ls[1], /^<li class="crew-line run" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="(d-run-r-one-[0-9a-z]+)">R one<\/button><time>09:00<\/time><\/li>$/, 'a run row with no entry: the square mark');
   assert.match(stripOf(html), /<div class="cd bare" id="d-run-r-one-[0-9a-z]+"><b>R one<\/b><\/div>/, 'nothing more to show: the panel shows the title');
   assert.match(ls[0], /<button type="button" class="tx" aria-expanded="false" aria-controls="d-run-r-two-[0-9a-z]+">R two<\/button>/, 'a row with a detail opens it');
 });
@@ -760,10 +760,10 @@ test('crew --row: category and summary from the row, one detail panel, one line 
   assert.strictEqual(ls.length, 4, 'Sinan (two entries, one line), Kendi işi, Zenger, Loose');
   assert.strictEqual(ls.filter((l) => l.includes('Sinan')).length, 1, 'one row, one line');
   const sinan = ls.find((l) => l.includes('Sinan'));
-  assert.match(sinan, /^<li class="crew-line work" data-role="lead"><span class="ic"><span role="img" title="Lead · yönetiyor" aria-label="Lead · yönetiyor"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder · kod yazıyor" aria-label="Builder · kod yazıyor"><svg/);
+  assert.match(sinan, /^<li class="crew-line work" data-role="lead" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span role="img" title="Lead · yönetiyor" aria-label="Lead · yönetiyor"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder · kod yazıyor" aria-label="Builder · kod yazıyor"><svg/);
   // Zenger runs too: it is the category line, Sinan under it without a prefix, the row's link on the line
   const sid = sinan.match(/aria-controls="(d-run-[^"]+)">Sinan Bey'e cevap<\/button><a class="lk" href="https:\/\/example\.com\/d" target="_blank" rel="noopener">taslak<\/a>/)[1];
-  assert.match(stripOf(html), /<li class="cat"><ul class="ch">\n  <li class="crew-line run">[^\n]*>Zenger <span class="n">1<\/span> <em>sürüyor<\/em><\/button>/);
+  assert.match(stripOf(html), /<li class="cat"><ul class="ch">\n  <li class="crew-line run" data-key="[^"]+" data-sig="[^"]+">[^\n]*>Zenger <span class="n">1<\/span> <em>sürüyor<\/em><\/button>/);
   assert.doesNotMatch(sinan, /class="cm"/, 'the model tail is in the detail');
   // the entry with no row: its own job, a panel with its title
   assert.match(ls.find((l) => l.includes('Kendi')), /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">Kendi işi<\/button>/);
@@ -1044,8 +1044,8 @@ test('board: two rows of one category gather under a category line; a single one
   setRows(d2, [{ state: 'you', title: 'Main', time: '09:00' }, { state: 'you', title: 'Sub', parent: 'Main', time: '09:10' }]);
   render(d2);
   const you = secOf(page(d2), 'you');
-  assert.match(you, /<li class="cat"><ul class="ch">\n  <li data-st="you" class="crew-line you"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="d-you-main-[0-9a-z]+">Main <span class="n">1<\/span><\/button>/);
-  assert.match(you, /<\/ul><ol>\n  <li data-st="you" class="crew-line you">[^\n]*>Sub<\/button>/);
+  assert.match(you, /<li class="cat"><ul class="ch">\n  <li data-st="you" class="crew-line you" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="d-you-main-[0-9a-z]+">Main <span class="n">1<\/span><\/button>/);
+  assert.match(you, /<\/ul><ol>\n  <li data-st="you" class="crew-line you" data-key="[^"]+" data-sig="[^"]+">[^\n]*>Sub<\/button>/);
 });
 test('board: every line opens its own detail, the next item, with an id made from its title', (t) => {
   const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
@@ -1441,4 +1441,90 @@ test('answers: without the capability, or with no write right, the row reads as 
   await flush();
   assert.deepStrictEqual([dom2.forms[0].hidden, dom2.forms[0].err.hidden, dom2.forms[0].send.disabled], [false, false, false], 'a passing failure: say so, keep the choice, Send again');
   assert.match(dom2.forms[0].err.textContent, /gönderilemedi/);
+});
+
+// Owner, 2026-10-05: "tracker da sayfayı sürekli yeniden çizme satırı güncelle güzelce. animatik düşün temiz
+// neat." A publish reloads every open view (the artifact runtime, contract 0.2.67: "every open view
+// live-reloads to it"; in-place edits are for live docs only), so the page cannot be patched without one.
+// What the page does: each line carries a stable key (from its title) and a signature of what it shows;
+// after a reload the motion script compares them with the last load and animates only what changed — a new
+// line slides in, a changed one flashes once, one that finished flashes in Done today — and keeps scroll and
+// open details (STATE_JS). Reduced motion: no animation.
+const keyOf = (l) => (l.match(/data-key="([^"]+)"/) || [])[1];
+const sigOf = (l) => (l.match(/data-sig="([^"]+)"/) || [])[1];
+const allLines = (html) => html.match(/<li [^>]*class="crew-line[^"]*"[^>]*>/g) || [];
+test('motion: every line has a stable key from its title and a signature of what it shows', (t) => {
+  const { slugId } = require('../tools/tracker.js');
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'you', title: 'Y', small: 'a', time: '09:00' }, { state: 'run', title: 'R', time: '09:01' }, { state: 'ok', title: 'D', time: '08:00' }]);
+  render(dir);
+  let ls = allLines(page(dir));
+  assert.strictEqual(ls.length, 3);
+  for (const l of ls) assert.ok(keyOf(l) && sigOf(l), l);
+  const y = ls.find((l) => l.includes('data-st="you"'));
+  assert.strictEqual(keyOf(y), slugId('k', 'Y'), 'the key comes from the title alone');
+  const before = Object.fromEntries(ls.map((l) => [keyOf(l), sigOf(l)]));
+  render(dir, '2026-10-01T10:00:00');
+  assert.deepStrictEqual(Object.fromEntries(allLines(page(dir)).map((l) => [keyOf(l), sigOf(l)])), before, 'a re-render with nothing new changes nothing');
+  setRows(dir, [{ state: 'you', title: 'Y', small: 'b', time: '09:00' }, { state: 'ok', title: 'R', time: '09:30' }, { state: 'ok', title: 'D', time: '08:00' }]);
+  render(dir);
+  ls = allLines(page(dir));
+  const now = Object.fromEntries(ls.map((l) => [keyOf(l), sigOf(l)]));
+  assert.notStrictEqual(now[slugId('k', 'Y')], before[slugId('k', 'Y')], 'new small text, new signature');
+  assert.ok(now[slugId('k', 'R')], 'the same key in another group');
+  assert.strictEqual(now[slugId('k', 'D')], before[slugId('k', 'D')]);
+  assert.ok(ls.find((l) => keyOf(l) === slugId('k', 'R')).includes('data-st="ok"'));
+});
+
+function motionDom(lines) {
+  const els = lines.map(([key, sig, st, folded]) => {
+    const cls = new Set(); const summary = { cls: new Set(), classList: null };
+    summary.classList = { add: (c) => summary.cls.add(c), remove: (c) => summary.cls.delete(c) };
+    return { key, cls, summary,
+      getAttribute: (k) => ({ 'data-key': key, 'data-sig': sig, 'data-st': st })[k] ?? null,
+      classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c) },
+      closest: (s) => (s === 'details' && folded ? { open: false, querySelector: () => summary } : null) };
+  });
+  return { els, document: { querySelectorAll: (s) => (s === 'li.crew-line[data-key]' ? els : []) } };
+}
+const runMotion = (dom, storage, timers = []) => {
+  const vm = require('vm');
+  const { MOTION_JS } = require('../tools/tracker.js');
+  vm.runInNewContext(MOTION_JS, { document: dom.document, location: { pathname: '/p' }, localStorage: storage, setTimeout: (f, ms) => timers.push([f, ms]), JSON });
+};
+const memStore = () => { const m = new Map(); return { m, getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) }; };
+test('motion: the first load animates nothing; the next marks new, changed and finished lines once', () => {
+  const st = memStore();
+  const first = motionDom([['k-a', 's1', 'you'], ['k-b', 's2', null], ['k-c', 's3', 'wait']]);
+  runMotion(first, st);
+  assert.ok(first.els.every((e) => e.cls.size === 0), 'nothing to compare with yet');
+  const timers = [];
+  const next = motionDom([['k-a', 's1', 'you'], ['k-b', 's2', 'ok', true], ['k-c', 's9', 'wait'], ['k-d', 's4', 'you']]);
+  runMotion(next, st, timers);
+  assert.deepStrictEqual(next.els.map((e) => [...e.cls]), [[], ['mv-done'], ['mv-changed'], ['mv-new']]);
+  assert.deepStrictEqual([...next.els[1].summary.cls], ['mv-changed'], 'a closed Done fold says something landed in it');
+  for (const [f] of timers) f();
+  assert.ok(next.els.every((e) => e.cls.size === 0), 'each mark is cleared after its animation');
+  const again = motionDom([['k-a', 's1', 'you'], ['k-b', 's2', 'ok', true], ['k-c', 's9', 'wait'], ['k-d', 's4', 'you']]);
+  runMotion(again, st);
+  assert.ok(again.els.every((e) => e.cls.size === 0), 'the same page again: nothing moves');
+});
+test('motion: no storage, or storage that throws, animates nothing and throws nothing', () => {
+  const throwing = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+  const dom = motionDom([['k-a', 's1', 'you']]);
+  assert.doesNotThrow(() => runMotion(dom, throwing));
+  assert.strictEqual(dom.els[0].cls.size, 0);
+  assert.doesNotThrow(() => runMotion(motionDom([['k-a', 's1', 'you']]), undefined));
+});
+test('motion: the page carries the script once; the animations run only without reduced motion', (t) => {
+  const { STRIP_CSS } = require('../tools/tracker.js');
+  const css = STRIP_CSS.join('\n');
+  const m = css.match(/@media \(prefers-reduced-motion: no-preference\)\{([^@]*?)\}\}/g) || [];
+  const motion = m.find((x) => x.includes('mv-new'));
+  assert.ok(motion, 'the line animations sit inside a no-preference block');
+  assert.match(motion, /li\.crew-line\.mv-new\{animation:mv-in/);
+  assert.match(motion, /li\.crew-line\.mv-changed,[^{]*\.mv-done[^{]*\{animation:mv-flash/);
+  assert.doesNotMatch(css.replace(motion, ''), /animation:mv-/, 'no motion animation outside it');
+  const dir = tmpdir(t); init(dir); setRows(dir, [{ state: 'you', title: 'Y', time: '09:00' }]); render(dir); render(dir);
+  assert.strictEqual(page(dir).split('<script id="motion">').length, 2);
 });

@@ -196,6 +196,8 @@ const STRIP_CSS = [
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
   '.cd[hidden]{display:none}',
+  '@keyframes mv-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}@keyframes mv-flash{0%,25%{background:color-mix(in srgb,var(--link) 14%,transparent)}100%{background:transparent}}',
+  '@media (prefers-reduced-motion: no-preference){li.crew-line.mv-new{animation:mv-in .45s ease-out both}li.crew-line.mv-changed,li.crew-line.mv-done,summary.mv-changed{animation:mv-flash 2.2s ease-out}}',
   '.cd .ask{color:var(--ink);font-weight:500}',
   '.cd ul.opt{list-style:none;margin:6px 0 2px;padding:0}',
   '.cd ul.opt>li{display:block;margin:0;padding:5px 0 5px 30px;position:relative;background:none;border:0;border-top:1px solid var(--line);overflow-wrap:anywhere}',
@@ -283,6 +285,21 @@ const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans
   + 'if(c==="invalid_argument"||c==="not_granted"||c==="revoked"||c==="capability_disabled"||c==="capability_removed"){f.hidden=true;return}err.textContent=T.fail;err.hidden=false;send.disabled=false})});'
   + 'f.hidden=false});'
   + 'col.onSnapshot(function(snap){each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(a&&a.key)mark(d.id,a)})},function(){})},function(){})})();';
+
+// Motion (owner, 2026-10-05: "sayfayı sürekli yeniden çizme satırı güncelle güzelce. animatik düşün temiz
+// neat."). A publish reloads every open view (artifact runtime 0.2.67: "every open view live-reloads to it";
+// in-place edits are for live docs only), so the page cannot be patched without one. After the reload this
+// script compares each line's key and signature with the last load (browser storage, per page; every access
+// guarded): a new line slides in, a changed one flashes once, one that moved to done flashes, and the closed
+// Done fold's head with it; then it stores this load. The first load and the same page again move nothing.
+// The animations are CSS, only without reduced motion; scroll and open details come back through STATE_JS.
+const MOTION_JS = '(function(){var K="trk-sig:"+location.pathname,prev=null,cur={};'
+  + 'try{prev=JSON.parse(localStorage.getItem(K)||"null")}catch(e){prev=null}'
+  + 'function mark(el,c){el.classList.add(c);setTimeout(function(){el.classList.remove(c)},2400)}'
+  + 'Array.prototype.forEach.call(document.querySelectorAll("li.crew-line[data-key]"),function(l){var k=l.getAttribute("data-key"),s=l.getAttribute("data-sig"),g=l.getAttribute("data-st")||"run";cur[k]={s:s,g:g};'
+  + 'if(!prev||typeof prev!=="object")return;var p=prev[k],c=!p?"mv-new":(p.g!==g&&g==="ok")?"mv-done":(p.s!==s||p.g!==g)?"mv-changed":"";if(!c)return;mark(l,c);'
+  + 'var d=l.closest&&l.closest("details");if(d&&!d.open){var h=d.querySelector("summary");if(h)mark(h,"mv-changed")}});'
+  + 'try{localStorage.setItem(K,JSON.stringify(cur))}catch(e){}})();';
 
 const CONSOLE_CSS = [
   theme.BASE_CSS,
@@ -468,6 +485,13 @@ function stampSince(e, clock) {
 
 const isUrl = (u) => /^https?:\/\//i.test(String(u || ''));
 
+// A short hash of a line's content (djb2, base 36): equal content, equal signature.
+function sigOf(text) {
+  let h = 5381;
+  for (const ch of String(text)) h = (Math.imul(h, 33) ^ ch.codePointAt(0)) >>> 0;
+  return h.toString(36);
+}
+
 // A stable id from a title (owner, 2026-10-05: what is open survives a reload; an id from a position
 // would point at another line once a row is added above it): a readable slug and a short hash of the
 // whole title, so two titles that slug alike still differ. `hashOf` (default the text) adds to the hash only,
@@ -600,8 +624,12 @@ function board(rows, crew, L, dev) {
     const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
     const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const d = detailOf(r, es, L, { dev, decide: g === 'you' });
-    const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}`
-      : `data-st="${g}" class="crew-line ${g}"`;
+    // motion (owner, 2026-10-05): a stable key from the title and a signature of what the line shows, so the
+    // page can tell after a reload what is new, changed or finished
+    const sig = sigOf(JSON.stringify([g, title, cat, r && r.small, r && r.url, r && r.label, it.t, r && r.options, r && r.recommend, r && r.why, es.map((e) => [e.role, e.job, e.state])]));
+    const mk = ` data-key="${slugId('k', title)}" data-sig="${sig}"`;
+    const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}${mk}`
+      : `data-st="${g}" class="crew-line ${g}"${mk}`;
     return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${time}</li>\n`
       + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}</div></li>\n`;
   };
@@ -735,7 +763,7 @@ function render(dir, { quiet = false } = {}) {
   html = html.replace(/\n<style id="theme">[\s\S]*?<\/style>/, '').replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
     .replace(/<script id="since">[\s\S]*?<\/script>\n/, '')
     .replace(/<script id="panel">[\s\S]*?<\/script>\n/, '').replace(/<script id="state">[\s\S]*?<\/script>\n/, '')
-    .replace(/<script id="answer">[\s\S]*?<\/script>\n/, '');
+    .replace(/<script id="answer">[\s\S]*?<\/script>\n/, '').replace(/<script id="motion">[\s\S]*?<\/script>\n/, '');
   html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) => a
     + css.replace(/border-radius:(?!0[;}\s!])[^;}]*;?/g, '').replace(/box-shadow:(?!none[;}\s!])[^;}]*;?/g, '') + b);
   // a page made before the strip gets its styles once
@@ -748,7 +776,7 @@ function render(dir, { quiet = false } = {}) {
   const at = html.lastIndexOf('</style>') + '</style>'.length;
   html = `${html.slice(0, at)}${first >= 0 ? '' : `\n<style id="theme">\n${theme.TOKENS_CSS}\n</style>`}\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
   // the clamp first (a restored long list opens through its button), then the panel, then the saved state
-  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n</body>`);
+  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n<script id="motion">${MOTION_JS}</script>\n</body>`);
   // the elapsed-time script only when a strip line has something to count
   if (crew.some(ticks)) html = html.replace('</body>', () => `<script id="since">${SINCE_JS}</script>\n</body>`);
   fs.writeFileSync(pagePath, html);
@@ -850,4 +878,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, ANSWER_JS, activeStrip, board, slugId, checkDecisions, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, ANSWER_JS, MOTION_JS, activeStrip, board, slugId, checkDecisions, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
