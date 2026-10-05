@@ -81,7 +81,8 @@ function refreshMemory(dir) {
   const root = path.resolve(dir);
   if (!isMemory(root)) fail(root + ' is not a Joserah Memory (no .memory/config.json of kind "memory")');
   const cfg = readJson(path.join(root, '.memory', 'config.json'));
-  const wanted = { 'AGENTS.md': render('AGENTS.md', cfg) };
+  // exp/shared-assistant: RECORDING.md (continuous recording) travels with AGENTS.md.
+  const wanted = { 'AGENTS.md': render('AGENTS.md', cfg), 'RECORDING.md': render('RECORDING.md', cfg) };
   for (const [rel, src] of Object.entries(MEMORY_TOOLS)) wanted[rel] = fs.readFileSync(path.join(PLUGIN_ROOT, src), 'utf8');
   const changed = [];
   for (const [rel, text] of Object.entries(wanted)) {
@@ -106,7 +107,8 @@ function refreshMemory(dir) {
 }
 
 /** scaffold.js --kind memory. Returns { root, files, registered }. */
-function scaffoldMemory({ target, company, members, sweeper, language }) {
+function scaffoldMemory({ target, company, members, sweeper, language, recording }) {
+  if (recording !== undefined && !['sweep', 'continuous'].includes(recording)) fail('--recording is sweep or continuous');
   if (!target) fail('--kind memory needs --target DIR');
   if (!company) fail('--kind memory needs --company NAME');
   const list = String(members || '').split(',').map(memberSlug).filter(Boolean);
@@ -134,6 +136,9 @@ function scaffoldMemory({ target, company, members, sweeper, language }) {
     kind: 'memory', company, language: language || null, members: list, sweeper: sw, lastSweep: null,
     created: new Date().toISOString().slice(0, 10),
   }, null, 2) + '\n', 'utf8');
+
+  // exp/shared-assistant: --recording continuous switches the new memory on before its first commit.
+  if (recording === 'continuous') require(path.join(root, 'tools', 'ingest.js')).init(root, sw);
 
   git(root, 'init', '-q');
   git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main');
@@ -210,8 +215,12 @@ function memoryChecks(root) {
       const [subject, ...names] = entry.split('\n');
       const member = (/^([a-z0-9-]+):/.exec(subject) || [])[1];
       if (member === cfg.sweeper) continue;
+      // exp/shared-assistant, continuous recording: a member writes knowledge/ by ingest, and that commit
+      // carries a log entry; the generated index may move on its own.
+      const logged = cfg.recording === 'continuous' && names.some((l) => l.split('\t')[1] === 'knowledge/log.md');
       for (const line of names.filter(Boolean)) {
         const [st, f] = line.split('\t');
+        if (cfg.recording === 'continuous' && (f === 'knowledge/index.md' || (logged && f.startsWith('knowledge/')))) continue;
         // questions/<date>-<from>-<to>-<slug>.md: the asker adds or deletes, only the addressee modifies.
         const qm = /^questions\/\d{4}-\d{2}-\d{2}-(.+)\.md$/.exec(f);
         const pair = qm && cfg.members.flatMap((a) => cfg.members.map((b) => [a, b])).find(([a, b]) => qm[1].startsWith(`${a}-${b}-`));

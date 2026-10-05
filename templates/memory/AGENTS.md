@@ -2,7 +2,7 @@
 
 This repository is {{COMPANY}}'s shared memory: plain markdown in git, records not conversation. This
 memory was created with Joserah, but Joserah is not required: any AI that reads `AGENTS.md` can work in
-it. Read this file in full at the start of every session, before you write anything.
+it. Read this file in full at the start of every session, before you write anything. When `.memory/config.json` says `"recording": "continuous"`, read `RECORDING.md` next: it replaces the `knowledge/` rule of §2, and §6 and §7.
 
 The clone lives at `.joserah/shared/<name>/` inside a Joserah workspace (the plugin puts it there), or
 at `~/<name>` without Joserah — one clone per machine, every workspace on that machine points at it.

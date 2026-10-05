@@ -6,6 +6,14 @@
  *        projects line when a knowledge page carries repo: — tools/project-drift.js)
  *        node tools/sync.js --push [--who X]  commit members/<me>/, inbox/ and questions/, then push
  *        node tools/sync.js --push --sweep    the sweeper after a sweep: commit everything, then push
+ *        node tools/sync.js --redo            after a conflict (exit 4): take the remote's state, keep your
+ *                                             commits on a redo-<time> branch, bring back your own files,
+ *                                             and list the notes whose ingest must be re-applied
+ *
+ * Continuous recording (.memory/config.json "recording": "continuous", RECORDING.md): --push also
+ * stages knowledge/, regenerates knowledge/index.md and refuses the push until
+ * "node tools/ingest.js check" passes. A pull that hits a real conflict never leaves the clone
+ * mid-rebase: the rebase is aborted, the files are named, and sync exits 4.
  *
  * --push first prints a "Push notice" naming its target (shared memory <folder> and
  * its origin URL) and every file about to go out, one line each, then exits 3. The
@@ -25,12 +33,17 @@ const { sweepState, sweepLine } = require('./sweep-due');
 const { brokenLinks } = require('./verify-links');
 const { checkClaims } = require('./claims');
 const { driftLine } = require('./project-drift');
+const ingest = require('./ingest');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
 const git = (...a) => spawnSync('git', ['-C', root, ...a], { encoding: 'utf8' });
-function die(msg) { console.error(`sync: ${msg}`); process.exit(1); }
+function die(msg, code = 1) { console.error(`sync: ${msg}`); process.exit(code); }
+let cfg = {};
+try { cfg = JSON.parse(fs.readFileSync(path.join(root, '.memory', 'config.json'), 'utf8').replace(/^\uFEFF/, '')); } catch { /* reported by doctor */ }
+const continuous = cfg.recording === 'continuous';
+const rebasing = () => ['rebase-merge', 'rebase-apply'].some((d) => fs.existsSync(path.resolve(root, git('rev-parse', '--git-path', d).stdout.trim())));
 
 const hasUpstream = git('rev-parse', '--abbrev-ref', '@{u}').status === 0;
 const hasOrigin = git('remote', 'get-url', 'origin').status === 0;
@@ -41,7 +54,14 @@ function pull() {
   if (!hasUpstream) return 'no remote to pull from';
   const before = git('rev-parse', 'HEAD').stdout.trim();
   const r = git('pull', '--rebase', '--autostash', '--quiet');
-  if (r.status !== 0) die(`pull failed — ${(r.stderr || r.stdout).trim()}`);
+  if (r.status !== 0) {
+    if (!rebasing()) die(`pull failed — ${(r.stderr || r.stdout).trim()}`);
+    // Someone pushed a change to the same lines first: abort, never leave a half state.
+    const files = git('diff', '--name-only', '--diff-filter=U').stdout.split(/\r?\n/).filter(Boolean);
+    git('rebase', '--abort');
+    die(`conflict with the remote on: ${files.join(', ') || '(unknown files)'} — your commit is kept, nothing was pushed. ` +
+      'Run node tools/sync.js --redo, then re-apply the notes it lists onto the fresh pages (RECORDING.md §3).', 4);
+  }
   const n = git('rev-list', '--count', `${before}..HEAD`).stdout.trim();
   return n === '0' ? 'up to date' : `pulled ${n} commit(s)`;
 }
@@ -70,8 +90,11 @@ function questions(me) {
   return [`Questions for ${me}: ${open.length} open`, ...open, `Answers to your questions: ${answered.length}`, ...answered];
 }
 
+if (flag('--redo')) redo();
+
 if (!flag('--push')) {
   console.log(pull());
+  if (continuous && ingest.writeIndex(root)) console.log('index: regenerated after the pull — it goes out with your next push');
   console.log(checks());
   // Project pages against their repos' HEAD (.memory/repos.json); a report, never a failure.
   try { const d = driftLine(root); if (d) console.log(d); } catch { /* the pull still stands */ }
@@ -94,9 +117,15 @@ if (flag('--sweep')) {
   subject = `${me}: sweep ${today}`;
 } else {
   // AGENTS.md, README.md and tools/ arrive from --refresh-memory; a member's push carries them too.
-for (const p of [path.join('members', me), 'inbox', 'questions', 'AGENTS.md', 'README.md', 'tools']) {
+  if (continuous) ingest.writeIndex(root);
+  for (const p of [path.join('members', me), 'inbox', 'questions', 'AGENTS.md', 'README.md', 'RECORDING.md', 'tools', ...(continuous ? ['knowledge'] : [])]) {
     if (fs.existsSync(path.join(root, p))) git('add', '--', p);
   }
+}
+// Continuous recording: the gate runs before anything is shown or committed.
+if (continuous) {
+  const r = ingest.check(root, me);
+  if (r.errors.length) { console.log(ingest.checkLine(r)); process.exit(1); }
 }
 // The notice: staged files plus commits not yet pushed, against where we diverged from the remote.
 const base = hasUpstream ? git('merge-base', 'HEAD', '@{u}').stdout.trim() : 'HEAD';
@@ -126,6 +155,11 @@ if (staged) {
 let pushed = `committed locally, not pushed (no remote configured for ${target})`;
 if (hasUpstream) {
   pull();
+  // Both sides' index lines survive a union merge; the generated list is put right before it leaves.
+  if (continuous && ingest.writeIndex(root)) {
+    git('add', '--', ingest.INDEX);
+    git('commit', '-q', '-m', `${me}: index`);
+  }
   const p = git('push', '--quiet');
   if (p.status !== 0) die(`push failed — ${(p.stderr || p.stdout).trim()}`);
   pushed = `pushed to ${target}`;
@@ -136,3 +170,34 @@ if (hasUpstream) {
 }
 const head = git('rev-parse', '--short', 'HEAD').stdout.trim();
 console.log(staged ? `${pushed}: ${head} ${subject}` : `nothing new to commit; ${pushed}`);
+
+/** --redo: after a conflict, re-derive instead of hand-merging (RECORDING.md §3). */
+function redo() {
+  const who = detectMember(root);
+  if (!who) die('who is this? write your first name, lowercase, into .memory/me');
+  if (!hasUpstream) die('nothing to redo against: no remote');
+  if (git('status', '--porcelain', '--untracked-files=no').stdout.trim()) die('uncommitted changes — push them first (node tools/sync.js --push), then --redo');
+  const f = git('fetch', '--quiet');
+  if (f.status !== 0) die(`fetch failed — ${(f.stderr || f.stdout).trim()}`);
+  if (git('rev-list', '--count', '@{u}..HEAD').stdout.trim() === '0') { console.log('nothing to redo: no commit of yours waits to be pushed'); process.exit(0); }
+  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const backup = `redo-${stamp}`;
+  if (git('branch', backup, 'HEAD').status !== 0) die(`could not keep your commits on ${backup}`);
+  const fork = git('merge-base', 'HEAD', '@{u}').stdout.trim();
+  const mine = git('diff', '--name-only', `${fork}..${backup}`).stdout.split(/\r?\n/).filter(Boolean)
+    .filter((p) => p.startsWith(`members/${who}/`) || p.startsWith('inbox/') || p.startsWith('questions/'));
+  const had = new Set(ingest.parseLog(git('show', `${fork}:${ingest.LOG}`).stdout || '').map((e) => e.block));
+  const redoList = ingest.parseLog(git('show', `${backup}:${ingest.LOG}`).stdout || '').filter((e) => !had.has(e.block));
+  const r = git('reset', '--hard', '--quiet', '@{u}');
+  if (r.status !== 0) die(`reset failed — ${(r.stderr || r.stdout).trim()}; your commits are on ${backup}`);
+  for (const p of mine) {
+    if (git('cat-file', '-e', `${backup}:${p}`).status === 0) git('checkout', backup, '--', p);
+    else if (fs.existsSync(path.join(root, p))) git('rm', '-q', '--', p);
+  }
+  console.log(`redo: the clone is on the remote's state; your commits are kept on branch ${backup}`);
+  console.log(`kept: ${mine.length} file(s) of yours${mine.length ? ' — ' + mine.join(', ') : ''}`);
+  for (const e of redoList.filter((x) => x.op === 'ingest' || x.op === 'fix')) {
+    console.log(`re-apply: ${e.title} — source ${e.source || '(none)'} — touched ${e.touched.join(', ') || '(none)'}`);
+  }
+  process.exit(0);
+}

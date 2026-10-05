@@ -225,6 +225,8 @@ working without Joserah:
 - `tools/lib/memory.js` — `--kind memory --recording continuous`; `--refresh-memory` carries `RECORDING.md`; doctor
   accepts a member's `knowledge/` edit when the same commit adds a log entry.
 
+Tests: `tests/memory-recording.test.js`, 15 tests — among them a control that removes the union lines and sees the two-member push stop (exit 4). Full suite on the branch 2026-10-06: 937 tests, 934 pass; the 3 failing doctor tests fail because a worktree is not the plugin linked from the skills dir (one extra warning), not because of this work.
+
 Not built (depends on §9): the job gate, the server side, the setup question, the `assistant` config entry.
 
 ## 9. Open owner decisions
