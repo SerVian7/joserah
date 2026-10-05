@@ -5,9 +5,9 @@ type: status
 
 # Joserah — status
 
-Last change: 03bda6e · 2026-10-05 19:39 +0300 · release 0.18.0: the crew, the Tracker board, Trail
+Last change: d4f8a59 · 2026-10-05 22:28 +0300 · release 0.18.1: crew off by default, the Tracker's one reading order, artifacts switch
 
-- Released: 0.18.0 on main, 872 tests (`node --test tests/*.test.js`), prompt v28.
+- Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
 - Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
