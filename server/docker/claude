@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The image's `claude`: the real binary, with the Joserah plugin loaded for sessions (jobs and the
+# terminal door). Subcommands and plain flags pass straight through.
+REAL=/home/joserah/.local/bin/claude
+case "${1:-}" in
+  auth|setup-token|install|update|doctor|plugin|plugins|mcp|--version|-v|--help|-h) exec "$REAL" "$@" ;;
+  *) exec "$REAL" --plugin-dir /opt/joserah "$@" ;;
+esac

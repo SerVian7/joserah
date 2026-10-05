@@ -1,0 +1,4 @@
+# Optional: docker compose -f compose.yaml -f compose.gpu.yaml up -d
+services:
+  joserah:
+    gpus: all
