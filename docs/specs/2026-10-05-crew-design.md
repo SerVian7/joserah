@@ -76,9 +76,18 @@ with defaults.
 
 - Defaults (owner, 2026-10-05): Lead Opus 5.5 medium; Architect Opus 5.5 high; Builder Opus 5.5 high; Scout
   Sonnet 5.5 medium; Sentry Haiku 4.5 low. The model value is written verbatim into the agent definition's
-  `model:` field, so it takes whatever that field accepts (alias or full id). The aliases shown are
-  placeholders: at build, check which model each alias resolves to and pin a full id wherever an alias would
-  drift from the owner's choice.
+  `model:` field, so it takes whatever that field accepts (alias or full id). Checked at build (claim lines
+  below): each alias resolves to the owner's choice, so the aliases stay and no full id is pinned.
+  - [measurement] Agent `model: opus` -> `claude-opus-5-5` (Opus 5.5)
+    condition: Claude Code 2.1.289 · Agent tool `model` alias, id read by the agent from its own system prompt ·
+    Windows 11 · date: 2026-10-05 · by: Builder
+  - [measurement] Agent `model: sonnet` -> `claude-sonnet-5-5` (Sonnet 5.5)
+    condition: Claude Code 2.1.289 · Agent tool `model` alias, id read by the agent from its own system prompt ·
+    Windows 11 · date: 2026-10-05 · by: Builder
+  - [measurement] Agent `model: haiku` -> `claude-haiku-4-5-20251001` (Haiku 4.5); `claude -p --model haiku`
+    reports the same id in its init event
+    condition: Claude Code 2.1.289 · Agent tool `model` alias, id read by the agent from its own system prompt ·
+    Windows 11 · date: 2026-10-05 · by: Builder
 - **Voice has no entry.** It runs on the session model the owner chose; Joserah never sets it.
 - A missing role or field falls back to its default. An unknown role or effort value is an error the
   generator reports, never silently dropped.
@@ -481,7 +490,8 @@ from the numbers whether crew stays the default.
 ## Open/future
 
 - **Developer mode's name:** `devMode` / "Developer mode" proposed; awaits the owner's confirmation before build.
-- **Model ids:** which id each default alias resolves to at build; pin full ids where needed.
+- ~~**Model ids:** which id each default alias resolves to at build; pin full ids where needed.~~
+  resolved: measured 2026-10-05, every alias matches the owner's choice; see Config.
 - ~~**Hook input:** the documented fields (agent_id, agent_type, transcript_path, source) are checked against a
   live payload at build; this bounds the safety net. Also whether `session_id` inside a SubagentStart call is
   the main session's, which the Ledger lookup relies on (fallback: the newest Ledger of the day).~~
