@@ -1166,3 +1166,34 @@ test('board: rows nested two levels (an outside updater): every line once; a lin
   const ids = [...you.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
   assert.strictEqual(ids.length, new Set(ids).size, 'no id twice');
 });
+
+// The live Daily Tracker moves onto the plugin board (Lead, 2026-10-05): its page keeps its own shell —
+// a <main> with attributes and a heading inside it before the crew slot — and its plans carry their day
+// as DD.MM, which must order by date, not by text.
+test('render keeps a page\'s own <main> attributes and what stands before the crew slot', (t) => {
+  const dir = tmpdir(t); init(dir);
+  fs.writeFileSync(path.join(dir, 'index.html'), page(dir).replace('<main>\n<!-- crew -->', '<main class="wrap">\n  <header><div class="eyebrow">Board · 05.10</div></header>\n<!-- crew -->'));
+  setRows(dir, [{ state: 'ok', title: 'B', time: '09:05' }]);
+  assert.strictEqual(render(dir).status, 0);
+  const html = page(dir);
+  assert.match(html, /<main class="wrap">\n  <header><div class="eyebrow">Board · 05\.10<\/div><\/header>\n<!-- crew -->\n<section class="crew">/);
+  assert.strictEqual(html.split('<header><div class="eyebrow">').length, 2, 'once');
+  render(dir);
+  assert.strictEqual(page(dir).split('<header><div class="eyebrow">').length, 2, 'still once after a re-render');
+  assert.match(page(dir), />B<\/button>/);
+});
+test('a day mark DD.MM orders by date, older than any time of today', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [
+    { state: 'plan', title: 'Sep', group: 'G', time: '30.09' },
+    { state: 'plan', title: 'Oct', group: 'G', time: '05.10' },
+    { state: 'plan', title: 'Aug', group: 'G', time: '28.08' },
+    { state: 'ok', title: 'Carried', time: '04.10' },
+    { state: 'ok', title: 'Today', time: '08:00' },
+  ]);
+  render(dir);
+  const html = page(dir);
+  assert.deepStrictEqual([...html.matchAll(/>(Sep|Oct|Aug)<\/button>/g)].map((m) => m[1]), ['Oct', 'Sep', 'Aug'], 'plans newest first by date');
+  assert.deepStrictEqual([...html.matchAll(/>(Carried|Today)<\/button>/g)].map((m) => m[1]), ['Today', 'Carried'], 'a day mark is older than today');
+  assert.match(html, /<summary class="hd">Done today <span>2<\/span><span class="lt">08:00<\/span>/, 'the last time is today\'s');
+});

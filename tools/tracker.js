@@ -94,7 +94,10 @@
  *       ok (done) | plan. <main> is rebuilt from it (the board above), so a row
  *       removed from the file disappears. A row without `time` is stamped once
  *       with the current local HH:MM and that stamp is written back to
- *       rows.json; a row with `time` keeps it. The console look (CONSOLE_CSS) and
+ *       rows.json; a row with `time` keeps it. A `time` of DD.MM (a carried-over
+ *       row, a plan's day) orders by that date, before any time of today. A page's
+ *       own <main> tag and what stands in it before <!-- crew --> are kept.
+ *       The console look (CONSOLE_CSS) and
  *       the clamp, panel and state scripts are put back last on every render, and
  *       any non-zero radius or shadow in the page's styles is stripped. Only
  *       <main>, those blocks and the page's "updated" stamp (data-t) change.
@@ -490,7 +493,11 @@ function board(rows, crew, L, dev) {
   for (const r of rows) if (r.state === 'run' || named.has(key(r.title))) { running.add(key(r.title)); if (hasParent(r)) running.add(key(r.parent)); }
 
   const G = { run: [], you: [], wait: [], ok: [], plan: [] };
-  const item = (r, es, t, i) => ({ r, es, t: String(t ?? ''), i });
+  // a time sorts as a time of today; a day mark DD.MM (a carried-over row, a plan's day) by its date and
+  // before any time of today (the year is not known: a December mark after a January one sorts wrong)
+  const tkey = (t) => { const m = /^(\d\d)\.(\d\d)$/.exec(t); return m ? `0 ${m[2]}.${m[1]}` : `1 ${t}`; };
+  const item = (r, es, t, i) => ({ r, es, t: String(t ?? ''), k: tkey(String(t ?? '')), i });
+  const latest = (xs) => xs.slice().sort((a, b) => a.k.localeCompare(b.k)).pop().t;
   const onRow = new Map();
   working.forEach((e, ci) => {
     const r = key(e.row) ? byTitle.get(key(e.row)) : null;
@@ -530,7 +537,7 @@ function board(rows, crew, L, dev) {
       + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}</div></li>\n`;
   };
   const NEWEST = new Set(['wait', 'ok', 'plan']);
-  const order = (g) => (a, b) => (NEWEST.has(g) ? -1 : 1) * a.t.localeCompare(b.t) || a.i - b.i;
+  const order = (g) => (a, b) => (NEWEST.has(g) ? -1 : 1) * a.k.localeCompare(b.k) || a.i - b.i;
   // a group's units: lines, or a category line over its members, standing where its first member stands
   // A category is keyed by the parent's name: the row of that title when there is one (always, on the
   // plugin's own page), else the name alone (an outside updater's rows may name a category no row has).
@@ -558,7 +565,7 @@ function board(rows, crew, L, dev) {
       if (g === 'ok') {
         // a finished category folds, closed; one open at a time inside Done today
         const all = head ? [head, ...ms] : ms;
-        const last = all.map((x) => x.t).sort().pop();
+        const last = latest(all);
         out.push(`  <li class="cat"><details name="trk-ok" id="${slugId('f-ok', m.title)}"><summary class="jh"><span class="jt">${esc(m.title)}${run}</span><span>${all.length} · ${esc(last)}</span></summary><ol>\n${head ? lineFor(g, head, { prefix: false }) : ''}${kids}</ol></details></li>\n`);
       } else if (head) {
         out.push(`  <li class="cat"><ul class="ch">\n${lineFor(g, head, { prefix: false, extra: ` <span class="n">${ms.length}</span>${run}` })}</ul><ol>\n${kids}</ol></li>\n`);
@@ -596,7 +603,7 @@ function board(rows, crew, L, dev) {
     const list = `<div class="clip${long ? ' clamp' : ''}" id="clip-${g}"><ol>\n${us.join('')}</ol></div>`
       + (long ? `<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${g}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
     if (g === 'ok') {
-      const last = its.map((x) => x.t).sort().pop();
+      const last = latest(its);
       return `<li class="sec"><div class="blk" data-k="ok"><details name="trk" id="f-ok"><summary class="hd">${head} <span>${its.length}</span><span class="lt">${esc(last)}</span></summary>${list}</details></div></li>`;
     }
     return `<li class="sec"><div class="blk" data-k="${g}"><div class="hd">${head} <span>${its.length}</span></div>${list}</div></li>`;
@@ -646,8 +653,12 @@ function render(dir, { quiet = false } = {}) {
   const ol = `<ol>\n${list.map((x) => '  ' + x + '\n').join('')}</ol>`;
   // the Active work strip is always there: what runs, or that nothing does
   const strip = `<section class="crew">${stripHtml}</section>\n`;
-  if (!/<main>[\s\S]*<\/main>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
-  html = html.replace(/<main>[\s\S]*<\/main>/, () => `<main>\n<!-- crew -->\n${strip}${ol}\n</main>`)
+  if (!/<main\b[^>]*>[\s\S]*<\/main>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
+  // a page's own <main> tag and what stands before its crew slot (a heading of its own) are kept
+  html = html.replace(/(<main\b[^>]*>)([\s\S]*)<\/main>/, (m, open, inner) => {
+    const at = inner.indexOf('<!-- crew -->');
+    return `${open}${at >= 0 ? inner.slice(0, at) : '\n'}<!-- crew -->\n${strip}${ol}\n</main>`;
+  })
     .replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
   // the console style and the clamp script are rebuilt last; no rounded corner or shadow survives in any style
   html = html.replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
