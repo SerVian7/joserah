@@ -1,0 +1,193 @@
+'use strict';
+/**
+ * wiki.js (lib) — the knowledge wiki's zero-token operations (spec §6, Karpathy's LLM wiki): scan the
+ * pages under .joserah/knowledge/, resolve links and wikilinks, backlinks, the generated index, the log
+ * line, the claims view, search, the source register, and the deterministic lint. Shared by the server
+ * and tools/wiki.js. Reads only; writing is the caller's (the server writes through its Store).
+ * No dependencies.
+ *
+ * Traversal: scan() walks real directories and regular files only — a symlink or junction is never
+ * followed, and dot-folders (.lint/, …) are skipped. resolveLink() decodes the href once, reads a
+ * backslash as a separator, and answers null for anything that is not a relative path inside the
+ * workspace (a scheme, an absolute path, a NUL byte, a malformed escape, or a climb past the root).
+ */
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { parseFrontmatter, parseClaims, findClaimAnomalies, extractWikilinks } = require('./note-format');
+
+const KNOWLEDGE = '.joserah/knowledge';
+const SIZE_LIMIT = 48 * 1024;
+const STALE_RAW_DAYS = 7;
+const GENERATED = new Set(['wiki/index.md', 'wiki/log.md']);
+const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+const posix = path.posix;
+
+function walk(dir, base, out) {
+  let es; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of es) {
+    if (e.name.startsWith('.')) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, base, out);
+    else if (e.isFile() && e.name.endsWith('.md')) out.push(path.relative(base, p).split(path.sep).join('/'));
+  }
+}
+
+const climbs = (p) => p === '..' || p.startsWith('../');
+
+function resolveLink(fromRel, href) {
+  const raw = String(href).split('#')[0].split('?')[0];
+  if (!raw || SCHEME_RE.test(raw)) return null;
+  let h; try { h = decodeURIComponent(raw); } catch { return null; }
+  if (h.includes('\0') || h.includes(':')) return null; // a colon is a scheme or a drive letter, wherever it stands
+  h = h.replace(/\\/g, '/');
+  if (SCHEME_RE.test(h) || h.startsWith('/')) return null;
+  const target = posix.normalize(posix.join(posix.dirname(fromRel), h));
+  if (target === '.') return null;
+  if (!climbs(target)) return { kind: 'page', rel: target };
+  const ws = posix.normalize(posix.join(KNOWLEDGE, target));
+  if (climbs(ws) || ws === '.' || ws === KNOWLEDGE) return null;
+  if (ws.startsWith(KNOWLEDGE + '/')) return { kind: 'page', rel: ws.slice(KNOWLEDGE.length + 1) };
+  return { kind: 'outside', rel: ws };
+}
+
+function firstLine(body) {
+  for (const l of body.split(/\r?\n/)) { const s = l.trim(); if (s && !s.startsWith('#') && !s.startsWith('---')) return s.replace(/[*_`[\]]/g, '').slice(0, 100); }
+  return '';
+}
+
+function scan(workspace) {
+  const base = path.join(workspace, KNOWLEDGE);
+  const rels = []; walk(base, base, rels);
+  return rels.sort().filter((r) => !GENERATED.has(r)).map((rel) => {
+    const abs = path.join(base, rel);
+    const text = fs.readFileSync(abs, 'utf8');
+    const fm = parseFrontmatter(text);
+    const body = fm.body;
+    const bodyLine = text.slice(0, text.length - body.length).split('\n').length - 1;
+    const heading = /^#\s+(.+)$/m.exec(body);
+    const links = [];
+    for (const m of body.matchAll(LINK_RE)) { const r = resolveLink(rel, m[1]); if (r && r.kind === 'page' && !links.includes(r.rel)) links.push(r.rel); }
+    return {
+      rel, title: String(fm.data.title || (heading ? heading[1].trim() : posix.basename(rel, '.md'))), type: String(fm.data.type || ''),
+      description: String(fm.data.description || firstLine(body)), body, links, wikilinks: extractWikilinks(body),
+      bytes: Buffer.byteLength(text), mtimeMs: fs.statSync(abs).mtimeMs, sha1: crypto.createHash('sha1').update(text).digest('hex'),
+      hasFrontmatter: fm.hasFrontmatter, unclosed: !fm.hasFrontmatter && /^---\r?\n/.test(text), bodyLine,
+    };
+  });
+}
+
+const slugOf = (rel) => posix.basename(rel, '.md').toLowerCase();
+function resolveWikilink(pages, name) {
+  const n = String(name).split('|')[0].trim().toLowerCase();
+  const bySlug = pages.find((p) => slugOf(p.rel) === n);
+  if (bySlug) return bySlug.rel;
+  const byTitle = pages.find((p) => p.title.toLowerCase() === n);
+  return byTitle ? byTitle.rel : null;
+}
+
+function backlinks(pages) {
+  const m = new Map();
+  for (const p of pages) {
+    const targets = new Set([...p.links, ...p.wikilinks.map((w) => resolveWikilink(pages, w)).filter(Boolean)]);
+    for (const t of targets) { if (t === p.rel) continue; if (!m.has(t)) m.set(t, []); m.get(t).push(p.rel); }
+  }
+  return m;
+}
+
+function buildIndex(pages) {
+  const lines = pages.filter((p) => posix.basename(p.rel) !== 'README.md').map((p) => {
+    const link = posix.relative('wiki', p.rel).split('/').map((s) => (s === '..' ? s : encodeURIComponent(s))).join('/');
+    const title = p.title.replace(/[[\]\\]/g, '\\$&');
+    return `- [${title}](${link}) — ${p.type || 'page'}${p.description ? ` · ${p.description}` : ''}`;
+  });
+  return ['# Wiki index', '', 'Generated by the Joserah server from the pages below, one line per page; do not edit by hand.', '', ...lines, ''].join('\n');
+}
+
+const logLine = (op, title, day) => `## [${day}] ${op} | ${String(title).replace(/\s+/g, ' ').trim()}\n`;
+
+// Claim lines count from the top of the file: parseClaims counts from the body, so the frontmatter's
+// lines are added (bodyLine; a Page built elsewhere without it counts as 0).
+const fileLine = (p, line) => line + (p.bodyLine || 0);
+function claims(pages) { return pages.flatMap((p) => parseClaims(p.body).map((c) => ({ ...c, line: fileLine(p, c.line), page: p.rel }))); }
+
+function fold(s) { return String(s).toLocaleLowerCase('tr').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i'); }
+
+// fold() plus, for every folded character, the index of the original character it came from, so a
+// snippet cut from the original text holds the match even where folding changed the length (…, ½, ﬁ).
+function foldMapped(s) {
+  let out = ''; const map = [];
+  for (let i = 0; i < s.length;) {
+    const ch = String.fromCodePoint(s.codePointAt(i)); const f = fold(ch);
+    for (let k = 0; k < f.length; k++) map.push(i);
+    out += f; i += ch.length;
+  }
+  map.push(s.length);
+  return { out, map };
+}
+
+function search(pages, q, limit = 50) {
+  const needle = fold(q).trim();
+  if (!needle) return [];
+  const hits = [];
+  for (const p of pages) {
+    const inTitle = fold(p.title).includes(needle);
+    const { out: body, map } = foldMapped(p.body); const at = body.indexOf(needle);
+    if (!inTitle && at < 0) continue;
+    const snippet = at < 0 ? p.description : p.body.slice(Math.max(0, map[at] - 60), map[at + needle.length] + 60).replace(/\s+/g, ' ').trim();
+    hits.push({ rel: p.rel, title: p.title, snippet, rank: inTitle ? 0 : 1 });
+  }
+  return hits.sort((a, b) => a.rank - b.rank || a.rel.localeCompare(b.rel)).slice(0, limit).map(({ rank, ...h }) => h);
+}
+
+function readSources(workspace) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(workspace, KNOWLEDGE, 'sources.json'), 'utf8'));
+    if (j && typeof j.sources === 'object' && j.sources) return { version: 1, sources: j.sources };
+  } catch { /* none yet */ }
+  return { version: 1, sources: {} };
+}
+
+function rawFiles(workspace) {
+  const out = []; const base = path.join(workspace, 'imports');
+  const go = (d) => { let es; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { return; } for (const e of es) { const p = path.join(d, e.name); if (e.isDirectory()) go(p); else if (e.isFile() && e.name !== 'README.md') out.push(p); } };
+  go(base);
+  return out.map((p) => ({ rel: path.relative(workspace, p).split(path.sep).join('/'), mtimeMs: fs.statSync(p).mtimeMs }));
+}
+
+function lint(workspace, { now = new Date() } = {}) {
+  const pages = scan(workspace);
+  const out = [];
+  const known = new Set(pages.map((p) => p.rel));
+  const back = backlinks(pages);
+  const slugs = new Map();
+  for (const p of pages) {
+    if (p.unclosed) out.push({ kind: 'frontmatter', rel: p.rel, line: 1, detail: 'frontmatter opened with --- but never closed' });
+    for (const m of p.body.matchAll(LINK_RE)) {
+      const r = resolveLink(p.rel, m[1]);
+      if (!r) continue;
+      const exists = r.kind === 'page' ? known.has(r.rel) || fs.existsSync(path.join(workspace, KNOWLEDGE, r.rel)) : fs.existsSync(path.join(workspace, r.rel));
+      if (!exists) out.push({ kind: 'broken-link', rel: p.rel, detail: `links to ${m[1]}, which does not exist` });
+    }
+    const name = posix.basename(p.rel);
+    if (name !== 'README.md' && name !== 'index.md' && !(back.get(p.rel) || []).length) out.push({ kind: 'orphan', rel: p.rel, detail: 'no other page links here' });
+    if (name !== 'README.md' && name !== 'index.md') { const s = slugOf(p.rel); if (!slugs.has(s)) slugs.set(s, []); slugs.get(s).push(p.rel); }
+    for (const c of parseClaims(p.body)) {
+      if (c.struck && !c.fields.superseded) out.push({ kind: 'superseded', rel: p.rel, line: fileLine(p, c.line), detail: 'a struck claim names no successor (superseded:)' });
+      if (c.type === 'measurement' && !c.fields.condition && !c.struck) out.push({ kind: 'claim', rel: p.rel, line: fileLine(p, c.line), detail: 'a measurement without its condition' });
+    }
+    for (const a of findClaimAnomalies(p.body)) out.push({ kind: 'claim', rel: p.rel, line: fileLine(p, a.line), detail: a.detail });
+    if (p.bytes > SIZE_LIMIT) out.push({ kind: 'size', rel: p.rel, detail: `${Math.round(p.bytes / 1024)} KB — split it; pages stay under ${SIZE_LIMIT / 1024} KB` });
+  }
+  for (const [, rels] of slugs) if (rels.length > 1) for (const r of rels) out.push({ kind: 'duplicate-slug', rel: r, detail: `same name as ${rels.filter((x) => x !== r).join(', ')}` });
+  const reg = readSources(workspace).sources;
+  for (const f of rawFiles(workspace)) {
+    if (f.rel.includes('-quarantine/')) continue;
+    if (reg[f.rel] && reg[f.rel].status === 'compiled') continue;
+    if (now.getTime() - f.mtimeMs > STALE_RAW_DAYS * 86400000) out.push({ kind: 'stale-raw', rel: f.rel, detail: `not compiled into the wiki after ${STALE_RAW_DAYS} days` });
+  }
+  return out;
+}
+
+module.exports = { KNOWLEDGE, SIZE_LIMIT, STALE_RAW_DAYS, scan, resolveLink, resolveWikilink, backlinks, buildIndex, logLine, claims, fold, search, readSources, lint };
