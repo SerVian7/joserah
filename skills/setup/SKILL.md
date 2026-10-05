@@ -95,6 +95,17 @@ and prints those paths. Show the owner that list and say what `--force` would do
 place, no backup — their own `AGENTS.md`, `.gitignore` or `.claude/settings.json` would be gone).
 Offer an empty folder, or moving the files aside. **Never add `--force` on your own initiative.**
 
+The scaffold also writes the crew's five agent definitions into `<path>/.claude/agents/` (defaults;
+no `crew` block is needed in config). When continuing a setup on a workspace that has no
+`.claude/agents/lead.md` yet, write them with the same generator:
+
+```
+node "<clone>/tools/crew.js" <path>
+```
+
+`kept-owner <role>` means a same-named file of the owner's was left alone; say so in one line. The
+restart in step 5 is what makes Claude Code see a `.claude/agents/` it did not have at session start.
+
 ## 4. Verify
 
 ```

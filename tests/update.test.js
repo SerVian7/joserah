@@ -123,3 +123,24 @@ test('check-update reports a newer plugin in the marketplace clone as `newer`, s
   assert.strictEqual(none.available, null);
   assert.strictEqual(none.newer, null);
 });
+
+// 0.18.0 (crew plan, Task 6.2): setup and update run the crew generator. Its
+// definitions live in the workspace's .claude/agents/, which Claude Code
+// watches only when the directory existed at session start.
+test('update runs crew.js after the prompt refresh and says a first-ever .claude/agents/ needs a restart', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'update', 'SKILL.md'), 'utf8');
+  const crew = text.indexOf('tools/crew.js');
+  assert.ok(crew > 0, 'the update skill names crew.js');
+  assert.ok(crew > text.indexOf('tools/refresh-prompt.js'), 'crew.js comes after the prompt refresh');
+  const step = text.slice(text.lastIndexOf('\n## ', crew), text.indexOf('\n## ', crew));
+  assert.match(step, /\.claude\/agents\//);
+  assert.match(step, /did not exist|first-ever|first time/i, 'the first-ever case');
+  assert.match(step, /restart/i);
+  assert.match(step, /one line/i, 'told in one line');
+  assert.match(step, /devMode/, 'with developer mode off the line names no agent');
+});
+
+test('setup names crew.js', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'setup', 'SKILL.md'), 'utf8');
+  assert.ok(text.includes('tools/crew.js'), 'the setup skill names crew.js');
+});

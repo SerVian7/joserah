@@ -105,6 +105,26 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/refresh-prompt.js" <workspace-root> --force
 The displaced text is kept beside the file as `AGENTS.md.replaced-<date>`. Delete it only when the
 owner says so.
 
+## 4b. The crew
+
+After the prompt is current, regenerate the crew's agent definitions from config:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/crew.js" <workspace-root>
+```
+
+It writes `.claude/agents/{lead,architect,builder,scout,sentry}.md` in the workspace, one line per
+role. `kept-owner <role>` → a same-named file the owner wrote is there and was left alone: name it in
+one line, overwrite nothing. Exit 1 → a typo in the `crew` block of `config.json`: its message names the
+key; say it in one line and let the owner fix it. With the crew off (`"crew": false` or
+`"enabled": false`) it writes nothing.
+
+Note before running it whether `.claude/agents/` existed. Claude Code watches that folder and picks up a
+changed file on the next delegation, but only if the folder existed when the session started: when this
+run created it for the first time, a **restart** is needed once, told in one line. With `devMode` off
+(absent means off) that line names no agent, role or model — it speaks of the work only, e.g. "restart
+Claude Code once so the new way of working takes effect."
+
 ## 5. The other plugin-owned files
 
 Run doctor and act on these lines only:
@@ -143,7 +163,8 @@ Every check `ok` or the update is not done — report what is still red, in the 
 one line each. When it is clean, tell the owner in one or two lines: what changed, and that a
 **new conversation** picks up the new instructions. If step 1 pulled anything, ask them to run
 `/reload-plugins` — that is enough (owner, 2026-09-30, checked on two machines). Never say
-"restart" unless the new version demonstrably is not active after the reload.
+"restart" unless the new version demonstrably is not active after the reload, or step 4b created
+`.claude/agents/` for the first time.
 
 **Then say what an update is not.** Nothing here read a single note: this moved the shell, and the
 owner's own pages are untouched by design. If doctor's `knowledge sweep` warned — or the workspace
