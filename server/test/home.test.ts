@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { APP_JS } from '../src/client.ts';
 import { signedIn, trackerPage } from './helpers.ts';
 
 const DAY = '2026-10-06';
@@ -35,4 +36,9 @@ test('the job page escapes what the owner typed and labels the cost an estimate'
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt; do it/);
   assert.match(html, /\$0\.0123 \(estimate\)/);
   assert.match(html, /<ol class="stream" data-job="/);
+});
+
+test('the client script reloads on a reset and when its own job ends', () => {
+  assert.match(APP_JS, /e.type==='reset'/);
+  assert.match(APP_JS, /ev.kind==='result'&&el.tagName==='OL'/);
 });
