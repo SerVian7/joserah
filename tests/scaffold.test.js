@@ -170,3 +170,54 @@ test('a fresh scaffold has the five crew definitions, each stamped, and no devMo
   const d = runTool('doctor.js', [dir]);
   assert.strictEqual(d.status, 0, d.stdout + d.stderr);
 });
+
+// Task 6.5: templates/ holds two kinds of thing — what a workspace is made of,
+// and what the plugin's own tools read from the plugin root (role supplements,
+// the memory kind's tree, page templates, crew role bodies). Only the first
+// may land in a workspace. Every top-level entry of templates/ must be named in
+// exactly one of these two lists, so a new folder cannot be added without
+// deciding which kind it is.
+const WORKSPACE_CONTENT = ['.gitattributes', '.joserah', 'AGENTS.md', 'imports', 'keys', 'projects'];
+const PLUGIN_SIDE = ['case', 'changelog', 'crew', 'memory', 'roles', 'tracker'];
+
+function filesUnder(dir, base = dir, acc = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) filesUnder(p, base, acc);
+    else acc.push(path.relative(base, p).split(path.sep).join('/'));
+  }
+  return acc;
+}
+
+test('6.5: every top-level entry of templates/ is classified as workspace content or plugin-side', () => {
+  const entries = fs.readdirSync(path.join(PLUGIN_ROOT, 'templates')).sort();
+  assert.deepStrictEqual(entries, [...WORKSPACE_CONTENT, ...PLUGIN_SIDE].sort());
+});
+
+test('6.5: a fresh scaffold has no plugin-side template folder at its root', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  for (const name of PLUGIN_SIDE) {
+    assert.ok(!fs.existsSync(path.join(dir, name)), `${name}/ must not be copied into a workspace`);
+  }
+});
+
+test('6.5: a fresh scaffold still has every workspace-content file and everything written beside it', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const tpl = path.join(PLUGIN_ROOT, 'templates');
+  for (const name of WORKSPACE_CONTENT) {
+    const src = path.join(tpl, name);
+    const rels = fs.statSync(src).isDirectory() ? filesUnder(src).map((f) => `${name}/${f}`) : [name];
+    for (const rel of rels) assert.ok(fs.existsSync(path.join(dir, rel)), `${rel} copied`);
+  }
+  for (const rel of ['.joserah/config.json', '.claude/settings.json', '.gitignore', 'CLAUDE.md',
+    'JOSERAH-ROLE.md', '.joserah/tools/verify-links.js', '.joserah/tools/lib/untouchable.js',
+    '.joserah/tools/secret.js', '.joserah/tools/lib/vault-dialog.js', 'keys/secrets.json']) {
+    assert.ok(fs.existsSync(path.join(dir, rel)), `${rel} written`);
+  }
+  const d = runTool('doctor.js', [dir]);
+  assert.strictEqual(d.status, 0, d.stdout + d.stderr);
+});

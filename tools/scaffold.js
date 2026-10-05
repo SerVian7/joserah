@@ -373,16 +373,25 @@ if (fs.existsSync(path.join(root, '.joserah', 'config.json')) && !args.force) {
 // Scaffolding into a directory that already holds the owner's own README.md,
 // CLAUDE.md, .gitignore or .claude/settings.json must not silently destroy
 // them — losing a .gitignore can expose whatever it was hiding.
-// templates/roles/ holds the client and server role supplements. Exactly one
-// is picked by kind and written explicitly as JOSERAH-ROLE.md (see below and
-// in copyTree) — the directory itself is never copied wholesale, so both the
-// collision check and the actual copy skip it by name.
-// templates/memory/ is the memory kind's own tree (tools/lib/memory.js), never a workspace's.
-const COPY_SKIP_DIRS = ['roles', 'memory'];
+// templates/ holds two kinds of thing: what a workspace is made of, and what
+// the plugin's own tools read from the plugin root — roles/ (one supplement is
+// picked by kind and written as JOSERAH-ROLE.md below), memory/ (the memory
+// kind's tree, tools/lib/memory.js), case/, changelog/ and tracker/ (page
+// templates for tools/case.js, changelog.js, tracker.js) and crew/ (role
+// bodies for tools/crew.js). Only the top-level entries named here are copied
+// — an allow-list, not a skip-list, so a new plugin-side template cannot leak
+// into every workspace by default (0.17.0–0.17.10 copied tracker/, case/ and
+// changelog/ to the workspace root that way). tests/scaffold.test.js holds
+// every top-level entry of templates/ to one of the two kinds.
+const WORKSPACE_CONTENT = ['.gitattributes', '.joserah', 'AGENTS.md', 'imports', 'keys', 'projects'];
 
-function plannedTemplateFiles(from, to, acc) {
-  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
-    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
+function workspaceEntries() {
+  return fs.readdirSync(TEMPLATES, { withFileTypes: true })
+    .filter((e) => WORKSPACE_CONTENT.includes(e.name));
+}
+
+function plannedTemplateFiles(from, to, acc, entries = fs.readdirSync(from, { withFileTypes: true })) {
+  for (const e of entries) {
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) plannedTemplateFiles(src, dst, acc);
@@ -400,7 +409,7 @@ const PLANNED = plannedTemplateFiles(TEMPLATES, root, [
   path.join(root, '.joserah', 'tools', 'secret.js'),
   path.join(root, '.joserah', 'tools', 'lib', 'vault-dialog.js'),
   path.join(root, 'JOSERAH-ROLE.md'),
-]);
+], workspaceEntries());
 
 const conflicts = PLANNED.filter((p) => fs.existsSync(p))
   .map((p) => path.relative(root, p).split(path.sep).join('/'))
@@ -441,10 +450,9 @@ function substitute(text) {
 }
 
 let filesCreated = 0;
-function copyTree(from, to) {
+function copyTree(from, to, entries = fs.readdirSync(from, { withFileTypes: true })) {
   fs.mkdirSync(to, { recursive: true });
-  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
-    if (e.isDirectory() && COPY_SKIP_DIRS.includes(e.name)) continue;
+  for (const e of entries) {
     const src = path.join(from, e.name);
     const dst = path.join(to, e.name);
     if (e.isDirectory()) copyTree(src, dst);
@@ -466,10 +474,10 @@ function copyTree(from, to) {
   }
 }
 
-copyTree(TEMPLATES, root);
+copyTree(TEMPLATES, root, workspaceEntries());
 
 // The role supplement is picked by kind, not copied as part of the tree
-// above — see COPY_SKIP_DIRS. Copied verbatim, like AGENTS.md: it is
+// above — see WORKSPACE_CONTENT. Copied verbatim, like AGENTS.md: it is
 // plugin-owned and carries no tokens to substitute.
 fs.copyFileSync(path.join(TEMPLATES, 'roles', `joserah-${roleFor(args.kind)}.md`),
   path.join(root, 'JOSERAH-ROLE.md'));
