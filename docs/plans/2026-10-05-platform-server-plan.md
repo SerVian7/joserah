@@ -6549,3 +6549,4 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - On branches, pushed, not merged (reviewer findings 1–3 each still to fix): `task/t06s-answers-server` (Task 6 server half, 7a9f8b7, suite 109/109), `task/t10-checkpoint` (Task 10, 3948ea9, suite 101/101). Worktrees `../joserah-wt-t06s-answers-server`, `../joserah-wt-t10-checkpoint`; findings in each builder report.
 - Remaining: fix + merge 6s and 10 → 11 → 12 (server half) ∥ 15 → 13 → 14 → 16 → 17 (heavy, alone) → 18 (heavy, alone) → 19. Task 20 is the owner's.
 - Known gap: Task 9 — a hard server crash can orphan a CLI process.
+- 01:54 (Manager): Task 6 server half (t06s, review fixes 4635f73, d392f7b) and Task 10 (t10, fixes 2c07f51, 7ece418) merged; server suite 127/127, existing 922/922.
