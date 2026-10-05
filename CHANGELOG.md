@@ -3,7 +3,9 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
-## Unreleased
+## 0.18.1
+
+0.18.1 — the crew is off by default, the Tracker reads in one order, and automatic page publishing can be switched off. Owner, 2026-10-05.
 
 - **Stop publishing pages, keep the files.** `"artifacts": false` in `.joserah/config.json` ends automatic artifact publishing: the Tracker is no longer held for an unpublished page, finished work is written as a Markdown file instead of a page, replies end with the path of the Tracker's `tracker.md` rather than a link, and the report-freshness reminder stays quiet. Absent or true changes nothing. Every Tracker render now also writes `tracker.md` beside `index.html` (same sections and groups, options with the recommended one marked), whatever the switch says.
 - **The crew is off by default.** A workspace without a `crew` key now runs as before the crew existed: the assistant does the work itself, and uses an agent only for heavy reading. Switch the crew on with `"crew": true` in `.joserah/config.json` when the work gets heavy. Workspaces that set `"crew": false` are unchanged; ones that relied on the old default turn it on that way.
