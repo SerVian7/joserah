@@ -547,6 +547,12 @@ if (!fs.existsSync(store)) {
   }, null, 2) + '\n', 'utf8');
 }
 
+// 0.18.0: the crew's five agent definitions, from the defaults (a fresh
+// config has no `crew` block, and needs none). The same function `crew.js`
+// runs, so a scaffold and a later regeneration write the same bytes; a
+// same-named file the owner already had is kept, never overwritten.
+require('./crew').generate(root);
+
 if (args.git) {
   const { spawnSync } = require('child_process');
   spawnSync('git', ['init'], { cwd: root, stdio: 'ignore' });

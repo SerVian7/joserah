@@ -85,6 +85,7 @@ test('defaults write five stamped definitions with model and effort', (t) => {
 
 test('crew off writes nothing', (t) => {
   const dir = ws(t, { crew: false });
+  fs.rmSync(path.join(dir, '.claude', 'agents'), { recursive: true, force: true }); // scaffold wrote them (on by default)
   assert.strictEqual(runTool('crew.js', [dir]).status, 0);
   assert.ok(!fs.existsSync(agent(dir, 'lead')));
 });
@@ -134,6 +135,7 @@ test('--check finds drift and writes nothing', (t) => {
 
 test('--check: a missing definition is drift; an owner file and crew off are not', (t) => {
   const dir = ws(t);
+  fs.rmSync(agent(dir, 'lead')); // scaffold wrote it; take it away
   let r = runTool('crew.js', [dir, '--check']);
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /drift lead/);
