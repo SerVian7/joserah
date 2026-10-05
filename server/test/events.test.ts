@@ -19,3 +19,13 @@ test('an id older than the ring buffer returns null (the page must reset)', () =
   assert.equal(b.since(1), null);
   assert.equal(b.lastId(), 5);
 });
+
+test('an id from a previous server run (newer than any issued) returns null, never a silent []', () => {
+  const b = new EventBus();
+  b.publish({ type: 'jobs' }); b.publish({ type: 'jobs' });
+  assert.deepEqual(b.since(b.lastId()), []);
+  assert.equal(b.since(b.lastId() + 1), null);
+  assert.equal(b.since(500), null);
+  assert.equal(b.since(-1), null);
+  assert.equal(b.since(Number.NaN), null);
+});

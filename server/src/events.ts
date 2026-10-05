@@ -24,10 +24,13 @@ export class EventBus {
     for (const fn of [...this.#subs]) { try { fn(id, event); } catch { /* a broken subscriber never stops the others */ } }
     return id;
   }
-  /** Events after `id`; `[]` when nothing is newer; `null` when `id` is older than the buffer (the page must reset). */
+  /**
+   * Events after `id`; `[]` when nothing is newer; `null` when `id` is older than the buffer or newer than any id
+   * issued (a page that saw a previous server run) — either way the page must reset.
+   */
   since(id: number): Array<{ id: number; event: BusEvent }> | null {
-    if (!Number.isFinite(id) || id < 0) return null;
-    if (id >= this.#next - 1) return [];
+    if (!Number.isFinite(id) || id < 0 || id > this.#next - 1) return null;
+    if (id === this.#next - 1) return [];
     const first = this.#ring[0]?.id ?? this.#next;
     if (id + 1 < first) return null;
     return this.#ring.filter((x) => x.id > id);
