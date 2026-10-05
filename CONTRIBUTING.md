@@ -52,6 +52,17 @@ Placeholders are `{{UPPER_SNAKE}}`. Use them.
   in `templates/AGENTS.md` until prompt v6; it is guidance for whoever builds
   the plugin, not for a session working in a workspace.)
 
+## Naming
+
+Joserah names its roles and structures with short, plain, elegant English terms
+that read easily and feel right: functional and terminological, never human or
+cute names. Future names follow this theme.
+
+- [decision] naming -> short, plain, elegant English terms for roles and structures, functional and terminological, no human or cute names; crew set "A": Voice (spokesperson: talks to the owner, shields them, adds finished links to the Tracker), Lead (manager and brain: decides, dispatches, checks), Architect (plans, big jobs only), Builder (code), Scout (research, reading, report pages), Sentry (watch duty, mail checks)
+  - date: 2026-10-05
+  - by: Serkan
+  - source: owner in chat, 2026-10-05
+
 ## Changing the prompt
 
 `templates/AGENTS.md` is versioned apart from the plugin. Every change to its
