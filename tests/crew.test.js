@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { PLUGIN_ROOT } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
 const { resolveCrew, ROLES } = require('../tools/lib/crew-config');
 
 test('no crew block means on, with defaults, devMode off', () => {
@@ -53,4 +53,58 @@ test('every role template carries job, limits, reply and the log rule', () => {
   const lead = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'crew', 'lead.md'), 'utf8');
   for (const s of ['Ledger', 'ledger.js add', 'ledger.js open', 'Done today', 'Distill', 'tracker.js crew', 'Job:', 'Rules:', 'Done when:', 'Report:'])
     assert.ok(lead.includes(s), `lead: ${s}`);
+});
+
+const ws = (t, cfgExtra = {}) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  const p = path.join(dir, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), ...cfgExtra }, null, 2));
+  return dir;
+};
+const agent = (dir, r) => path.join(dir, '.claude', 'agents', `${r}.md`);
+
+test('defaults write five stamped definitions with model and effort', (t) => {
+  const dir = ws(t);
+  const r = runTool('crew.js', [dir]);
+  assert.strictEqual(r.status, 0, r.stderr);
+  const lead = fs.readFileSync(agent(dir, 'lead'), 'utf8');
+  assert.match(lead, /^---\nname: lead\n/);
+  assert.match(lead, /\nmodel: opus\n/);
+  assert.match(lead, /\neffort: medium\n/);
+  assert.match(lead, /joserah:crew generated from config/);
+});
+
+test('crew off writes nothing', (t) => {
+  const dir = ws(t, { crew: false });
+  assert.strictEqual(runTool('crew.js', [dir]).status, 0);
+  assert.ok(!fs.existsSync(agent(dir, 'lead')));
+});
+
+test('an unstamped same-named file is kept and reported', (t) => {
+  const dir = ws(t);
+  fs.mkdirSync(path.dirname(agent(dir, 'scout')), { recursive: true });
+  fs.writeFileSync(agent(dir, 'scout'), 'mine');
+  const r = runTool('crew.js', [dir]);
+  assert.strictEqual(fs.readFileSync(agent(dir, 'scout'), 'utf8'), 'mine');
+  assert.match(r.stdout, /kept-owner scout/);
+});
+
+test('a config error exits 1 and names the key', (t) => {
+  const dir = ws(t, { crew: { scuot: {} } });
+  const r = runTool('crew.js', [dir]);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /scuot/);
+});
+
+test('description from the template first line; plugin root resolved in the body', (t) => {
+  const dir = ws(t);
+  runTool('crew.js', [dir]);
+  const scout = fs.readFileSync(agent(dir, 'scout'), 'utf8');
+  const first = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'crew', 'scout.md'), 'utf8').split('\n')[0];
+  assert.ok(scout.includes('\ndescription: ' + first + '\n'), 'description is the first line');
+  assert.match(scout, /\nmodel: sonnet\n/);
+  const lead = fs.readFileSync(agent(dir, 'lead'), 'utf8');
+  assert.doesNotMatch(lead, /\$\{CLAUDE_PLUGIN_ROOT\}/, 'a subagent has no CLAUDE_PLUGIN_ROOT in its shell');
+  assert.ok(lead.includes(PLUGIN_ROOT.replace(/\\/g, '/') + '/tools/ledger.js'));
 });
