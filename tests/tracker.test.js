@@ -905,7 +905,7 @@ test('strip: nothing running says so, in both languages', (t) => {
   for (const [lang, head, text] of [['tr', 'Aktif çalışma 0', 'Şu an çalışan iş yok'], ['en', 'Active work 0', 'Nothing running right now']]) {
     const dir = tmpdir(t); init(dir, ['--lang', lang]);
     setRows(dir, [{ state: 'you', title: 'Y', time: '09:00' }]);
-    crew(dir, ['--role', 'lead', '--job', 'Karar', '--state', 'owner', '--reason', 'decision', '--row', 'Y']);
+    crew(dir, ['--role', 'lead', '--job', 'Karar', '--state', 'owner', '--reason', 'approval', '--row', 'Y']);
     let html = page(dir);
     assert.strictEqual(heads(html)[0], head, lang);
     assert.match(stripOf(html), new RegExp(`<ul>\\n  <li class="crew-none">${text}</li>\\n</ul>`), lang);
@@ -1196,4 +1196,70 @@ test('a day mark DD.MM orders by date, older than any time of today', (t) => {
   assert.deepStrictEqual([...html.matchAll(/>(Sep|Oct|Aug)<\/button>/g)].map((m) => m[1]), ['Oct', 'Sep', 'Aug'], 'plans newest first by date');
   assert.deepStrictEqual([...html.matchAll(/>(Carried|Today)<\/button>/g)].map((m) => m[1]), ['Today', 'Carried'], 'a day mark is older than today');
   assert.match(html, /<summary class="hd">Done today <span>2<\/span><span class="lt">08:00<\/span>/, 'the last time is today\'s');
+});
+
+// Owner, 2026-10-05: a decision row named the question but not the options or a recommendation, so it
+// could not be answered from the page ("hatırlamıyorum ve önerilerin dispatch de değil"). A row waiting
+// on the owner's decision carries the question (`ask`), two or more options in plain words (`options`)
+// and the one recommended (`rec`), and its detail shows them; an action row needs only the action and where.
+const DEC = { state: 'you', title: 'Varsayılan yapı', ask: 'Yeni ekip varsayılan mı olsun?', options: ['Evet, varsayılan', 'Hayır, eski yapı kalsın', 'Sadece büyük işlerde'], rec: 'Sadece büyük işlerde', time: '09:00' };
+test('decision rows: a you row with ask, options and rec renders the question, the options and the marked recommendation', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [DEC, { state: 'you', title: 'Eklentileri yeniden yükle', small: 'Claude Code: /reload-plugins', time: '09:05' }]);
+  assert.strictEqual(render(dir).status, 0);
+  const cd = (page(dir).match(/<div class="cd" id="d-you-varsayilan-yapi-[0-9a-z]+">([\s\S]*?)<\/div>/) || [])[1];
+  assert.strictEqual(cd, '<b>Varsayılan yapı</b><p class="ask">Yeni ekip varsayılan mı olsun?</p><ol class="opt"><li>Evet, varsayılan</li><li>Hayır, eski yapı kalsın</li><li class="rec">Sadece büyük işlerde <em>önerim</em></li></ol>');
+  assert.match(page(dir), />Eklentileri yeniden yükle<\/button>/, 'an action row needs only the action and where');
+  const en = tmpdir(t); init(en);
+  setRows(en, [{ ...DEC, rec: 'Evet, varsayılan' }]);
+  render(en);
+  assert.match(page(en), /<li class="rec">Evet, varsayılan <em>recommended<\/em><\/li>/);
+  // the options stay readable on any page: list items, numbered, never a grid row
+  const { STRIP_CSS } = require('../tools/tracker.js');
+  assert.ok(STRIP_CSS.some((c) => c.includes('.cd ol.opt>li{display:list-item')));
+});
+test('decision rows: a decision without its question, two options or a recommendation among them is refused', (t) => {
+  const dir = tmpdir(t); init(dir);
+  const bad = [
+    { ...DEC, ask: undefined },
+    { ...DEC, options: ['Evet, varsayılan'], rec: 'Evet, varsayılan' },
+    { ...DEC, options: ['Evet', ' '], rec: 'Evet' },
+    { ...DEC, rec: undefined },
+    { ...DEC, rec: 'Başka bir şey' },
+    { state: 'you', title: 'Only rec', rec: 'x', time: '09:00' },
+  ];
+  for (const r of bad) {
+    setRows(dir, [r]);
+    const out = render(dir);
+    assert.strictEqual(out.status, 1, JSON.stringify(r));
+    assert.match(out.stderr, /waits on the owner's decision: it needs ask \(the question\), options \(two or more, in plain words\) and rec \(one of the options\)/);
+  }
+  // a decided row moved to done keeps its fields without being checked
+  setRows(dir, [{ ...DEC, state: 'ok', rec: undefined }]);
+  assert.strictEqual(render(dir).status, 0);
+});
+test('decision rows: an owner entry with reason decision makes its you row a decision', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'you', title: 'Seçim', time: '09:00' }]);
+  const before = fs.readFileSync(path.join(dir, 'rows.json'), 'utf8');
+  const r = crew(dir, ['--role', 'lead', '--job', 'Seçim', '--state', 'owner', '--reason', 'decision', '--row', 'Seçim']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /"Seçim" waits on the owner's decision/);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'), before, 'nothing written');
+  assert.strictEqual(crew(dir, ['--role', 'lead', '--job', 'Seçim', '--state', 'owner', '--reason', 'approval', '--row', 'Seçim']).status, 0, 'an approval is an action');
+  setRows(dir, [{ ...DEC, title: 'Seçim' }]);
+  assert.strictEqual(crew(dir, ['--role', 'lead', '--job', 'Seçim', '--state', 'owner', '--reason', 'decision', '--row', 'Seçim']).status, 0);
+});
+test('decision rows: row --ask --option --rec writes them; a refused row is not written', (t) => {
+  const dir = tmpdir(t); init(dir);
+  assert.strictEqual(row(dir, ['--title', 'Seçim', '--state', 'you', '--ask', 'Hangisi?', '--option', 'A', '--option', 'B', '--rec', 'B']).status, 0);
+  const r = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0];
+  assert.deepStrictEqual([r.ask, r.options, r.rec], ['Hangisi?', ['A', 'B'], 'B']);
+  const out = row(dir, ['--title', 'Seçim 2', '--state', 'you', '--ask', 'Hangisi?', '--option', 'A']);
+  assert.strictEqual(out.status, 1);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8')).length, 1, 'not written');
+});
+test('decision rows: the rule is written in the orchestrate skill', () => {
+  const skill = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  for (const w of ['the question (`ask`)', 'two or more options in plain words (`options`)', 'the one recommended (`rec`)', 'An action row (a sign-in, a reload, an approval of one thing) needs only the action and where it is done'] ) assert.ok(skill.includes(w), w);
 });

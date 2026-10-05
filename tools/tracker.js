@@ -67,7 +67,11 @@
  *       developer mode "Builder · kod yazıyor", off "Kod yazıyor"; a summary icon
  *       leads with its count, "2 · kod yazıyor").
  *       Owner: you rows (with the owner entries naming them) and owner entries
- *       with no such row, as their own lines. Active work and Owner oldest first,
+ *       with no such row, as their own lines. A you row waiting on a decision
+ *       (it has ask/options/rec, or an owner entry with reason decision names it)
+ *       must carry ask, two or more options and rec (one of them), else render,
+ *       row and crew refuse it before writing (checkDecisions); its detail shows
+ *       the question and the options, the recommendation marked. Active work and Owner oldest first,
  *       the rest newest first; ties keep file order; an empty group is left out.
  *       In a group, two or more lines of one category (a row's parent, by name)
  *       sit under one category line, indented; one alone reads
@@ -120,8 +124,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', rec: 'recommended', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', rec: 'önerim', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -185,6 +189,7 @@ const STRIP_CSS = [
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
   '.cd[hidden]{display:none}',
+  '.cd .ask{color:var(--ink);font-weight:500}.cd ol.opt{list-style:decimal;margin:4px 0 2px;padding-left:20px}.cd ol.opt>li{display:list-item;margin:2px 0;padding:0;background:none;border:0;overflow-wrap:anywhere}.cd ol.opt>li.rec{color:var(--ink);font-weight:500}.cd ol.opt em{margin-left:6px;font:600 10.5px var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--you)}',
   ':is(.crew,main) li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
   // a category line: its title (and "running" when a member runs) and the member count; a done one folds
   'li.cat{display:block}li.cat>ul.ch,li.cat>ol{list-style:none;margin:0;padding:0}',
@@ -306,7 +311,8 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent|row)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (a === '--option') (opt.option = opt.option || []).push(argv[++i]);
+    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent|row|ask|rec)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -393,6 +399,25 @@ function checkParents(rows) {
   });
 }
 
+// A row waiting on the owner's decision (owner, 2026-10-05: "hatırlamıyorum ve önerilerin dispatch de
+// değil") carries what is needed to answer it from the page: the question (`ask`), two or more options
+// in plain words (`options`) and the one recommended (`rec`, one of the options). A you row is a decision
+// when it carries any of them or an owner entry with reason decision names it; any other you row is an
+// action (sign-in, reload, approval of one thing) and needs only the action and where it is done.
+const DECISION_NEEDS = "waits on the owner's decision: it needs ask (the question), options (two or more, in plain words) and rec (one of the options)";
+function checkDecisions(rows, crew = []) {
+  const named = new Set(crew.filter((e) => e && e.state === 'owner' && e.reason === 'decision' && key(e.row)).map((e) => key(e.row)));
+  rows.forEach((r, i) => {
+    if (!r || r.state !== 'you') return;
+    const isDecision = r.ask !== undefined || r.options !== undefined || r.rec !== undefined || named.has(key(r.title));
+    if (!isDecision) return;
+    const opts = Array.isArray(r.options) ? r.options.map((o) => String(o ?? '').trim()) : [];
+    const ok = String(r.ask ?? '').trim() && opts.length >= 2 && opts.every(Boolean)
+      && opts.some((o) => key(o) === key(r.rec));
+    if (!ok) die(`row ${i + 1}: "${r.title}" ${DECISION_NEEDS}`);
+  });
+}
+
 // Developer mode only: `model · effort · ctx @time` as reported, in the line's detail (the build note,
 // 2026-10-05: no longer on the line); the context figure only with the time it was reported (never
 // estimated). Several entries on one line: their tails one after another, " / " between them.
@@ -456,7 +481,11 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
   const urls = [];
   for (const e of es) if (isUrl(e.url) && e.url !== lead && !urls.includes(e.url)) urls.push(e.url);
   const tail = dev ? crewTail(es) : '';
-  return dl
+  // a decision: the question, then the options, the recommended one marked
+  const opts = r && Array.isArray(r.options) ? r.options.map((o) => String(o ?? '').trim()).filter(Boolean) : [];
+  const ask = (r && String(r.ask ?? '').trim() ? `<p class="ask">${esc(r.ask)}</p>` : '')
+    + (opts.length ? `<ol class="opt">${opts.map((o) => (key(o) === key(r.rec) ? `<li class="rec">${esc(o)} <em>${esc(L.rec || LABELS.en.rec)}</em></li>` : `<li>${esc(o)}</li>`)).join('')}</ol>` : '');
+  return dl + ask
     + (rest ? `<p>${esc(rest)}</p>` : '')
     + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
     + (urls.length ? `<p class="ln">${urls.map((u) => a(u, L.link)).join(' · ')}</p>` : '')
@@ -649,6 +678,7 @@ function render(dir, { quiet = false } = {}) {
     seen.add(k);
   });
   checkParents(rows);
+  checkDecisions(rows, crew);
   const { strip: stripHtml, list } = board(rows, crew, L, dev);
   const ol = `<ol>\n${list.map((x) => '  ' + x + '\n').join('')}</ol>`;
   // the Active work strip is always there: what runs, or that nothing does
@@ -680,7 +710,7 @@ function render(dir, { quiet = false } = {}) {
 }
 
 function upsert(dir, opt) {
-  if (!dir || !opt.title || !opt.state) die('usage: tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan [--small t] [--url u] [--label t] [--group t]');
+  if (!dir || !opt.title || !opt.state) die('usage: tracker.js row <dir> --title "<text>" --state run|you|wait|ok|plan [--small t] [--url u] [--label t] [--group t] [--ask q --option a --option b --rec b]');
   if (!Object.prototype.hasOwnProperty.call(GROUP, opt.state)) die(`unknown state "${opt.state}"`);
   const rowsPath = path.join(dir, 'rows.json');
   if (!fs.existsSync(rowsPath)) die(`${rowsPath} not found (run init first)`);
@@ -691,12 +721,16 @@ function upsert(dir, opt) {
   if (opt.url) row.url = opt.url;
   if (opt.label) row.label = opt.label;
   if (opt.group) row.group = opt.group;
+  if (opt.ask) row.ask = opt.ask;
+  if (opt.option) row.options = opt.option;
+  if (opt.rec) row.rec = opt.rec;
   const i = rows.findIndex((r) => r && key(r.title) === key(opt.title));
   // the parent stays unless given: re-running a sub-job's row must not ungroup it
   const parent = opt.parent !== undefined ? opt.parent : (i >= 0 ? rows[i].parent : undefined);
   if (parent) row.parent = parent;
   if (i >= 0) rows[i] = row; else rows.push(row);
   checkParents(rows); // before writing: a refused row leaves rows.json alone
+  checkDecisions(rows, store.crew);
   writeStore(rowsPath, store);
   render(dir);
 }
@@ -741,6 +775,7 @@ function upsertCrew(dir, opt, { quiet = true } = {}) {
   if (old.state === entry.state) { const o = { ...old }; stampSince(o, now()); entry.since = o.since; entry.sinceState = o.sinceState; }
   else { entry.since = now().toISOString(); entry.sinceState = entry.state; }
   if (i >= 0) store.crew[i] = entry; else store.crew.push(entry);
+  checkDecisions(store.rows, store.crew); // before writing: an owner decision needs its row's options
   writeStore(rowsPath, store);
   render(dir, { quiet });
 }
@@ -768,4 +803,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, activeStrip, board, slugId, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, activeStrip, board, slugId, checkDecisions, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };

@@ -253,6 +253,13 @@ per other audience.
   for the owner — an approval, a choice, an action such as reloading plugins — appears the moment it
   is raised as an owner-waiting row on the Daily Tracker, linking to the page where it is decided
   when one exists. Never only in chat.
+- **An owner row can be answered from the page** (owner, 2026-10-05). A row waiting on the owner's
+  decision carries the question (`ask`), two or more options in plain words (`options`) and the one
+  recommended (`rec`); its detail shows them, the recommendation marked
+  (`tracker.js row … --ask "<question>" --option "<a>" --option "<b>" --rec "<b>"`). The updater refuses a
+  decision row without them, and an owner entry with reason decision makes its row one. Never invent
+  options to pass the check: ask whoever knows them. An action row (a sign-in, a reload, an approval of
+  one thing) needs only the action and where it is done.
 
 ### Crew strip
 
