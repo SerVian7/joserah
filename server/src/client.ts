@@ -13,7 +13,7 @@ fetch('/api/ingest',{method:'POST',credentials:'same-origin',body:fd}).then(func
 .then(function(j){location.href=j.id?'/jobs/'+j.id:'/'},function(x){err.textContent=(x&&(x.message||x.error))||'error'})});
 if(typeof EventSource==='undefined')return;var es=new EventSource('/events');
 es.onmessage=function(m){var e;try{e=JSON.parse(m.data)}catch(x){return}
-function typing(){var r=$('#reply-text'),t=$('#job textarea');return (r&&r.value)||(t&&t.value)}
+function typing(){var r=$('#reply-text'),t=$('#job textarea'),a=$('#ask textarea');return (r&&r.value)||(t&&t.value)||(a&&a.value)}
 if(e.type==='reset'&&!typing()){location.reload();return}
 if(e.type==='job'){Array.prototype.forEach.call(all('[data-job="'+e.id+'"]'),function(el){var ev=e.event||{};
 if(el.tagName==='OL'&&(ev.kind==='text'||ev.kind==='tool')){var li=D.createElement('li');li.className=ev.kind;li.textContent=ev.kind==='tool'?'· '+ev.name:ev.text;el.appendChild(li)}

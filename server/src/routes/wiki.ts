@@ -7,6 +7,7 @@ import { renderMarkdown } from '../markdown.ts';
 import { shell, esc, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
 
+const GENERATED = new Set(['wiki/index.md', 'wiki/log.md']);
 const SEG = /^[^\\/:*?"<>|\0]{1,160}$/;
 const CSS = '<style>table.claims td,table.claims th{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}tr.struck{color:var(--muted)}.speaks{color:var(--ok)}#ask textarea{min-height:4em}form{margin:12px 0}</style>';
 
@@ -32,7 +33,8 @@ export function wikiHtml(page: WikiPage, pages: WikiPage[]): string {
   return renderMarkdown(withWikilinks, { resolveHref: (h) => {
     if (h.startsWith('/w/page/')) return h;
     const r = wikiLib.resolveLink(page.rel, h);
-    return r && r.kind === 'page' && pages.some((p) => p.rel === r.rel) ? pageUrl(r.rel) : null;
+    const frag = /#[^?]*$/.exec(h.split('?')[0]);
+    return r && r.kind === 'page' && (GENERATED.has(r.rel) || pages.some((p) => p.rel === r.rel)) ? pageUrl(r.rel) + (frag ? encodeURI(frag[0]) : '') : null;
   } });
 }
 

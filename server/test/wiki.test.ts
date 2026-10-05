@@ -85,3 +85,13 @@ test('pages with spaces and brackets link correctly; the generated index and log
   html = await (await app.request('/w/page/wiki/index.md', { headers: { cookie } })).text();
   assert.match(html, /href="\/w\/page\/wiki\/topics\/src\.md"/);
 });
+
+test('links keep their anchor and reach the generated index', async (t) => {
+  const { app, deps, cookie } = await signedIn(t);
+  put(deps.workspace, 'wiki/index.md', '# Wiki index\n');
+  put(deps.workspace, 'wiki/topics/b.md', '# B\n');
+  put(deps.workspace, 'wiki/topics/a.md', '# A\n\n[b](b.md#part) [home](../index.md)\n');
+  const html = await (await app.request('/w/page/wiki/topics/a.md', { headers: { cookie } })).text();
+  assert.match(html, /href="\/w\/page\/wiki\/topics\/b\.md#part"/);
+  assert.match(html, /href="\/w\/page\/wiki\/index\.md"/);
+});
