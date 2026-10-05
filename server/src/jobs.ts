@@ -74,6 +74,11 @@ export class JobRunner {
   onEnd(fn: (job: JobRecord) => void): void { this.#ends.push(fn); }
   get(id: string): JobRecord | undefined { return this.#jobs.get(id); }
   list(day?: string): JobRecord[] { return [...this.#jobs.values()].filter((j) => !day || j.day === day).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  /** The CLI's own cost estimate summed over today's jobs. */
+  todayCostUsd(): number {
+    const day = localDay();
+    return Math.round([...this.#jobs.values()].filter((j) => j.day === day).reduce((s, j) => s + (typeof j.costUsd === 'number' ? j.costUsd : 0), 0) * 1e6) / 1e6;
+  }
   running(): JobRecord[] { return [...this.#jobs.values()].filter((j) => j.state === 'running'); }
   logTail(id: string, n = 200): unknown[] {
     const j = this.#jobs.get(id); if (!j) return [];
@@ -89,6 +94,8 @@ export class JobRunner {
     if (!text || text.length > 8000) throw new Refused('bad-text', 'a job needs a text of 1 to 8000 characters');
     if (!fs.existsSync(path.join(this.#o.workspace, '.joserah', 'config.json'))) throw new Refused('no-workspace', 'there is no workspace here yet — finish the setup wizard first');
     const cfg = this.#o.config();
+    const spent = this.todayCostUsd();
+    if (spent >= cfg.dailyBudgetUsd) throw new Refused('daily-budget', `today's estimated spend $${spent.toFixed(2)} has reached the daily cap $${cfg.dailyBudgetUsd.toFixed(2)}; jobs start again tomorrow or after the cap is raised in server.json`);
     const t = now();
     const id = `j-${localDay(t).replaceAll('-', '')}-${hhmm(t).replace(':', '')}-${crypto.randomBytes(3).toString('hex')}`;
     const job: JobRecord = { id, day: localDay(t), type, target: 'server', text, state: 'queued', createdAt: t.toISOString(),
@@ -256,7 +263,8 @@ export class JobRunner {
     // Only a resume that never started a session falls back; a timeout, a cancel or a missing CLI would fail again.
     if (job.state === 'failed' && !live.stop && !exit.spawnError && job.resumeSessionId && !job.sessionId && !job.fallbackOf && job.parentId && !this.#stopping) {
       const p = this.#jobs.get(job.parentId);
-      this.submit({ type: job.type, text: job.text, fallbackOf: job.id, parentId: job.parentId, pointers: p ? [`${jobsDir(p.day)}/${p.id}.md`] : [] });
+      try { this.submit({ type: job.type, text: job.text, fallbackOf: job.id, parentId: job.parentId, pointers: p ? [`${jobsDir(p.day)}/${p.id}.md`] : [] }); }
+      catch (e) { if (!(e instanceof Refused)) throw e; job.error = `${job.error ?? ''}; fallback not started: ${e.message}`; this.#save(job); this.#digest(job); }
     }
   }
 

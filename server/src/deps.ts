@@ -4,6 +4,7 @@ import type { EventBus } from './events.ts';
 import type { Store } from './store.ts';
 import type { Engine, EngineHealth } from './engine.ts';
 import type { JobRunner } from './jobs.ts';
+import type { AnswerTrigger } from './answer-trigger.ts';
 export interface HealthView { signedIn: boolean | null; lastJobOk: boolean | null }
 export interface AuthHolder { state: AuthState }
 export interface AppDeps {
@@ -19,5 +20,6 @@ export interface AppDeps {
   bus: EventBus;
   engine: Engine;
   jobs: JobRunner;
+  answers: AnswerTrigger;
   engineHealth: EngineHealth | null;
 }

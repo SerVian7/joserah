@@ -3,7 +3,6 @@ import type { AppDeps } from '../deps.ts';
 import type { JobRecord } from '../jobs.ts';
 import { JOB_TYPES, workspaceLang } from '../config.ts';
 import { listPages } from '../pages.ts';
-import { localDay } from '../paths.ts';
 import { shell, esc, LABELS } from '../layout.ts';
 import { APP_JS } from '../client.ts';
 import { streamLines } from './jobs.ts';
@@ -22,13 +21,12 @@ export function register(app: App, deps: AppDeps): void {
     const L = LABELS[lang()]; const h = deps.engineHealth;
     const blocked = h && (!h.installed || !h.signedIn) ? h.detail : '';
     const running = deps.jobs.list().filter((j) => j.state === 'running' || j.state === 'queued');
-    const today = deps.jobs.list(localDay()).reduce((sum, j) => sum + (typeof j.costUsd === 'number' ? j.costUsd : 0), 0);
     const pages = listPages(deps.workspace).map((p) => `<li><a href="${esc(p.url)}">${esc(p.title)}</a> <span class="muted">${esc(p.day)}</span>${p.reports.map((r) => ` · <a href="${esc(p.url + encodeURIComponent(r))}">${esc(r)}</a>`).join('')}</li>`).join('');
     const body = `<h2>${esc(L.newJob)}</h2>
 <form id="job"><fieldset${blocked ? ' disabled' : ''}>${blocked ? `<p class="err">${esc(L.disabled)}: ${esc(blocked)}</p>` : ''}
 <textarea name="text" required maxlength="8000"></textarea>
 <div class="row"><select name="type">${JOB_TYPES.map((t) => `<option${t === 'task' ? ' selected' : ''}>${t}</option>`).join('')}</select><button>${esc(L.send)}</button><span class="err"></span></div></fieldset></form>
-<p class="muted">${esc(L.cost)}: ${esc(money(today))} (${esc(L.estimate)})</p>
+<p id="cost">${esc(L.cost)}: ${esc(money(deps.jobs.todayCostUsd()))} (${esc(L.estimate)}) · cap $${deps.config().dailyBudgetUsd.toFixed(2)}</p>
 <h2>${esc(L.running)}</h2><ul id="running" class="jobs">${running.length ? running.map(jobLine).join('') : `<li class="muted">${esc(L.none)}</li>`}</ul>
 <h2>${esc(L.tracker)}</h2><iframe class="trk" src="/p/tracker" title="${esc(L.tracker)}"></iframe>
 <h2>${esc(L.pages)}</h2><ul>${pages}</ul>`;

@@ -14,6 +14,7 @@ import { ClaudeCliEngine } from '../src/engines/claude-cli.ts';
 import { JobRunner, type Checkpointer } from '../src/jobs.ts';
 import { cliTracker } from '../src/tracker-bridge.ts';
 import { GitCheckpointer } from '../src/checkpoint.ts';
+import { AnswerTrigger } from '../src/answer-trigger.ts';
 
 export const SERVER_ROOT = path.resolve(import.meta.dirname, '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
@@ -55,6 +56,8 @@ export function baseDeps(t: TestContext, over: Partial<AppDeps> = {}): AppDeps {
     auth: { state: { kind: 'setup' } }, limiter: new RateLimiter(), secureCookies: false, bus, store, engine, engineHealth: null, ...over } as AppDeps;
   // Route tests get a runner on the fake engine; it reads the config through the deps, so a test may swap it.
   if (!over.jobs) deps.jobs = new JobRunner({ workspace, store, bus, engine, config: () => deps.config(), tracker: cliTracker(workspace, 'en'), jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
+  // The answer trigger is built but not started: no test gets a job it did not ask for.
+  if (!over.answers) deps.answers = new AnswerTrigger({ workspace, bus, jobs: deps.jobs, config: () => deps.config() });
   return deps;
 }
 
@@ -105,5 +108,6 @@ export function runnerFor(t: TestContext, o: { env?: Record<string, string>; con
   const runner = new JobRunner({ workspace: ws, store: deps.store, bus: deps.bus, engine: fakeEngine(o.env), config: () => cfg,
     tracker: cliTracker(ws, 'en'), checkpoint: o.checkpointer ? new GitCheckpointer(ws, deps.store) : o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
   deps.jobs = runner;
+  deps.answers = new AnswerTrigger({ workspace: ws, bus: deps.bus, jobs: runner, config: () => cfg });
   return { runner, deps, ws };
 }
