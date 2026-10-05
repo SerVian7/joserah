@@ -5,6 +5,7 @@ import type { HttpBindings } from '@hono/node-server';
 import type { AppDeps } from './deps.ts';
 import { headers, guard, originCheck } from './security.ts';
 import { register as authRoutes } from './routes/auth.ts';
+import { register as pagesRoutes } from './routes/pages.ts';
 
 export type Env = { Bindings: HttpBindings; Variables: { signedIn: boolean } };
 export type App = Hono<Env>;
@@ -23,6 +24,7 @@ export function createApp(deps: AppDeps): App {
   app.use('*', guard(deps));
   app.use('*', originCheck(deps));
   authRoutes(app, deps);
+  pagesRoutes(app, deps);
   // Later tasks register their routes here, after authRoutes and before notFound.
   app.notFound((c) => (c.req.path.startsWith('/api/') ? jsonError(c, 404, 'not-found') : c.html('<!doctype html><title>404</title><p>Not found.</p>', 404)));
   return app;
