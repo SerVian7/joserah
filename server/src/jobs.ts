@@ -28,6 +28,7 @@ export interface Checkpointer {
 export const noCheckpoint: Checkpointer = { before: () => ({ ok: true, commit: '' }), after: () => ({ changed: [], flags: [] }) };
 export interface RunnerOptions { workspace: string; store: Store; bus: EventBus; engine: Engine; config: () => ServerConfig; tracker: TrackerBridge; checkpoint?: Checkpointer; jobUrl: (id: string) => string; lang: 'tr' | 'en' }
 
+type Stop = 'cancel' | 'timeout' | 'turn-limit' | 'shutdown';
 const END: readonly JobState[] = ['done', 'failed', 'cancelled', 'interrupted', 'needs-approval', 'refused'];
 const redact = (s: string) => redactions.redact(s).text;
 const firstLine = (s: string) => s.trim().split(/\r?\n/)[0]?.slice(0, 200) ?? '';
@@ -64,7 +65,8 @@ export class JobRunner {
   #jobs = new Map<string, JobRecord>();
   #queue: string[] = [];
   #active = new Set<string>();
-  #live = new Map<string, { run: EngineRun; stop?: 'cancel' | 'timeout' | 'turn-limit' }>();
+  #live = new Map<string, { run: EngineRun; stop?: Stop }>();
+  #stopping = false;
   #idleWaiters: Array<() => void> = [];
   #ends: Array<(job: JobRecord) => void> = [];
   constructor(o: RunnerOptions) { this.#o = o; }
@@ -81,6 +83,7 @@ export class JobRunner {
 
   submit(input: SubmitInput): JobRecord {
     const type = (input.type ?? 'task') as JobType;
+    if (this.#stopping) throw new Refused('stopping', 'the server is stopping; start the job again once it is back');
     if (!(JOB_TYPES as readonly string[]).includes(type)) throw new Refused('bad-type', `unknown job type: ${input.type}`);
     const text = String(input.text ?? '').trim();
     if (!text || text.length > 8000) throw new Refused('bad-text', 'a job needs a text of 1 to 8000 characters');
@@ -112,6 +115,7 @@ export class JobRunner {
     if (!p) throw new Refused('not-found', `no job ${id}`);
     if (RESTRICTED_TYPES.includes(p.type)) throw new Refused('restricted', `${p.type} jobs keep their fixed tools`);
     if (p.state !== 'needs-approval' || !p.denials?.length) throw new Refused('not-waiting', 'this job is not waiting for an approval');
+    if ([...this.#jobs.values()].some((j) => j.parentId === id && j.allowTools?.length)) throw new Refused('already-approved', 'this approval was already given');
     return this.submit({ type: p.type, text: `The owner allowed: ${p.denials.join(', ')}. Continue the job.`, parentId: id, resumeSessionId: p.sessionId, allowTools: p.denials });
   }
 
@@ -148,12 +152,23 @@ export class JobRunner {
     this.#pump();
   }
 
+  /**
+   * The server is stopping (Ctrl+C, `docker restart`): no new job starts, each running one is stopped by its process
+   * tree and ends `interrupted` with an owner row; queued jobs stay queued on disk for the next start's recover().
+   */
+  async shutdown(): Promise<void> {
+    this.#stopping = true;
+    this.#queue = [];
+    await Promise.all([...this.#live.values()].map((live) => { if (!live.stop) live.stop = 'shutdown'; return live.run.cancel(); }));
+    if (this.#active.size) await this.idle();
+  }
+
   idle(): Promise<void> { return this.#isIdle() ? Promise.resolve() : new Promise((r) => this.#idleWaiters.push(r)); }
   #isIdle(): boolean { return this.#queue.length === 0 && this.#active.size === 0; }
   #checkIdle(): void { if (this.#isIdle()) for (const w of this.#idleWaiters.splice(0)) w(); }
 
   #titleFor(text: string, t: Date): string {
-    const short = text.replace(/\s+/g, ' ').slice(0, 70);
+    const short = redact(text).replace(/\s+/g, ' ').slice(0, 70);
     const base = `${short}${text.length > 70 ? '…' : ''} · ${hhmm(t)}`;
     const taken = new Set([...this.#jobs.values()].filter((j) => j.day === localDay(t)).map((j) => j.rowTitle.toLowerCase()));
     let title = base; for (let n = 2; taken.has(title.toLowerCase()); n++) title = `${base} (${n})`;
@@ -165,13 +180,17 @@ export class JobRunner {
 
   #pump(): void {
     const max = this.#o.config().maxConcurrentJobs;
-    while (this.#active.size < max && this.#queue.length) {
+    while (!this.#stopping && this.#active.size < max && this.#queue.length) {
       const id = this.#queue.shift()!;
       const job = this.#jobs.get(id);
       if (!job || job.state !== 'queued') continue;
       this.#active.add(id);
       if (this.#active.size > 1) for (const a of this.#active) { const j = this.#jobs.get(a); if (j) j.overlap = true; }
-      void this.#run(job).catch((e: Error) => { job.state = 'failed'; job.error = `server error: ${e.message}`; this.#finish(job); })
+      void this.#run(job).catch((e: Error) => {
+        job.state = 'failed'; job.error = `server error: ${e.message}`;
+        try { this.#finish(job); } catch (e2) { process.stderr.write(`jobs: ${job.id}: ${(e2 as Error).message}
+`); }
+      })
         .finally(() => { this.#active.delete(id); this.#pump(); this.#checkIdle(); });
     }
     this.#checkIdle();
@@ -192,31 +211,39 @@ export class JobRunner {
       brief: job.resumeSessionId ? job.text : composeBrief({ task: job.text, type: job.type, pointers: job.pointers }),
       resumeSessionId: job.resumeSessionId, restricted: RESTRICTED_TYPES.includes(job.type), writeArea: writeAreaFor(job.type), allowTools: job.allowTools };
     const run = this.#o.engine.start(ej);
-    const live: { run: EngineRun; stop?: 'cancel' | 'timeout' | 'turn-limit' } = { run };
+    const live: { run: EngineRun; stop?: Stop } = { run };
     this.#live.set(job.id, live);
-    const timer = setTimeout(() => { live.stop = 'timeout'; void run.cancel(); }, cfg.jobTimeoutMin * 60000);
+    const timer = setTimeout(() => { if (!live.stop) { live.stop = 'timeout'; void run.cancel(); } }, cfg.jobTimeoutMin * 60000);
     const log = `${jobsDir(job.day)}/${job.id}.jsonl`;
     let result: Extract<EngineEvent, { kind: 'result' }> | null = null;
     const denied = new Set<string>();
     let stderr = '';
-    for await (const { raw, event } of run.events) {
-      if (event.kind === 'init' && !job.sessionId) { job.sessionId = event.sessionId; job.cliVersion = event.cliVersion; this.#save(job); }
-      if (raw) this.#o.store.append(log, redact(raw) + '\n');
-      if (event.kind === 'stderr') { stderr += event.text; this.#o.store.append(log, JSON.stringify({ type: 'stderr', text: redact(event.text) }) + '\n'); }
-      else if (event.kind === 'text') this.#emit(job, { kind: 'text', text: redact(event.text) });
-      else if (event.kind === 'tool') this.#emit(job, { kind: 'tool', name: event.name });
-      else if (event.kind === 'turn') { job.turns += 1; if (job.turns > cfg.jobMaxTurns && !live.stop) { live.stop = 'turn-limit'; void run.cancel(); } }
-      else if (event.kind === 'denied') denied.add(event.tool);
-      else if (event.kind === 'result') { result = event; for (const d of event.denials) denied.add(d); }
+    let exit: Awaited<EngineRun['done']>;
+    try {
+      for await (const { raw, event } of run.events) {
+        if (event.kind === 'init' && !job.sessionId) { job.sessionId = event.sessionId; job.cliVersion = event.cliVersion; this.#save(job); }
+        if (raw) this.#o.store.append(log, redact(raw) + '\n');
+        if (event.kind === 'stderr') { stderr += event.text; this.#o.store.append(log, JSON.stringify({ type: 'stderr', text: redact(event.text) }) + '\n'); }
+        else if (event.kind === 'text') this.#emit(job, { kind: 'text', text: redact(event.text) });
+        else if (event.kind === 'tool') this.#emit(job, { kind: 'tool', name: event.name });
+        else if (event.kind === 'turn') { job.turns += 1; if (job.turns > cfg.jobMaxTurns && !live.stop) { live.stop = 'turn-limit'; void run.cancel(); } }
+        else if (event.kind === 'denied') denied.add(event.tool);
+        else if (event.kind === 'result') { result = event; for (const d of event.denials) denied.add(d); }
+      }
+      clearTimeout(timer); // the stream closed with the process: a late timer must not rename a finished job
+      exit = await run.done;
+    } catch (e) {
+      void run.cancel(); // a write failed mid-stream: never leave the CLI running unwatched
+      throw e;
+    } finally {
+      clearTimeout(timer); this.#live.delete(job.id);
     }
-    const exit = await run.done;
-    clearTimeout(timer);
-    this.#live.delete(job.id);
     const r = result as Extract<EngineEvent, { kind: 'result' }> | null;
     job.denials = [...denied];
     job.costUsd = r?.costUsd ?? null;
     job.resultText = redact(r?.text ?? '');
     if (live.stop === 'cancel') job.state = 'cancelled';
+    else if (live.stop === 'shutdown') { job.state = 'interrupted'; job.error = 'the server stopped while the job ran'; }
     else if (live.stop === 'timeout') { job.state = 'failed'; job.error = `timeout after ${cfg.jobTimeoutMin} min`; }
     else if (live.stop === 'turn-limit') { job.state = 'failed'; job.error = `turn limit ${cfg.jobMaxTurns} reached`; }
     else if (exit.spawnError) { job.state = 'failed'; job.error = `could not start Claude Code: ${exit.spawnError}`; }
@@ -226,7 +253,8 @@ export class JobRunner {
     else if (!r.ok) { job.state = 'failed'; job.error = r.subtype || 'error'; }
     else job.state = 'done';
     this.#finish(job);
-    if (job.state === 'failed' && job.resumeSessionId && !job.sessionId && !job.fallbackOf && job.parentId) {
+    // Only a resume that never started a session falls back; a timeout, a cancel or a missing CLI would fail again.
+    if (job.state === 'failed' && !live.stop && !exit.spawnError && job.resumeSessionId && !job.sessionId && !job.fallbackOf && job.parentId && !this.#stopping) {
       const p = this.#jobs.get(job.parentId);
       this.submit({ type: job.type, text: job.text, fallbackOf: job.id, parentId: job.parentId, pointers: p ? [`${jobsDir(p.day)}/${p.id}.md`] : [] });
     }
@@ -234,8 +262,8 @@ export class JobRunner {
 
   #finish(job: JobRecord): void {
     if (job.startedAt) { // a job that never started has nothing to diff
-      const a = (this.#o.checkpoint ?? noCheckpoint).after(job);
-      job.changed = a.changed; job.flags = [...(job.flags ?? []), ...a.flags];
+      try { const a = (this.#o.checkpoint ?? noCheckpoint).after(job); job.changed = a.changed; job.flags = [...(job.flags ?? []), ...a.flags]; }
+      catch (e) { job.flags = [...(job.flags ?? []), `changed-file check failed: ${(e as Error).message}`]; }
     }
     job.endedAt = now().toISOString();
     for (const fn of this.#ends) { try { fn(job); } catch (e) { job.flags = [...(job.flags ?? []), `bookkeeping failed: ${(e as Error).message}`]; } }
@@ -262,7 +290,7 @@ export class JobRunner {
 
   #digest(job: JobRecord): void {
     const lines = [`# Job ${job.id}`, '',
-      `- Task: ${job.text.replace(/\s+/g, ' ').slice(0, 300)}`,
+      `- Task: ${redact(job.text).replace(/\s+/g, ' ').slice(0, 300)}`,
       `- Type: ${job.type} · model ${job.model} · target ${job.target}${job.parentId ? ` · follows ${job.parentId}` : ''}`,
       `- State: ${job.state}${job.error ? ` — ${job.error}` : ''}`,
       `- Started: ${job.startedAt ?? '-'} · ended: ${job.endedAt ?? '-'} · tool turns: ${job.turns}`,

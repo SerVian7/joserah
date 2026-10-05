@@ -61,14 +61,20 @@ jobs.onEnd((j) => { deps.health.lastJobOk = j.state === 'done'; });
 const app = createApp(deps);
 const ready = () => {
   console.log(`Joserah server: ${baseUrl}/`);
-  if (ensureJobIgnores(workspace)) console.log('Added the job-log lines to the workspace .gitignore.');
-  rotateLogs(store, cfg.rawLogDays);
-  setInterval(() => rotateLogs(store, cfg.rawLogDays), 24 * 3600000).unref(); // and once a day while it runs
-  // A job that was running when the server stopped becomes interrupted (owner row); queued jobs run.
+  // First: a job that was running when the server stopped becomes interrupted (owner row); queued jobs run.
   jobs.recover();
+  const chore = (name: string, fn: () => unknown) => { try { fn(); } catch (e) { console.error(`joserah: ${name} failed: ${(e as Error).message}`); } };
+  chore('job-log ignore lines', () => { if (ensureJobIgnores(workspace)) console.log('Added the job-log lines to the workspace .gitignore.'); });
+  chore('raw log rotation', () => rotateLogs(store, cfg.rawLogDays));
+  setInterval(() => chore('raw log rotation', () => rotateLogs(store, cfg.rawLogDays)), 24 * 3600000).unref(); // and once a day while it runs
   const refresh = async () => { const h = await engine.health(); deps.health.signedIn = h.signedIn; deps.engineHealth = h; };
   void refresh(); setInterval(() => void refresh(), 5 * 60000).unref();
   if (deps.auth.state.kind === 'setup') console.log(`First start — open ${baseUrl}/setup?token=${setupToken(state)} to set the password.`);
 };
+// Ctrl+C or `docker restart` (SIGTERM): stop running jobs as interrupted, keep the queue for the next start.
+let stopping = false;
+const stop = () => { if (stopping) return; stopping = true; void jobs.shutdown().finally(() => process.exit(0)); };
+process.once('SIGINT', stop);
+process.once('SIGTERM', stop);
 if (tls) serve({ fetch: app.fetch, port: listen.port, hostname: listen.hostname, createServer: https.createServer, serverOptions: tls }, ready);
 else serve({ fetch: app.fetch, port: listen.port, hostname: listen.hostname }, ready);

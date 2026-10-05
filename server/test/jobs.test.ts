@@ -179,3 +179,51 @@ test('job logs stay out of the backup; old raw logs are rotated', (t) => {
   assert.deepEqual(rotateLogs(deps.store, 30, new Date(`${DAY}T09:00:00`)), ['.joserah/desk/jobs/2026-08-01/j-old.jsonl']);
   assert.ok(fs.existsSync(path.join(ws, '.joserah/desk/jobs/2026-08-01/j-old.md')), 'the digest stays');
 });
+
+test('shutdown stops a running job as interrupted, closes its row and keeps the queue on disk', async (t) => {
+  const pids = path.join(tmpdir(t), 'pids.json');
+  const { runner, ws } = runnerFor(t, { env: { FAKE_CLAUDE_MODE: 'hang', FAKE_CLAUDE_PIDS: pids } });
+  const a = runner.submit({ type: 'task', text: 'long one' });
+  const b = runner.submit({ type: 'task', text: 'waiting one' });
+  let stopped = false; // a failed shutdown never leaves the fake hanging
+  t.after(async () => { if (!stopped) for (const id of [b.id, a.id]) await runner.cancel(id); });
+  for (let i = 0; i < 100 && !fs.existsSync(pids); i++) await new Promise((r) => setTimeout(r, 20));
+  await runner.shutdown();
+  stopped = true;
+  assert.equal(rec(ws, a).state, 'interrupted');
+  assert.equal(rec(ws, b).state, 'queued', 'a queued job is left for the next start');
+  const { rows, crew } = rowsOf(ws);
+  assert.equal(rows.find((x: { title: string }) => x.title === a.rowTitle).state, 'you');
+  assert.equal(crew.find((c: { job: string }) => c.job === a.rowTitle).state, 'idle');
+  const [pid] = JSON.parse(fs.readFileSync(pids, 'utf8')) as number[];
+  let alive = true;
+  for (let i = 0; i < 50 && alive; i++) { try { process.kill(pid, 0); await new Promise((r) => setTimeout(r, 20)); } catch { alive = false; } }
+  assert.equal(alive, false, 'the CLI process is gone');
+  assert.throws(() => runner.submit({ type: 'task', text: 'x' }), (e: unknown) => (e as Refused).code === 'stopping');
+});
+
+test('a failing changed-file check never loses the job: it ends with an owner row', async (t) => {
+  const { runner, ws } = runnerFor(t, { checkpoint: { before: () => ({ ok: true, commit: 'c0' }), after: () => { throw new Error('git broke'); } } });
+  const job = runner.submit({ type: 'task', text: 'x' });
+  await runner.idle();
+  assert.equal(runner.get(job.id)!.state, 'done');
+  assert.match(runner.get(job.id)!.flags!.join(' '), /git broke/);
+  assert.equal(rowsOf(ws).rows.find((x: { title: string }) => x.title === job.rowTitle).state, 'you');
+});
+
+test('an approval is given once', async (t) => {
+  const { runner } = runnerFor(t, { env: { FAKE_CLAUDE_MODE: 'deny' } });
+  const a = runner.submit({ type: 'task', text: 'build' });
+  await runner.idle();
+  runner.approve(a.id);
+  assert.throws(() => runner.approve(a.id), (e: unknown) => (e as Refused).code === 'already-approved');
+  await runner.idle();
+});
+
+test('a secret typed into a job stays out of its row title and its digest', async (t) => {
+  const { runner, ws } = runnerFor(t);
+  const job = runner.submit({ type: 'task', text: 'use password=hunter2hunter2 for the box' });
+  await runner.idle();
+  assert.ok(!job.rowTitle.includes('hunter2hunter2'));
+  assert.ok(!fs.readFileSync(path.join(ws, '.joserah/desk/jobs', DAY, `${job.id}.md`), 'utf8').includes('hunter2hunter2'));
+});
