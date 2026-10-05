@@ -451,6 +451,9 @@ button ("tümü (N)") opens it in place as a bounded scroll area (keyboard acces
 under reduced-motion). Active work is never clamped or folded. With developer mode on, each strip entry may
 carry a faint `model · effort · ctx @time`; `ctx` is shown only as a reported figure with its time, never
 estimated (source: plan Task 4.6). Strip colour for waiting-on-owner: the page's owner colour (owner, "A bence.").
+Running work is listed once: the strip is its only list, titled "Active work" (tr "Aktif çalışma"); each entry reads
+"<category> · <short summary>" and opens its detail (text, next step, links) in one panel under the strip; an owner
+entry links to its decision page; every entry is clickable (owner, 2026-10-05; plan Task 3.9).
 Section order (owner, 2026-10-05: "Sorunun cevabı A evet."): active work first — agent working, owner,
 waiting, plans, done — replacing the 2026-10-03 order.
 
