@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 2286cf9 · 2026-10-05 09:46 +0300 · docs: crew orchestration design spec
+Last change: 5931e88 · 2026-10-05 10:30 +0300 · crew: close spec gaps, implementation plan
 
 - Released: 0.17.10 on main, 683 tests (`node --test tests/*.test.js`), prompt v25.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
