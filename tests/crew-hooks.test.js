@@ -137,3 +137,61 @@ test('a fresh Lead in the same session takes the stamps from then on', (t) => {
   assert.doesNotMatch(fs.readFileSync(path.join(leadDir(ws), 'ledger-0900.md'), 'utf8'), /compact/);
   assert.match(fs.readFileSync(path.join(leadDir(ws), 'ledger-1000.md'), 'utf8'), /11:00 · compact/);
 });
+
+// A Lead with one open job, one closed, one owner-waiting, one decision; today's Daily Tracker with
+// one open and one done row (spec "Tests", post-compact).
+function compactFixture(t) {
+  const ws = wsFor(t);
+  hook(ws, 'subagent-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', agent_type: 'lead' }));
+  const led = path.join(ws, '.joserah', 'desk', 'crew', '2026-10-05', 'lead', 'ledger-0900.md');
+  const add = (...a) => runTool('ledger.js', ['add', led, ...a], { env: { JOSERAH_NOW: '2026-10-05T09:10:00' } });
+  add('start', 'open-job', 'Scout', 'scout/0910-open-job.md');
+  add('start', 'closed-job', 'Builder', 'builder/0910-closed-job.md');
+  add('end', 'closed-job', 'done', 'builder/0910-closed-job.md');
+  add('owner', 'wait-job', 'approval - send it', '-');
+  add('decision', '-', 'keep the old page', '-');
+  const tr = path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-05', 'daily-tracker');
+  runTool('tracker.js', ['init', tr, '--title', 'Daily Tracker']);
+  fs.writeFileSync(path.join(tr, 'rows.json'), JSON.stringify([{ state: 'you', title: 'Open row' }, { state: 'ok', title: 'Done row' }]));
+  return { ws, tr };
+}
+
+test('SessionStart compact re-injects open items and open Tracker rows only', (t) => {
+  const { ws } = compactFixture(t);
+  const r = hook(ws, 'session-start', JSON.stringify({ session_id: 'S1', source: 'compact' }), '2026-10-05T11:00:00');
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.strictEqual(JSON.parse(r.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
+  for (const s of ['open-job', 'wait-job', 'keep the old page', 'A1', 'Open row']) assert.ok(ctx.includes(s), s);
+  for (const s of ['closed-job', 'Done row']) assert.ok(!ctx.includes(s), s);
+  assert.ok(ctx.length < 2000, `under 2,000 characters (${ctx.length})`);
+});
+
+test('SessionStart with another source adds nothing', (t) => {
+  const ws = wsFor(t);
+  const r = hook(ws, 'session-start', JSON.stringify({ session_id: 'S1', source: 'startup' }));
+  assert.strictEqual(r.stdout, '');
+});
+
+test('re-injection never takes another session\'s Ledger', (t) => {
+  const { ws } = compactFixture(t);
+  const r = hook(ws, 'session-start', JSON.stringify({ session_id: 'S2', source: 'compact' }), '2026-10-05T11:00:00');
+  assert.strictEqual(r.status, 0, r.stderr);
+  const ctx = r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : '';
+  for (const s of ['open-job', 'wait-job', 'keep the old page', 'A1']) assert.ok(!ctx.includes(s), s);
+  assert.ok(ctx.includes('Open row'), 'the Daily Tracker is this conversation\'s page, Lead or no Lead');
+});
+
+test('a subagent compacting gets the Ledger lines, no Tracker rows', (t) => {
+  const { ws } = compactFixture(t);
+  const r = hook(ws, 'session-start', JSON.stringify({ session_id: 'S1', agent_id: 'A1', source: 'compact' }), '2026-10-05T11:00:00');
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(ctx.includes('open-job'));
+  assert.ok(!ctx.includes('Open row'));
+});
+
+test('compact with nothing open adds nothing', (t) => {
+  const ws = wsFor(t);
+  const r = hook(ws, 'session-start', JSON.stringify({ session_id: 'S1', source: 'compact' }));
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout, '');
+});

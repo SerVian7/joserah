@@ -20,6 +20,9 @@
  *   session-end     a `session-end` stamp (reason, transcript_path); both go
  *                   only to the Ledger whose `open` line names this session,
  *                   today's or yesterday's, and to nothing when none does.
+ *   session-start   source `compact` only: re-injects this session's Ledger
+ *                   (open jobs, owner lines, last decisions, Lead's agent id)
+ *                   and, for the main session, the Daily Tracker's open rows.
  *
  * Every path exits 0: a hook that fails must never block a spawn, a compaction
  * or the end of a session. Tests fix the clock with JOSERAH_NOW.
@@ -109,7 +112,71 @@ function stamp(root, input, kind, detail) {
   return null;
 }
 
+const MAX_CONTEXT = 2000;
+
+/**
+ * Today's Daily Tracker folder: desk/artifacts/<today>/daily-tracker, else the
+ * first folder of the day whose index.html says "Daily Tracker" (the test
+ * session-brief.js uses for the new-day line). Null when there is none.
+ */
+function dailyTracker(root) {
+  const base = path.join(root, '.joserah', 'desk', 'artifacts', isoDay(now()));
+  let subs;
+  try { subs = fs.readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort(); } catch { return null; }
+  if (subs.includes('daily-tracker')) subs = ['daily-tracker', ...subs.filter((n) => n !== 'daily-tracker')];
+  for (const n of subs) {
+    const d = path.join(base, n);
+    try {
+      if (!fs.existsSync(path.join(d, 'rows.json'))) continue;
+      if (/Daily Tracker/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) return d;
+    } catch { /* not a page */ }
+  }
+  return null;
+}
+
+/** The Tracker's rows, from either rows.json shape (array, or { rows, crew }). */
+function trackerRows(dir) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
+    const rows = Array.isArray(j) ? j : (j && Array.isArray(j.rows) ? j.rows : []);
+    return rows.filter((r) => r && typeof r.title === 'string');
+  } catch { return []; }
+}
+
+/**
+ * SessionStart `compact`: what the compaction dropped comes back from the
+ * files — this session's Ledger (open jobs, owner-waiting lines, last
+ * decisions, Lead's agent id) and, for the main session, the Daily Tracker's
+ * open rows. A subagent compacting (its payload carries `agent_id`) gets the
+ * Ledger only. Under MAX_CONTEXT characters.
+ */
+function reinject(root, input) {
+  if (input.source !== 'compact') return null;
+  const parts = [];
+  const file = sessionLedger(root, id(input.session_id));
+  if (file) {
+    const o = L.openItems(fs.readFileSync(file, 'utf8'));
+    const item = (j) => `${j.job} (${j.text}${j.path !== '-' ? `, ${j.path}` : ''})`;
+    const open = o.jobs.filter((j) => j.kind === 'start').map(item);
+    const owner = o.jobs.filter((j) => j.kind === 'owner').map(item);
+    parts.push(`Lead ${o.agentId || '-'} (Ledger ${rel(root, file)})`);
+    parts.push(`open: ${open.join(', ') || 'none'}`);
+    parts.push(`owner: ${owner.join(', ') || 'none'}`);
+    parts.push(`decisions: ${o.decisions.map((d) => d.text).join(', ') || 'none'}`);
+  }
+  if (!input.agent_id) {
+    const dir = dailyTracker(root);
+    const rows = dir ? trackerRows(dir).filter((r) => r.state !== 'ok') : [];
+    if (rows.length) parts.push(`Tracker open rows: ${rows.map((r) => `${r.title} [${r.state}]`).join(', ')}`);
+  }
+  if (!parts.length) return null;
+  let text = `[crew] After compaction — ${parts.join('; ')}`;
+  if (text.length > MAX_CONTEXT) text = text.slice(0, MAX_CONTEXT - 1) + '…';
+  return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } };
+}
+
 function handle(event, root, input) {
+  if (event === 'session-start') return reinject(root, input);
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
   // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
   // may not fire at all when a background shell is still running: best effort only.
