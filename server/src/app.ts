@@ -5,6 +5,7 @@ import type { HttpBindings } from '@hono/node-server';
 import type { AppDeps } from './deps.ts';
 import { headers, guard, originCheck } from './security.ts';
 import { register as authRoutes } from './routes/auth.ts';
+import { register as setupRoutes } from './routes/setup.ts';
 import { register as pagesRoutes } from './routes/pages.ts';
 import { register as dbRoutes } from './routes/db.ts';
 import { register as eventsRoutes } from './routes/events.ts';
@@ -31,6 +32,7 @@ export function createApp(deps: AppDeps): App {
   app.use('*', guard(deps));
   app.use('*', originCheck(deps));
   authRoutes(app, deps);
+  setupRoutes(app, deps);
   pagesRoutes(app, deps);
   dbRoutes(app, deps);
   eventsRoutes(app, deps);
