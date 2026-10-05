@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 3a214f3 · 2026-10-05 23:26 +0300 · platform server spec: three-part platform, engine interface, device runner later
+Last change: f3c39a2 · 2026-10-05 23:36 +0300 · platform server spec: job safety and records; lessons from earlier projects
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
