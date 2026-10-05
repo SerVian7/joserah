@@ -15,6 +15,7 @@ import { JobRunner, type Checkpointer } from '../src/jobs.ts';
 import { cliTracker } from '../src/tracker-bridge.ts';
 import { GitCheckpointer } from '../src/checkpoint.ts';
 import { AnswerTrigger } from '../src/answer-trigger.ts';
+import { LintScheduler } from '../src/lint-scheduler.ts';
 
 export const SERVER_ROOT = path.resolve(import.meta.dirname, '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
@@ -58,6 +59,8 @@ export function baseDeps(t: TestContext, over: Partial<AppDeps> = {}): AppDeps {
   if (!over.jobs) deps.jobs = new JobRunner({ workspace, store, bus, engine, config: () => deps.config(), tracker: cliTracker(workspace, 'en'), jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
   // The answer trigger is built but not started: no test gets a job it did not ask for.
   if (!over.answers) deps.answers = new AnswerTrigger({ workspace, bus, jobs: deps.jobs, config: () => deps.config() });
+  // The lint scheduler is built but not started: no test gets a timer it did not ask for.
+  if (!over.lint) deps.lint = new LintScheduler({ workspace, stateDir, store, bus, jobs: deps.jobs, tracker: cliTracker(workspace, 'en'), config: () => deps.config(), lang: 'en' });
   return deps;
 }
 
