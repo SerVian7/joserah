@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 5b53382 · 2026-10-06 02:01 +0300 ·  (T11)
+Last change: ebf8a29 · 2026-10-06 02:01 +0300 · status: T11 merged (T11)
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
