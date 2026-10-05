@@ -240,7 +240,7 @@ const PANEL_JS = '(function(){function all(){return document.querySelectorAll("b
 // the browser's storage, under the page's path; every read and write is guarded, and with no storage the
 // page simply starts closed. Nothing is saved before the viewer acts. (The artifact runtime 0.2.67
 // promises only claude.use(); it has no hot-reload snapshot to use instead.)
-const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0;'
+const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0,W=typeof window!=="undefined"?window:{},H=(W.claude&&W.claude.hot)||null;'
   + 'function each(s,f){Array.prototype.forEach.call(document.querySelectorAll(s),f)}'
   + 'function dk(d){if(d.id)return d.id;var s=d.querySelector("summary");return"S:"+(s?s.textContent:"").trim().slice(0,80)}'
   + 'function get(){try{return JSON.parse(localStorage.getItem(K)||"null")}catch(e){return null}}'
@@ -249,13 +249,15 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0;'
   + 'return{p:p,d:d,c:c,y:Math.round(window.scrollY||0)}}'
   + 'function put(){if(!ready)return;try{localStorage.setItem(K,JSON.stringify(snap()))}catch(e){}}'
   + 'function later(){clearTimeout(t);t=setTimeout(put,150)}'
-  + 'function restore(){var s=get();if(!s||typeof s!=="object")return;var d=s.d||[],c=s.c||[],y=+s.y||0;'
+  + 'function restore(s){if(!s||typeof s!=="object")return;var d=s.d||[],c=s.c||[],y=+s.y||0;'
   + 'each("details",function(x){x.open=d.indexOf(dk(x))>=0});'
   + 'each("button.tx[aria-controls]",function(b){if(s.p&&b.getAttribute("aria-controls")===s.p){b.setAttribute("aria-expanded","true");var e=document.getElementById(s.p);if(e)e.hidden=false}});'
   + 'each("button.more[aria-controls]",function(b){if(c.indexOf(b.getAttribute("aria-controls"))>=0&&b.getAttribute("aria-expanded")!=="true")b.click()});'
   + 'if(y>0){window.scrollTo(0,y);window.addEventListener("load",function(){window.scrollTo(0,y)})}}'
-  + 'function go(){restore();ready=true;document.addEventListener("click",later);document.addEventListener("toggle",later,true);window.addEventListener("scroll",later);window.addEventListener("pagehide",put)}'
-  + 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()})();';
+  + 'function go(h){restore(h&&h.state&&typeof h.state==="object"?h.state:get());ready=true;document.addEventListener("click",later);document.addEventListener("toggle",later,true);window.addEventListener("scroll",later);window.addEventListener("pagehide",put)}'
+  + 'function start(h){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){go(h)});else go(h)}'
+  + 'if(H&&typeof H.snapshot==="function"){try{H.snapshot(function(){return{state:snap(),sig:W.__trkSig||null}})}catch(e){}}'
+  + 'if(H&&typeof H.ready==="function"){try{H.ready(start)}catch(e){start({})}}else start((H&&H.data)||{})})();';
 
 // Console look (owner, 2026-10-05: "kartlar olmasın yuvarlak köşeli … elit admin gibi"): no cards, no
 // rounded corners, no shadows; hairline lines, mono group heads with their counts, a tabular
@@ -293,8 +295,8 @@ const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans
 // guarded): a new line slides in, a changed one flashes once, one that moved to done flashes, and the closed
 // Done fold's head with it; then it stores this load. The first load and the same page again move nothing.
 // The animations are CSS, only without reduced motion; scroll and open details come back through STATE_JS.
-const MOTION_JS = '(function(){var K="trk-sig:"+location.pathname,prev=null,cur={};'
-  + 'try{prev=JSON.parse(localStorage.getItem(K)||"null")}catch(e){prev=null}'
+const MOTION_JS = '(function(){var K="trk-sig:"+location.pathname,prev=null,cur={},W=typeof window!=="undefined"?window:{},H=(W.claude&&W.claude.hot)||null;'
+  + 'if(H&&H.data&&H.data.sig&&typeof H.data.sig==="object")prev=H.data.sig;else{try{prev=JSON.parse(localStorage.getItem(K)||"null")}catch(e){prev=null}}W.__trkSig=cur;'
   + 'function mark(el,c){el.classList.add(c);setTimeout(function(){el.classList.remove(c)},2400)}'
   + 'Array.prototype.forEach.call(document.querySelectorAll("li.crew-line[data-key]"),function(l){var k=l.getAttribute("data-key"),s=l.getAttribute("data-sig"),g=l.getAttribute("data-st")||"run";cur[k]={s:s,g:g};'
   + 'if(!prev||typeof prev!=="object")return;var p=prev[k],c=!p?"mv-new":(p.g!==g&&g==="ok")?"mv-done":(p.s!==s||p.g!==g)?"mv-changed":"";if(!c)return;mark(l,c);'
@@ -546,7 +548,7 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
       const rec = key(o.key) === key(r.recommend);
       const t = (o.label || o.text) + (rec ? ` · ${L.rec || LABELS.en.rec}` : '');
       return `<button type="button"${rec ? ' class="rec"' : ''} data-k="${esc(o.key)}" data-l="${esc(o.label || o.text)}" aria-pressed="false" title="${esc(t)}">${esc(o.key)}</button>`;
-    }).join('')}</div><input type="text" name="note" maxlength="500" placeholder="${esc(L.note || LABELS.en.note)}" aria-label="${esc(L.note || LABELS.en.note)}"><button type="submit" class="send" disabled>${esc(L.send || LABELS.en.send)}</button><span class="err" role="status" hidden></span></form>`
+    }).join('')}</div><input type="text" id="n-${slugId('a', r.title)}" name="note" maxlength="500" placeholder="${esc(L.note || LABELS.en.note)}" aria-label="${esc(L.note || LABELS.en.note)}"><button type="submit" class="send" disabled>${esc(L.send || LABELS.en.send)}</button><span class="err" role="status" hidden></span></form>`
     : '';
   return dl + ask + form
     + (rest ? `<p>${esc(rest)}</p>` : '')

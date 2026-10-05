@@ -1340,7 +1340,7 @@ test('answers: a question row carries a hidden answer form — one button per op
     + '<div class="ak" role="group" aria-label="Seçiminiz">'
     + '<button type="button" class="rec" data-k="A" data-l="İki aşama" aria-pressed="false" title="İki aşama · önerim">A</button>'
     + '<button type="button" data-k="B" data-l="Tek tasarım" aria-pressed="false" title="Tek tasarım">B</button></div>'
-    + '<input type="text" name="note" maxlength="500" placeholder="not (isteğe bağlı)" aria-label="not (isteğe bağlı)">'
+    + `<input type="text" id="n-${id}" name="note" maxlength="500" placeholder="not (isteğe bağlı)" aria-label="not (isteğe bağlı)">`
     + '<button type="submit" class="send" disabled>Gönder</button><span class="err" role="status" hidden></span></form>');
   assert.match(html, new RegExp(`>Soru: rapor nasıl kurulsun\\? <span class="an" data-an="${id}" hidden></span></button>`), 'the line has a hidden answered tag');
   const en = tmpdir(t); init(en); setRows(en, [ANS]); render(en);
@@ -1527,4 +1527,55 @@ test('motion: the page carries the script once; the animations run only without 
   assert.doesNotMatch(css.replace(motion, ''), /animation:mv-/, 'no motion animation outside it');
   const dir = tmpdir(t); init(dir); setRows(dir, [{ state: 'you', title: 'Y', time: '09:00' }]); render(dir); render(dir);
   assert.strictEqual(page(dir).split('<script id="motion">').length, 2);
+});
+
+// The viewer's own update hook (Artifact quickstart guidance, 2026-10-05: "published changes are delivered to
+// [open viewers] automatically at their next quiet moment, with state preserved where possible. If your page
+// has state a viewer would miss, register window.claude?.hot?.snapshot(...) and boot through
+// window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {})"). The
+// page registers its open detail, folds, opened lists, scroll and line signatures there, and boots from
+// what the hook hands back; browser storage stays the fallback for a full reload.
+test('hot: the state script registers a snapshot and restores from what the viewer hands back, before storage', () => {
+  const vm = require('vm');
+  const { STATE_JS } = require('../tools/tracker.js');
+  const d = stateDom({ saved: { p: null, d: [], c: [], y: 0 } });
+  let snapFn = null; let start = null;
+  d.ctx.window.claude = { hot: { snapshot: (f) => { snapFn = f; }, ready: (f) => { start = f; } } };
+  d.ctx.window.__trkSig = { 'k-a': { s: 'x', g: 'you' } };
+  vm.runInNewContext(STATE_JS, d.ctx);
+  assert.strictEqual(typeof snapFn, 'function', 'a snapshot function is registered');
+  assert.strictEqual(typeof start, 'function', 'it boots through hot.ready');
+  start({ state: { p: 'd-you-x', d: ['f-ok'], c: ['clip-ok'], y: 220 } });
+  assert.deepStrictEqual([d.btn.getAttribute('aria-expanded'), d.panel.hidden, d.fOk.open, d.more.clicks, d.scrolls[0]], ['true', false, true, 1, 220], 'restored from the hook, not from storage');
+  d.ctx.window.scrollY = 220;
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(snapFn())), { state: { p: 'd-you-x', d: ['f-ok'], c: ['clip-ok'], y: 220 }, sig: { 'k-a': { s: 'x', g: 'you' } } }, 'what is open now, the reopened long list included');
+});
+test('hot: no ready, the data the hook holds; no hook data, storage as before', () => {
+  const vm = require('vm');
+  const { STATE_JS } = require('../tools/tracker.js');
+  const d = stateDom({ saved: { p: null, d: ['f-ok'], c: [], y: 0 } });
+  d.ctx.window.claude = { hot: { data: { state: { p: 'd-you-x', d: [], c: [], y: 0 } } } };
+  vm.runInNewContext(STATE_JS, d.ctx);
+  assert.deepStrictEqual([d.btn.getAttribute('aria-expanded'), d.fOk.open], ['true', false]);
+  const e = stateDom({ saved: { p: null, d: ['f-ok'], c: [], y: 0 } });
+  e.ctx.window.claude = { hot: { ready: (f) => f({}) } };
+  vm.runInNewContext(STATE_JS, e.ctx);
+  assert.strictEqual(e.fOk.open, true, 'the hook had nothing: storage');
+});
+test('hot: motion compares with the signatures the hook kept, and leaves this load\'s for the next snapshot', () => {
+  const vm = require('vm');
+  const { MOTION_JS } = require('../tools/tracker.js');
+  const dom = motionDom([['k-a', 's2', 'you']]);
+  const st = memStore(); st.setItem('trk-sig:/p', JSON.stringify({ 'k-a': { s: 's2', g: 'you' } }));
+  const window = { claude: { hot: { data: { sig: { 'k-a': { s: 's1', g: 'you' } } } } } };
+  vm.runInNewContext(MOTION_JS, { document: dom.document, location: { pathname: '/p' }, localStorage: st, setTimeout: () => {}, JSON, window });
+  assert.deepStrictEqual([...dom.els[0].cls], ['mv-changed'], 'against the hook\'s s1, not storage\'s s2');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(window.__trkSig)), { 'k-a': { s: 's2', g: 'you' } });
+});
+test('hot: the answer note field has a stable id, so the viewer can keep what was typed', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [{ state: 'you', title: 'Hangisi?', options: [{ key: 'A', label: 'x' }, { key: 'B', label: 'y' }], recommend: 'A', why: 'z', time: '09:00' }]);
+  render(dir);
+  const { slugId } = require('../tools/tracker.js');
+  assert.match(page(dir), new RegExp(`<input type="text" id="n-${slugId('a', 'Hangisi?')}" name="note"`));
 });
