@@ -41,8 +41,8 @@ and `supersedes` id.
 Append-only rules: an entry is never edited. A wrong entry is answered by a new one with `supersedes`; the
 old one renders struck through (the same convention as claim lines). A `waiting` or `draft` is closed only
 by a later entry's `resolves`. Mail bodies are summarised; a full mail text appears only in `mail-out.text`
-and `draft.text` (the owner's own words). No secret ever goes into an entry (the tool runs the existing
-secret scan pattern over the JSON and refuses a hit).
+and `draft.text` (the owner's own words). No secret ever goes into an entry (the tool checks the JSON against the
+`SPECIFIC` patterns of `hooks/lib/redactions.js`, which `secret-scan.js` uses, and refuses a hit).
 
 ## Data file
 
