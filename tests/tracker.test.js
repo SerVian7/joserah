@@ -16,7 +16,9 @@ const lis = (dir) => page(dir).match(/<li data-st="[\s\S]*?<\/li>/g) || [];
 // one section's block by its key (run, you, wait, plan, ok)
 const blockOf = (html, k) => (html.match(new RegExp(`<div class="blk" data-k="${k}">[\\s\\S]*?</div></li>`)) || [''])[0];
 // section heads, e.g. "Done 3": the label and its row count
-const heads = (html) => (html.match(/<div class="hd">[^<]*<span>\d+<\/span>/g) || []).map((s) => s.replace(/<[^>]+>/g, '').trim());
+const heads = (html) => (html.match(/<(?:div|summary) class="hd">[^<]*<span>\d+<\/span>/g) || []).map((s) => s.replace(/<[^>]+>/g, '').trim());
+// one section of the list by its key (you, wait, ok, plan): from its block to the next section
+const secOf = (html, k) => { const i = html.indexOf(`<div class="blk" data-k="${k}">`); if (i < 0) return ''; const j = html.indexOf('<li class="sec', i + 1); return html.slice(i, j < 0 ? html.indexOf('</main>', i) : j); };
 
 test('init writes the one-line header and an empty rows.json', (t) => {
   const dir = tmpdir(t);
@@ -84,7 +86,7 @@ test('a row with time keeps it untouched', (t) => {
 // Section order (owner, 2026-10-05, "Sorunun cevabı A evet."): active work first — in progress (agent
 // working in developer mode), then owner — then waiting, plans and done, all in the one list; this
 // replaces the 2026-10-03 rule that put waiting and plans at the top.
-test('sections: in progress, owner, waiting, plans, done, in that order; empty section has none', (t) => {
+test('sections: in progress, owner, waiting, done today, plans, in that order; empty section has none', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -97,16 +99,17 @@ test('sections: in progress, owner, waiting, plans, done, in that order; empty s
   render(dir);
   const html = page(dir);
   // active work (run) is the strip above the list, not a section of it (owner, 2026-10-05: "hepsini iki kere listelemiş olmayız")
-  assert.deepStrictEqual(heads(html), ['Active work 1', 'Owner 1', 'Waiting 1', 'Plans 1', 'Done 1']);
-  assert.deepStrictEqual(lis(dir).map((l) => l.match(/class="s (\w+)"/)[1]), ['you', 'wait', 'plan', 'ok']);
+  // Tracker yeni düzen (owner, 2026-10-05): the board, then plans alone below
+  assert.deepStrictEqual(heads(html), ['Active work 1', 'Owner 1', 'Waiting 1', 'Done today 1', 'Plans 1']);
+  assert.deepStrictEqual(lis(dir).map((l) => l.match(/data-st="(\w+)"/)[1]), ['you', 'wait', 'ok', 'plan']);
   assert.doesNotMatch(html, /<section class="pl">/, 'no section above the list any more');
-  assert.doesNotMatch(html, /<details/, 'waiting and plans are open sections, never a closed fold');
-  assert.strictEqual((html.match(/<li class="sec">/g) || []).length, 4);
+  assert.doesNotMatch(secOf(html, 'you') + secOf(html, 'wait'), /<details/, 'owner and waiting are open sections, never a closed fold');
+  assert.strictEqual((html.match(/<li class="sec( pl)?">/g) || []).length, 4);
   render(dir);
   assert.strictEqual(page(dir), html.replace(/data-t="[^"]*"/, page(dir).match(/data-t="[^"]*"/)[0]), 'a re-render is stable');
   setRows(dir, [{ state: 'ok', title: 'D', time: '08:00' }, { state: 'plan', title: 'P', time: '08:00' }]);
   render(dir);
-  assert.deepStrictEqual(heads(page(dir)), ['Active work 0', 'Plans 1', 'Done 1'], 'nothing running: the strip says so');
+  assert.deepStrictEqual(heads(page(dir)), ['Active work 0', 'Done today 1', 'Plans 1'], 'nothing running: the strip says so');
 });
 
 test('chronological inside a group (done: newest first), ties keep file order, removed row disappears', (t) => {
@@ -127,7 +130,7 @@ test('chronological inside a group (done: newest first), ties keep file order, r
   assert.doesNotMatch(page(dir), /gone/);
 });
 
-test('url + label makes a link after small text; default label; non-http gives none', (t) => {
+test('url + label makes a link on the line; default label; non-http gives none', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -137,8 +140,8 @@ test('url + label makes a link after small text; default label; non-http gives n
   ]);
   render(dir);
   const p = page(dir);
-  assert.match(p, /note · <a href="https:\/\/example\.com\/x\?a=1&amp;b=2"[^>]*>open<\/a>/);
-  assert.match(p, /<a href="http:\/\/example\.com\/"[^>]*>page<\/a>/);
+  assert.match(p, />A<\/button><a class="lk" href="https:\/\/example\.com\/x\?a=1&amp;b=2"[^>]*>open<\/a>/);
+  assert.match(p, /<a class="lk" href="http:\/\/example\.com\/"[^>]*>page<\/a>/);
   assert.doesNotMatch(p, /javascript:/);
   assert.doesNotMatch(p, />bad</);
 });
@@ -182,7 +185,7 @@ test('tr labels', (t) => {
   render(dir);
   const p = page(dir);
   assert.ok(!p.includes('Ajan'), 'no agent wording with developer mode off');
-  for (const w of ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar', 'Bitti', 'Plan', '>sayfa<']) assert.ok(p.includes(w), w);
+  for (const w of ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar', '>sayfa<']) assert.ok(p.includes(w), w);
 });
 
 test('errors: missing dir, bad JSON, unknown state', (t) => {
@@ -251,7 +254,7 @@ test('row upserts by title and done rows sort newest first', (t) => {
   assert.ok(p.indexOf('<b>a</b>') < p.indexOf('<b>B</b>'));
 });
 
-test('plans with a group: one flat open list, newest first, the group in the small line', (t) => {
+test('plans: one closed fold per group, the newest group first, newest first inside; no group goes under Other', (t) => {
   const dir = tmpdir(t);
   init(dir);
   setRows(dir, [
@@ -261,12 +264,12 @@ test('plans with a group: one flat open list, newest first, the group in the sma
     { state: 'plan', title: 'P4', time: '07:00' },
   ]);
   render(dir);
-  const top = blockOf(page(dir), 'plan');
+  const top = secOf(page(dir), 'plan');
   assert.deepStrictEqual(heads(top), ['Plans 4']);
-  assert.doesNotMatch(top, /<details/);
-  assert.deepStrictEqual((top.match(/<b>\w+<\/b>/g) || []).map((s) => s.slice(3, -4)), ['P2', 'P1', 'P3', 'P4']);
-  assert.match(top, /<b>P2<\/b><small>Beta · note<\/small>/);
-  assert.match(top, /<b>P1<\/b><small>Alpha<\/small>/);
+  assert.deepStrictEqual([...top.matchAll(/<summary class="jh"><span class="jt">(\w+)<\/span><span>(\d)<\/span>/g)].map((m) => `${m[1]} ${m[2]}`), ['Beta 1', 'Alpha 2', 'Other 1']);
+  assert.doesNotMatch(top, /<details[^>]* open/, 'all closed');
+  assert.deepStrictEqual([...top.matchAll(/>(P\d)<\/button>/g)].map((m) => m[1]), ['P2', 'P1', 'P3', 'P4']);
+  assert.match(top, /<b>Beta · P2<\/b><p>note<\/p>/, 'the detail names its group');
 });
 
 // Owner, 2026-10-05: "Ajan çalışıyor, kısmını aktif çalışma gibi yapalım" — one name in every mode.
@@ -345,7 +348,7 @@ test('strip: icon, line, state class; counts only working entries (owner, 2026-1
   const html = page(dir);
   assert.match(html, /class="crew"/);
   assert.doesNotMatch(html, /data-count=/, 'one working scout, one working lead: no badge');
-  assert.doesNotMatch(html, /class="crew-line (owner|idle)"|approval/, 'waiting and idle entries are not strip lines');
+  assert.doesNotMatch(stripOf(html), /class="crew-line (owner|idle)"|approval|>B</, 'waiting and idle entries are not strip lines');
   assert.match(html, /<span class="ic"><span role="img" title="Scout · researching" aria-label="Scout · researching">/, 'the role and its activity are the icon\'s title');
   assert.doesNotMatch(html, /Scout · A/, 'never in the line text');
   assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
@@ -376,7 +379,7 @@ test('devMode off: the strip shows icons and states, with no role name and no ag
     assert.ok(!html.includes(ICONS.builder), `${lang}: an idle role shows no icon`);
     assert.match(html, /class="crew-line work"/);
     assert.doesNotMatch(html, /class="crew-line (owner|idle)"/, 'only running lines');
-    assert.match(html, /<button type="button" class="tx" aria-expanded="false" aria-controls="cd-\d+">DOTS araştırması<\/button>/, 'a line is the work only');
+    assert.match(html, /<button type="button" class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">DOTS araştırması<\/button>/, 'a line is the work only');
     assert.doesNotMatch(html, ROLE_WORDS, `${lang}: no role name`);
     assert.doesNotMatch(html, /ajan|agent/i, `${lang}: no agent wording`);
     assert.match(html, lang === 'tr' ? /Aktif çalışma/ : /Active work/, `${lang}: the run label is neutral`);
@@ -392,7 +395,7 @@ test('devMode on: the role shows only as the icon\'s title', (t) => {
   crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
   const html = page(dir);
   assert.match(html, /<span class="ic"><span role="img" title="Scout · researching" aria-label="Scout · researching"><svg/);
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+">A<\/button>/);
+  assert.match(html, /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">A<\/button>/);
   assert.doesNotMatch(html, />[^<>]*Scout · /, 'never in the line text');
   assert.match(html, /data-role="scout"[^>]*title="1 · Scout · researching"/, 'the summary icon says it with its count');
 });
@@ -460,7 +463,7 @@ test('console look: no rounded corners and no shadows, a page made before it inc
   assert.strictEqual(page(dir).split('<style id="console">').length, 2, 'one console style');
   assert.strictEqual(page(dir).split('<script id="clip">').length, 2, 'one clamp script');
 });
-test('a main job with sub-jobs is a container; only a finished container folds', (t) => {
+test('a main job with sub-jobs: a category line in each group; only a finished one folds; running shows everywhere', (t) => {
   const dir = tmpdir(t); init(dir);
   setRows(dir, [
     { state: 'run', title: 'Main', time: '09:00' },
@@ -472,21 +475,21 @@ test('a main job with sub-jobs is a container; only a finished container folds',
   ]);
   assert.strictEqual(render(dir).status, 0);
   const html = page(dir);
-  const sec = (k) => html.match(new RegExp(`<div class="blk" data-k="${k}">([\\s\\S]*?)</div></li>`))[1];
-  // running rows are strip lines: the main job's own line, and the sub-job under its category (the main job)
   assert.ok(!html.includes('data-k="run"'), 'no running section in the list');
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+">Main<\/button>/);
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+"><span class="ct">Main ·<\/span> Sub running<\/button>/);
-  // another section: the header carries the main job's state
-  assert.match(sec('you'), /<li class="job"><div class="jh"><span class="jt">Main <em>· Active work<\/em><\/span><span>1 · 09:35<\/span><\/div><ol><li data-st="you">/);
-  assert.match(sec('ok'), /<li class="grp"><details name="trk"><summary><span class="jt">Main <em>· Active work<\/em><\/span><span>2 · 09:20<\/span><\/summary><ol>[\s\S]*Sub done 2[\s\S]*Sub done 1[\s\S]*<\/ol><\/details><\/li>/);
-  assert.match(sec('ok'), /<li data-st="ok">[\s\S]*Loose/, 'a row without parent stays a row');
-  assert.ok(sec('ok').indexOf('Loose') < sec('ok').indexOf('class="grp"'), 'the container sorts by its newest row (done: newest first)');
-  assert.doesNotMatch(sec('you'), /<details/, 'active work never folds');
-  assert.doesNotMatch(html, /<details(?![^>]*name="trk")/, 'one open at a time');
+  // in the strip the main job is the category line, its running sub-job under it
+  const s = stripOf(html);
+  assert.match(s, /<li class="cat"><ul class="ch">\n  <li class="crew-line run">[^\n]*aria-controls="d-run-main-[0-9a-z]+">Main <span class="n">1<\/span> <em>running<\/em><\/button>/);
+  assert.match(s, /<\/ul><ol>\n  <li class="crew-line run">[^\n]*>Sub running<\/button>/);
+  // one sub-job in a group: prefixed with its category
+  assert.match(secOf(html, 'you'), />\s*<span class="ct">Main ·<\/span> Ask<\/button>/);
+  // done: the category folds, closed, with its count and last time; newest first inside
+  const ok = secOf(html, 'ok');
+  assert.match(ok, /<li class="cat"><details name="trk-ok" id="f-ok-main-[0-9a-z]+"><summary class="jh"><span class="jt">Main <em>running<\/em><\/span><span>2 · 09:20<\/span><\/summary><ol>[\s\S]*Sub done 2[\s\S]*Sub done 1[\s\S]*<\/ol><\/details><\/li>/);
+  assert.ok(ok.indexOf('Loose') < ok.indexOf('class="cat"'), 'a category stands where its newest member stands (done: newest first)');
+  assert.doesNotMatch(secOf(html, 'you'), /<details/, 'the owner group never folds');
   assert.doesNotMatch(html, /<details[^>]*\sopen/, 'closed by default');
 });
-test('waiting and plans are open sections; their containers never fold', (t) => {
+test('waiting categories never fold; plans fold by group', (t) => {
   const dir = tmpdir(t); init(dir);
   setRows(dir, [
     { state: 'wait', title: 'W main', time: '08:00' },
@@ -495,32 +498,32 @@ test('waiting and plans are open sections; their containers never fold', (t) => 
     { state: 'ok', title: 'Done main', time: '07:00' },
   ]);
   render(dir);
-  const top = blockOf(page(dir), 'wait') + blockOf(page(dir), 'plan');
-  assert.doesNotMatch(top, /<details/);
-  assert.match(top, /<li class="job"><div class="jh"><span class="jt">W main<\/span><span>1 · 08:10<\/span><\/div><ol><li data-st="wait">[\s\S]*<b>W sub<\/b>/);
-  assert.match(top, /<li class="job"><div class="jh"><span class="jt">Done main <em>· Done<\/em><\/span>/);
+  const w = secOf(page(dir), 'wait');
+  assert.doesNotMatch(w, /<details/);
+  assert.match(w, /<li class="cat"><ul class="ch">\n  <li data-st="wait" class="crew-line wait">[^\n]*>W main <span class="n">1<\/span><\/button>[\s\S]*<\/ul><ol>\n  <li data-st="wait" class="crew-line wait">[^\n]*>W sub<\/button>/);
+  assert.match(secOf(page(dir), 'plan'), /<details name="trk" id="f-plan-alpha-[0-9a-z]+"><summary class="jh"><span class="jt">Alpha<\/span><span>1<\/span><\/summary><ol>\n[^\n]*>P sub<\/button>/);
 });
-test('a long list shows its first rows: more than five items get a button and a fade, five do not', (t) => {
+test('a long list shows its first lines: more than five units get a button and a fade, five do not', (t) => {
   const dir = tmpdir(t); init(dir);
   const n = (k, state) => [...Array(k)].map((_, i) => ({ state, title: `${state} ${i}`, time: `08:0${i}` }));
   setRows(dir, [...n(6, 'ok'), ...n(5, 'plan'), ...n(7, 'run'), ...n(7, 'you'), ...n(6, 'wait')]);
   render(dir);
   const html = page(dir);
-  const blk = (k) => html.match(new RegExp(`<div class="blk" data-k="${k}">[\\s\\S]*?</ol></div>(<div class="fade"[^>]*></div><button[^>]*>[^<]*</button>)?</div>`));
   for (const k of ['ok', 'wait']) {
-    assert.match(blk(k)[0], new RegExp(`<div class="clip clamp" id="clip-${k}">`), k);
-    assert.match(blk(k)[1] || '', new RegExp(`<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${k}"[^>]*>all \\(\\d+\\)</button>`), k);
+    assert.match(secOf(html, k), new RegExp(`<div class="clip clamp" id="clip-${k}">`), k);
+    assert.match(secOf(html, k), new RegExp(`</ol></div><div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${k}"[^>]*>all \\(\\d+\\)</button>`), k);
   }
-  assert.doesNotMatch(html.match(/<section class="crew">[\s\S]*?<\/section>/)[0], /class="(more|fade)"/, 'the strip never clamps');
-  for (const k of ['plan', 'you']) {
-    assert.ok(!blk(k)[1], `${k}: no button`);
-    assert.match(blk(k)[0], new RegExp(`<div class="clip" id="clip-${k}">`), `${k}: not clamped`);
-  }
-  // a container counts as one item
+  assert.doesNotMatch(stripOf(html), /class="(more|fade)"/, 'the strip never clamps');
+  assert.match(secOf(html, 'you'), /<div class="clip" id="clip-you">/, 'the owner group never clamps');
+  assert.doesNotMatch(secOf(html, 'you') + secOf(html, 'plan'), /class="(more|fade)"/);
+  // a category counts as one unit
   setRows(dir, [...n(4, 'ok'), { state: 'ok', title: 'M', time: '07:00' }, ...[1, 2, 3].map((i) => ({ state: 'ok', title: `s${i}`, parent: 'M', time: `07:1${i}` }))]);
   render(dir);
   assert.doesNotMatch(page(dir), /class="more"/);
   assert.doesNotMatch(page(dir), /class="fade"/);
+  // the clamp measures lines, never the detail items between them
+  const { CLIP_JS } = require('../tools/tracker.js');
+  assert.match(CLIP_JS, /:scope>ol>li:not\(\.crew-dl\)/);
 });
 test('tr: the button reads tümü and daralt', (t) => {
   const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
@@ -537,7 +540,8 @@ test('the clamp transition runs only without reduced motion', () => {
 test('the template carries the console style and the clamp script; a re-render is byte-stable', (t) => {
   const f = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'tracker', 'index.html'), 'utf8');
   assert.ok(f.includes(`<style id="console">\n${CONSOLE_CSS}\n</style>`), 'template and renderer agree (style)');
-  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n</body>`), 'template and renderer agree (script)');
+  const { PANEL_JS, STATE_JS } = require('../tools/tracker.js');
+  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n</body>`), 'template and renderer agree (scripts)');
   const dir = tmpdir(t); init(dir);
   const fresh = page(dir);
   render(dir, '2026-10-01T09:05:00Z');
@@ -547,11 +551,12 @@ test('the template carries the console style and the clamp script; a re-render i
   const outside = (h) => h.replace(/<main>[\s\S]*<\/main>/, '').replace(/data-t="[^"]*"/, '');
   assert.strictEqual(outside(once), outside(fresh), 'only <main> and the stamp change');
 });
-test('crew --model --effort --ctx: a faint tail in developer mode; ctx only with its time; none when off', (t) => {
+test('crew --model --effort --ctx: a faint tail in the detail in developer mode; ctx only with its time; none when off', (t) => {
   const dir = devWs(t);
   assert.strictEqual(crew(dir, ['--role', 'builder', '--job', 'A', '--state', 'work', '--model', 'opus', '--effort', 'high', '--ctx', '84213']).status, 0);
   let html = page(dir);
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+">A <small class="cm" title="opus · high · 84k @09:05">opus · high<i> · 84k @09:05<\/i><\/small><\/button>/);
+  assert.match(html, /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">A<\/button>/, 'the line is the work only');
+  assert.match(html, /<b>A<\/b><p class="cm">opus · high · 84k @09:05<\/p>/);
   crew(dir, ['--role', 'builder', '--job', 'A', '--state', 'idle']);
   const e = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8')).crew[0];
   assert.deepStrictEqual([e.model, e.effort, e.ctx, e.ctxTime, e.state], ['opus', 'high', 84213, '09:05', 'idle'], 'model, effort and ctx carry over');
@@ -561,8 +566,8 @@ test('crew --model --effort --ctx: a faint tail in developer mode; ctx only with
   fs.writeFileSync(path.join(dir, 'rows.json'), JSON.stringify(store));
   render(dir);
   html = page(dir);
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+">B<\/button>/, 'ctx alone: no tail');
-  assert.match(html, /class="tx" aria-expanded="false" aria-controls="cd-\d+">C <small class="cm" title="sonnet">sonnet<\/small><\/button>/);
+  assert.match(html, /<div class="cd bare" id="d-[a-z0-9-]+"><b>B<\/b><\/div>/, 'ctx alone: no tail');
+  assert.match(html, /<b>C<\/b><p class="cm">sonnet<\/p>/);
   assert.doesNotMatch(html, /7k|5k/);
   for (const bad of [['--effort', 'extreme'], ['--ctx', 'many'], ['--ctx', '0'], ['--model', 'a b']]) {
     assert.strictEqual(crew(dir, ['--role', 'scout', '--job', 'D', '--state', 'work', ...bad]).status, 1, bad.join(' '));
@@ -693,9 +698,9 @@ test('active work: run rows are listed once, in the strip, never in the list', (
   assert.ok(ls[0].includes('R two'), 'oldest first');
   assert.ok(html.indexOf('<section class="crew">') < html.indexOf('<ol>'), 'the strip is above the list');
   // a run row with no crew entry: a line without an icon, so nothing running is hidden
-  assert.strictEqual(ls[1], '<li class="crew-line run"><span class="ic"></span><button type="button" class="tx" aria-expanded="false" aria-controls="cd-2">R one</button><time>09:00</time></li>');
-  assert.match(stripOf(html), /<div class="cd bare" id="cd-2"><b>R one<\/b><\/div>/, 'nothing more to show: the panel shows the title');
-  assert.match(ls[0], /<button type="button" class="tx" aria-expanded="false" aria-controls="cd-1">R two<\/button>/, 'a row with a detail opens it');
+  assert.match(ls[1], /^<li class="crew-line run"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="(d-run-r-one-[0-9a-z]+)">R one<\/button><time>09:00<\/time><\/li>$/, 'a run row with no entry: the square mark');
+  assert.match(stripOf(html), /<div class="cd bare" id="d-run-r-one-[0-9a-z]+"><b>R one<\/b><\/div>/, 'nothing more to show: the panel shows the title');
+  assert.match(ls[0], /<button type="button" class="tx" aria-expanded="false" aria-controls="d-run-r-two-[0-9a-z]+">R two<\/button>/, 'a row with a detail opens it');
 });
 test('crew --row: category and summary from the row, one detail panel, one line per row', (t) => {
   const dir = devWs(t);
@@ -717,25 +722,27 @@ test('crew --row: category and summary from the row, one detail panel, one line 
   assert.strictEqual(ls.filter((l) => l.includes('Sinan')).length, 1, 'one row, one line');
   const sinan = ls.find((l) => l.includes('Sinan'));
   assert.match(sinan, /^<li class="crew-line work" data-role="lead"><span class="ic"><span role="img" title="Lead · yönetiyor" aria-label="Lead · yönetiyor"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder · kod yazıyor" aria-label="Builder · kod yazıyor"><svg/);
-  assert.match(sinan, /<button type="button" class="tx" aria-expanded="false" aria-controls="cd-1"><span class="ct">Zenger ·<\/span> Sinan Bey'e cevap/);
-  assert.match(sinan, /class="cm" title="opus · high">opus · high</);
-  // the entry with no row: its own job, no detail, no button
-  assert.match(ls.find((l) => l.includes('Kendi')), /class="tx" aria-expanded="false" aria-controls="cd-\d+">Kendi işi<\/button>/);
-  // the detail: small text, next step, links (the row's and the entries'), in one panel under the lines
+  // Zenger runs too: it is the category line, Sinan under it without a prefix, the row's link on the line
+  const sid = sinan.match(/aria-controls="(d-run-[^"]+)">Sinan Bey'e cevap<\/button><a class="lk" href="https:\/\/example\.com\/d" target="_blank" rel="noopener">taslak<\/a>/)[1];
+  assert.match(stripOf(html), /<li class="cat"><ul class="ch">\n  <li class="crew-line run">[^\n]*>Zenger <span class="n">1<\/span> <em>sürüyor<\/em><\/button>/);
+  assert.doesNotMatch(sinan, /class="cm"/, 'the model tail is in the detail');
+  // the entry with no row: its own job, a panel with its title
+  assert.match(ls.find((l) => l.includes('Kendi')), /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">Kendi işi<\/button>/);
+  // the detail: small text, next step, the entries' links, the model tail, right under its line
   const s = stripOf(html);
-  assert.ok(s.indexOf('<li class="crew-dl"><div class="cd" id="cd-1">') === s.indexOf('</li>', s.indexOf('aria-controls="cd-1"')) + '</li>\n  '.length, 'the panel is right under its line');
-  const cd = (s.match(/<div class="cd" id="cd-1">[\s\S]*?<\/div>/) || [''])[0];
+  assert.ok(s.indexOf(`<li class="crew-dl"><div class="cd" id="${sid}">`) === s.indexOf('</li>', s.indexOf(`aria-controls="${sid}"`)) + '</li>\n  '.length, 'the panel is right under its line');
+  const cd = (s.match(new RegExp(`<div class="cd" id="${sid}">[\\s\\S]*?</div>`)) || [''])[0];
   assert.match(cd, /<p>kısa taslak hazır<\/p>/);
   assert.match(cd, /<p class="nx"><span>sonraki<\/span> siz gönderin<\/p>/);
-  assert.match(cd, /<a href="https:\/\/example\.com\/d"[^>]*>taslak<\/a>/);
   assert.match(cd, /<a href="https:\/\/example\.com\/r"[^>]*>sayfa<\/a>/);
+  assert.match(cd, /<p class="cm">opus · high<\/p>/);
   assert.doesNotMatch(s, /\shidden/, 'without script every detail shows');
   // every button controls a detail that exists, once
   const ctl = [...s.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(ctl.length >= 1);
   for (const id of ctl) assert.strictEqual(html.split(`id="${id}"`).length, 2, id);
   // a running row with no crew entry still shows
-  assert.ok(ls.some((l) => /<span class="ic"><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="cd-\d+">Loose<\/button>/.test(l)));
+  assert.ok(ls.some((l) => /<span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">Loose<\/button>/.test(l)));
   assert.strictEqual(html.split('<script id="panel">').length, 2, 'one panel script');
   render(dir);
   assert.strictEqual(page(dir).split('<script id="panel">').length, 2, 'still one after a re-render');
@@ -756,17 +763,20 @@ test('devMode off: no role name in a mapped strip line or its detail', (t) => {
   assert.doesNotMatch(stripOf(html), /class="cm"|opus/, 'no model tail');
   assert.match(stripOf(html), /<time data-since="[^"]+">/, 'elapsed stays');
 });
-test('the panel script: one detail open at a time, aria-expanded follows, hidden otherwise', () => {
+test('the panel script: one detail open at a time across the page, aria-expanded follows, hidden otherwise', () => {
   const vm = require('vm');
   const { PANEL_JS } = require('../tools/tracker.js');
   assert.ok(PANEL_JS, 'exported');
   const ds = { 'cd-1': { hidden: false }, 'cd-2': { hidden: false } };
   const btn = (id) => { const a = { 'aria-controls': id, 'aria-expanded': 'false' }; return { getAttribute: (k) => a[k], setAttribute: (k, v) => { a[k] = v; }, closest() { return this; } }; };
   const bs = [btn('cd-1'), btn('cd-2')];
-  let onClick = null; const cls = new Set();
-  const sec = { classList: { add: (c) => cls.add(c) }, querySelectorAll: () => bs, addEventListener: (ev, f) => { if (ev === 'click') onClick = f; } };
-  vm.runInNewContext(PANEL_JS, { document: { querySelector: () => sec, getElementById: (id) => ds[id] } });
-  assert.ok(cls.has('js'));
+  let onClick = null; let onReady = null; const cls = new Set();
+  const document = { readyState: 'loading', documentElement: { classList: { add: (c) => cls.add(c) } }, querySelectorAll: () => bs, getElementById: (id) => ds[id],
+    addEventListener: (ev, f) => { if (ev === 'click') onClick = f; if (ev === 'DOMContentLoaded') onReady = f; } };
+  vm.runInNewContext(PANEL_JS, { document });
+  assert.deepStrictEqual([ds['cd-1'].hidden, cls.size], [false, 0], 'it waits for the whole document');
+  onReady();
+  assert.ok(cls.has('js-cd'));
   assert.deepStrictEqual([ds['cd-1'].hidden, ds['cd-2'].hidden], [true, true], 'with script, all closed at first');
   onClick({ target: bs[0] });
   assert.deepStrictEqual([bs[0].getAttribute('aria-expanded'), ds['cd-1'].hidden, ds['cd-2'].hidden], ['true', false, true]);
@@ -794,16 +804,18 @@ test('every strip line is clickable', (t) => {
   const html = page(dir);
   const ls = linesOf(html);
   assert.strictEqual(ls.length, 4);
-  for (const l of ls) assert.match(l, /<button type="button" class="tx" aria-expanded="false" aria-controls="cd-\d+">|<a class="tx" href="https?:/, 'a clickable control on every line');
+  for (const l of ls) assert.match(l, /<button type="button" class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">/, 'a button on every line');
   const id = (l) => l.match(/aria-controls="([^"]+)"/)[1];
   const cdOf = (l) => (stripOf(html).match(new RegExp('<div class="cd[^"]*" id="' + id(l) + '">([\\s\\S]*?)</div>')) || [])[1];
-  // a row: its text, next step, the row's link, then the entry's
-  const pep = cdOf(ls.find((l) => l.includes('Peplink planı')));
-  assert.match(pep, /^<b>Zenger · Peplink planı<\/b><p>plan hazır<\/p><p class="nx"><span>sonraki<\/span> tek evet<\/p>/);
-  assert.match(pep, /<a href="https:\/\/example\.com\/row"[^>]*>plan<\/a> · <a href="https:\/\/example\.com\/entry"[^>]*>sayfa<\/a>/);
+  // a row: the row's link on the line; in the detail its text, next step and the entry's link
+  const pepLine = ls.find((l) => l.includes('Peplink planı'));
+  assert.match(pepLine, /<\/button><a class="lk" href="https:\/\/example\.com\/row" target="_blank" rel="noopener">plan<\/a><time/);
+  assert.match(cdOf(pepLine), /^<b>Zenger · Peplink planı<\/b><p>plan hazır<\/p><p class="nx"><span>sonraki<\/span> tek evet<\/p><p class="ln"><a href="https:\/\/example\.com\/entry"[^>]*>sayfa<\/a><\/p>$/);
   assert.doesNotMatch(stripOf(html), /class="dl"|karar sayfası/, 'no decision link');
-  // no row, a url: the line is the link
-  assert.match(ls.find((l) => l.includes('Row-less with url')), /<a class="tx" href="https:\/\/example\.com\/direct" target="_blank" rel="noopener">Row-less with url<\/a>/);
+  // no row, a url: the url is in its detail (the build note: an entry's url shows in the detail, not on the line)
+  const direct = ls.find((l) => l.includes('Row-less with url'));
+  assert.doesNotMatch(direct, /example\.com\/direct/);
+  assert.match(cdOf(direct), /<a href="https:\/\/example\.com\/direct"[^>]*>sayfa<\/a>/);
   // neither: a panel with the job text
   const bare = ls.find((l) => l.includes('Row-less, no url'));
   assert.match(stripOf(html), new RegExp('<div class="cd bare" id="' + id(bare) + '"><b>Row-less, no url</b></div>'));
@@ -828,9 +840,9 @@ test('strip: each line opens its detail directly under itself, never under anoth
   crew(dir, ['--role', 'lead', '--job', 'Trail', '--state', 'work', '--row', 'Trail']);
   crew(dir, ['--role', 'builder', '--job', 'No row', '--state', 'work']);
   const s = stripOf(page(dir));
-  const ul = (s.match(/<ul>([\s\S]*?)<\/ul>/) || [])[1] || '';
+  const ul = s;
   // the list's items in order: each line, then (when it opens a panel) its own detail
-  const items = ul.match(/<li[\s\S]*?<\/li>/g) || [];
+  const items = ul.match(/<li class="crew-(?:line|dl)[\s\S]*?<\/li>/g) || [];
   const lines = items.filter((l) => l.startsWith('<li class="crew-line'));
   assert.strictEqual(lines.length, 4);
   for (const l of lines) {
@@ -842,13 +854,15 @@ test('strip: each line opens its detail directly under itself, never under anoth
   assert.match(items[items.indexOf(lines[0]) + 1], /<b>Joserah · Yeni ekip<\/b>/);
   assert.doesNotMatch(s, /<div class="crew-d">/, 'no shared panel after the list');
   // the first of several lines: its panel is the second item, nothing of it after the last line
-  assert.match(items[1], /id="cd-1"/);
-  assert.ok(ul.lastIndexOf('id="cd-1"') < ul.indexOf(lines[1]), 'the first line\'s detail comes before the second line');
-  assert.strictEqual(s.split('<script id="panel">').length, 2, 'one panel script');
+  const first = lines[0].match(/aria-controls="([^"]+)"/)[1];
+  assert.match(items[1], new RegExp(`id="${first}"`));
+  assert.ok(ul.lastIndexOf(`id="${first}"`) < ul.indexOf(lines[1]), 'the first line\'s detail comes before the second line');
+  assert.strictEqual(page(dir).split('<script id="panel">').length, 2, 'one panel script');
   // attached to its line as a child is: the children's indent and left rule
   const { STRIP_CSS } = require('../tools/tracker.js');
-  assert.ok(STRIP_CSS.some((c) => c.includes('.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}')));
-  assert.ok(page(dir).includes('.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}'), 'the page carries it');
+  const rule = STRIP_CSS.find((c) => c.startsWith(':is(.crew,main) li.crew-dl{'));
+  assert.match(rule, /margin:0 0 0 2px;padding:0 0 0 16px;[^}]*border-left:1px solid var\(--line\)\}/);
+  assert.ok(page(dir).includes(rule), 'the page carries it');
 });
 
 // Owner, 2026-10-05: "şu an çalışan bir şey var mı anlamıyorum hepsi beni bekliyor galiba". The strip
@@ -869,7 +883,7 @@ test('strip: only running work, never what waits on the owner or an idle entry',
   const ls = linesOf(html);
   assert.deepStrictEqual(ls.map((l) => l.match(/class="crew-line (\w+)"/)[1]), ['work'], 'one running line');
   assert.ok(ls[0].includes('Trail'));
-  assert.deepStrictEqual(heads(html), ['Aktif çalışma 1', 'Sizde 1']);
+  assert.deepStrictEqual(heads(html), ['Aktif çalışma 1', 'Sizde 2'], 'what waits on the owner is in the owner section, a row-less entry as its own line');
   const s = stripOf(html);
   assert.doesNotMatch(s, /Peplink|Onay|Bitti|<em>|crew-line owner|crew-line idle/, 'nothing waiting or idle in the strip');
   assert.doesNotMatch(s, /data-role="(lead|sentry|scout)"/, 'the summary counts only working roles (and Voice)');
@@ -940,4 +954,215 @@ test('strip icons say what each role is doing (title and aria-label)', (t) => {
   const s = stripOf(page(en));
   for (const a of ['Managing', 'Planning', 'Writing code', 'Researching', 'Watching']) assert.ok(s.includes(`<span class="ic"><span ${tip(a)}><svg`), a);
   assert.ok(s.includes(tip('1 · writing code')));
+});
+
+// Owner, 2026-10-05, "Tracker yeni düzen" (Architect's build note, design-note.md): one board above —
+// Active work, Owner, Waiting, Done today (one closed fold) — every row in the Active work line shape,
+// lines of one category under one category line; Plans alone below. Each line's detail opens right under it.
+const boardRows = [
+  { state: 'run', title: 'R', parent: 'Alpha', time: '09:00' },
+  { state: 'you', title: 'Y', small: 'karar lazım · sonraki: evet deyin', url: 'https://example.com/y', time: '09:05' },
+  { state: 'wait', title: 'A1', parent: 'Alpha', time: '09:10' },
+  { state: 'wait', title: 'A2', parent: 'Alpha', time: '09:20' },
+  { state: 'wait', title: 'B1', parent: 'Beta', time: '09:15' },
+  { state: 'ok', title: 'Alpha', time: '08:00' },
+  { state: 'ok', title: 'Beta', time: '10:00' },
+  { state: 'plan', title: 'P1', group: 'Later', time: '08:30' },
+];
+test('board: run, owner, waiting, done today, plans in that order; done is one closed fold with count and last time', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, boardRows);
+  render(dir);
+  const html = page(dir);
+  assert.deepStrictEqual(heads(html), ['Active work 1', 'Owner 1', 'Waiting 3', 'Done today 2', 'Plans 1']);
+  const ok = secOf(html, 'ok');
+  assert.match(ok, /^<div class="blk" data-k="ok"><details name="trk" id="f-ok"><summary class="hd">Done today <span>2<\/span><span class="lt">10:00<\/span><\/summary>/, 'closed, count and last finish time');
+  assert.ok(html.indexOf('data-k="ok"') < html.indexOf('data-k="plan"'), 'plans after done');
+  assert.match(html, /<li class="sec pl"><div class="blk" data-k="plan">/, 'plans below their rule');
+  assert.match(secOf(html, 'plan'), /<details name="trk" id="f-plan-later-[0-9a-z]+"><summary class="jh"><span class="jt">Later<\/span><span>1<\/span><\/summary>/, 'one closed fold per group');
+  assert.doesNotMatch(html, /<details[^>]* open/, 'every fold starts closed');
+});
+test('board: empty owner, waiting and done render nothing; an empty strip keeps its none line', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [{ state: 'plan', title: 'P', time: '08:00' }]);
+  render(dir);
+  const html = page(dir);
+  assert.deepStrictEqual(heads(html), ['Aktif çalışma 0', 'Planlar 1']);
+  assert.match(stripOf(html), /<li class="crew-none">Şu an çalışan iş yok<\/li>/);
+});
+test('board: two rows of one category gather under a category line; a single one is prefixed', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, boardRows);
+  render(dir);
+  const w = secOf(page(dir), 'wait');
+  assert.match(w, /<li class="cat"><div class="jh"><span class="jt">Alpha <em>running<\/em><\/span><span>2<\/span><\/div><ol>/, 'Alpha: a category line that says running (R runs)');
+  const alpha = w.match(/<li class="cat">[\s\S]*?<\/ol><\/li>/)[0];
+  for (const x of ['A1', 'A2']) assert.match(alpha, new RegExp(`aria-controls="[^"]+">${x}</button>`), `${x} under Alpha, no prefix`);
+  assert.match(w, /aria-controls="[^"]+"><span class="ct">Beta ·<\/span> B1<\/button>/, 'one row of Beta: prefixed');
+  assert.ok(w.indexOf('Alpha') < w.indexOf('B1'), 'newest first: Alpha (A2 09:20) before B1 (09:15)');
+  // a parent in the same group is the category line itself
+  const d2 = tmpdir(t); init(d2);
+  setRows(d2, [{ state: 'you', title: 'Main', time: '09:00' }, { state: 'you', title: 'Sub', parent: 'Main', time: '09:10' }]);
+  render(d2);
+  const you = secOf(page(d2), 'you');
+  assert.match(you, /<li class="cat"><ul class="ch">\n  <li data-st="you" class="crew-line you"><span class="ic"><span class="sq"><\/span><\/span><button type="button" class="tx" aria-expanded="false" aria-controls="d-you-main-[0-9a-z]+">Main <span class="n">1<\/span><\/button>/);
+  assert.match(you, /<\/ul><ol>\n  <li data-st="you" class="crew-line you">[^\n]*>Sub<\/button>/);
+});
+test('board: every line opens its own detail, the next item, with an id made from its title', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, boardRows);
+  render(dir);
+  const html = page(dir);
+  const ids = [...html.matchAll(/aria-controls="(d-[^"]+)"/g)].map((m) => m[1]);
+  assert.strictEqual(ids.length, 8, 'one control per line');
+  for (const id of ids) {
+    assert.strictEqual(html.split(`id="${id}"`).length, 2, `${id} once`);
+    assert.match(html, new RegExp(`aria-controls="${id}">[^\\n]*</li>\\n\\s*<li class="crew-dl"><div class="cd[^"]*" id="${id}">`), `${id} right under its line`);
+  }
+  assert.match(html, /aria-controls="d-you-y-[0-9a-z]+">Y<\/button>/, 'the id comes from the title');
+  // the same titles in another order keep their ids
+  setRows(dir, [...boardRows].reverse());
+  render(dir);
+  assert.deepStrictEqual([...page(dir).matchAll(/aria-controls="(d-[^"]+)"/g)].map((m) => m[1]).sort(), ids.sort());
+  // the detail: text, then the next step on its own line
+  assert.match(html, /<div class="cd" id="d-you-y-[0-9a-z]+"><b>Y<\/b><p class="dl"><a href="https:\/\/example\.com\/y" target="_blank" rel="noopener">karar sayfası<\/a><\/p><p>karar lazım<\/p><p class="nx"><span>sonraki<\/span> evet deyin<\/p><\/div>/);
+});
+test('board: a row url is a link label on the line (label, else page); a non-http url is dropped', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [
+    { state: 'wait', title: 'L1', url: 'https://example.com/a', label: 'İş akışı', time: '09:00' },
+    { state: 'wait', title: 'L2', url: 'https://example.com/b', time: '09:01' },
+    { state: 'wait', title: 'L3', url: 'javascript:alert(1)', time: '09:02' },
+  ]);
+  render(dir);
+  const ls = lis(dir);
+  const of = (x) => ls.find((l) => l.includes(`>${x}</button>`));
+  assert.match(of('L1'), /<\/button><a class="lk" href="https:\/\/example\.com\/a" target="_blank" rel="noopener">İş akışı<\/a><time>09:00<\/time><\/li>$/);
+  assert.match(of('L2'), /<a class="lk" href="https:\/\/example\.com\/b" target="_blank" rel="noopener">sayfa<\/a>/);
+  assert.doesNotMatch(page(dir), /javascript:/);
+});
+test('board: owner lines lead their detail with the decision link and the reason; an owner entry without a you row is its own line', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [{ state: 'you', title: 'Plan onayı', url: 'https://example.com/plan', label: 'plan', time: '09:00' }, { state: 'ok', title: 'Eski', time: '08:00' }]);
+  crew(dir, ['--role', 'lead', '--job', 'Onay', '--state', 'owner', '--reason', 'approval', '--row', 'Plan onayı']);
+  crew(dir, ['--role', 'scout', '--job', 'Kaynak seçimi', '--state', 'owner', '--reason', 'decision', '--url', 'https://example.com/pick']);
+  const you = secOf(page(dir), 'you');
+  assert.match(you, /<div class="hd">Sizde <span>2<\/span><\/div>/);
+  assert.match(you, /<div class="cd" id="d-you-plan-onay[^"]*"><b>Plan onayı<\/b><p class="dl"><a href="https:\/\/example\.com\/plan" target="_blank" rel="noopener">plan<\/a> <em>onay<\/em><\/p><\/div>/);
+  assert.match(you, /aria-controls="d-you-[^"]+">Kaynak seçimi<\/button>/);
+  assert.match(you, /<p class="dl"><a href="https:\/\/example\.com\/pick" target="_blank" rel="noopener">karar sayfası<\/a> <em>karar<\/em><\/p>/);
+});
+test('board: in developer mode the model tail is in the detail, never on the line', (t) => {
+  const dir = devWs(t);
+  setRows(dir, [{ state: 'run', title: 'Kod', time: '09:00' }]);
+  crew(dir, ['--role', 'builder', '--job', 'Kod', '--state', 'work', '--row', 'Kod', '--model', 'opus', '--effort', 'high']);
+  const s = stripOf(page(dir));
+  assert.doesNotMatch(linesOf(page(dir))[0], /class="cm"|opus/);
+  assert.match(s, /<div class="cd" id="d-run-kod-[0-9a-z]+"><b>Kod<\/b><p class="cm">opus · high<\/p><\/div>/);
+});
+test('board: phone width puts the link under the text; only the time and the link label never wrap', () => {
+  const { CONSOLE_CSS } = require('../tools/tracker.js');
+  assert.match(CONSOLE_CSS, /@media \(max-width:560px\)\{[^\n]*li\.crew-line\{[^}]*grid-template-areas:"m x t" "\. l \."/);
+  for (const rule of CONSOLE_CSS.split(/(?<=\})/)) {
+    if (!rule.includes('white-space:nowrap')) continue;
+    assert.match(rule.replace(/^@media[^{]*\{/, ''), /^[^{]*(time|\.lk)[^{]*\{/, `nowrap only on the time and the link: ${rule.slice(0, 90)}`);
+  }
+});
+
+// Owner, 2026-10-05: "sayfa güncellenince otomatik yenileniyor expandların durumu da değişmesin". What is
+// open — a line's detail, a fold, an opened long list — and the scroll position survive a reload of the
+// page (a republish reloads it). Kept per viewer in the browser's storage; every read and write guarded.
+const stateDom = ({ saved, throwing } = {}) => {
+  const store = new Map(saved ? [['trk:/p', JSON.stringify(saved)]] : []);
+  const el = (a, extra) => ({ a: { ...a }, getAttribute(k) { return this.a[k]; }, setAttribute(k, v) { this.a[k] = String(v); }, ...extra });
+  const panel = { hidden: true };
+  const btn = el({ 'aria-controls': 'd-you-x', 'aria-expanded': 'false' });
+  const more = el({ 'aria-controls': 'clip-ok', 'aria-expanded': 'false' }, { clicks: 0, click() { this.clicks++; this.a['aria-expanded'] = 'true'; } });
+  const fOk = { id: 'f-ok', open: false, querySelector: () => null };
+  const legacy = { id: '', open: false, querySelector: () => ({ textContent: '  Zenger  ' }) };
+  const docL = {}; const winL = {}; const scrolls = [];
+  const document = {
+    readyState: 'complete',
+    querySelectorAll: (s) => (s.startsWith('button.tx') ? [btn] : s === 'details' ? [fOk, legacy] : s.startsWith('button.more') ? [more] : []),
+    getElementById: (id) => (id === 'd-you-x' ? panel : null),
+    addEventListener: (ev, f) => { docL[ev] = f; },
+  };
+  const window = { scrollY: 0, scrollTo: (x, y) => { scrolls.push(y); window.scrollY = y; }, addEventListener: (ev, f) => { winL[ev] = f; } };
+  const ctx = { document, window, location: { pathname: '/p' }, setTimeout: (f) => f(), clearTimeout: () => {}, JSON };
+  if (throwing) Object.defineProperty(ctx, 'localStorage', { get() { throw new Error('denied'); } });
+  else ctx.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
+  return { ctx, store, panel, btn, more, fOk, legacy, docL, winL, scrolls };
+};
+test('expand state: a reload restores the open detail, folds, opened lists and the scroll position', () => {
+  const vm = require('vm');
+  const { STATE_JS } = require('../tools/tracker.js');
+  const d = stateDom({ saved: { p: 'd-you-x', d: ['f-ok', 'S:Zenger'], c: ['clip-ok'], y: 300 } });
+  vm.runInNewContext(STATE_JS, d.ctx);
+  assert.deepStrictEqual([d.btn.getAttribute('aria-expanded'), d.panel.hidden], ['true', false], 'the detail is open again');
+  assert.deepStrictEqual([d.fOk.open, d.legacy.open], [true, true], 'folds by id, and a fold without one by its summary');
+  assert.strictEqual(d.more.clicks, 1, 'the opened long list opens again');
+  assert.deepStrictEqual(d.scrolls, [300]);
+});
+test('expand state: what the viewer opens is saved under the page, the scroll position too', () => {
+  const vm = require('vm');
+  const { STATE_JS } = require('../tools/tracker.js');
+  const d = stateDom();
+  vm.runInNewContext(STATE_JS, d.ctx);
+  assert.strictEqual(d.store.size, 0, 'nothing saved before the viewer acts');
+  d.btn.setAttribute('aria-expanded', 'true'); d.fOk.open = true; d.ctx.window.scrollY = 120;
+  d.docL.click({ target: d.btn });
+  assert.deepStrictEqual(JSON.parse(d.store.get('trk:/p')), { p: 'd-you-x', d: ['f-ok'], c: [], y: 120 });
+  d.fOk.open = false; d.ctx.window.scrollY = 40;
+  d.winL.scroll();
+  assert.deepStrictEqual(JSON.parse(d.store.get('trk:/p')), { p: 'd-you-x', d: [], c: [], y: 40 });
+});
+test('expand state: storage that throws changes nothing and throws nothing', () => {
+  const vm = require('vm');
+  const { STATE_JS } = require('../tools/tracker.js');
+  const d = stateDom({ throwing: true });
+  assert.doesNotThrow(() => vm.runInNewContext(STATE_JS, d.ctx));
+  assert.deepStrictEqual([d.btn.getAttribute('aria-expanded'), d.fOk.open, d.more.clicks, d.scrolls.length], ['false', false, 0, 0]);
+  d.btn.setAttribute('aria-expanded', 'true');
+  assert.doesNotThrow(() => { d.docL.click({ target: d.btn }); d.winL.scroll(); d.winL.pagehide(); });
+});
+test('the page carries the panel and state scripts once, after the clamp script; the strip alone carries them for an outside page', (t) => {
+  const { PANEL_JS, STATE_JS, activeStrip, LABELS } = require('../tools/tracker.js');
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, boardRows);
+  render(dir); render(dir);
+  const html = page(dir);
+  for (const id of ['panel', 'state']) assert.strictEqual(html.split(`<script id="${id}">`).length, 2, id);
+  assert.ok(html.indexOf('<script id="clip">') < html.indexOf('<script id="panel">') && html.indexOf('<script id="panel">') < html.indexOf('<script id="state">'));
+  assert.doesNotMatch(stripOf(html), /<script/, 'not inside the strip on a tracker page');
+  const s = activeStrip([], [{ state: 'run', title: 'R', time: '09:00' }], LABELS.tr, false);
+  assert.ok(s.includes(`<script id="panel">${PANEL_JS}</script><script id="state">${STATE_JS}</script>`), 'an outside page (its own updater) gets both with the strip');
+  assert.doesNotMatch(activeStrip([], [{ state: 'run', title: 'R', time: '09:00' }], LABELS.tr, false, { script: false }), /<script/);
+});
+
+// An outside updater's rows may name a category that is not a row (the live Daily Tracker does): its
+// lines still gather under one category line by that name, in the strip as in any group.
+test('board: a category that is not a row gathers its lines by name', () => {
+  const { activeStrip, LABELS } = require('../tools/tracker.js');
+  const s = activeStrip([], [
+    { state: 'run', title: 'One', parent: 'Joserah · crew', time: '09:00' },
+    { state: 'run', title: 'Two', parent: 'joserah · crew ', time: '09:10' },
+    { state: 'run', title: 'Solo', parent: 'Zenger', time: '09:05' },
+  ], LABELS.tr, false, { script: false });
+  assert.match(s, /<li class="cat"><div class="jh"><span class="jt">Joserah · crew <em>sürüyor<\/em><\/span><span>2<\/span><\/div><ol>\n[^\n]*>One<\/button>[\s\S]*>Two<\/button>/);
+  assert.match(s, /<span class="ct">Zenger ·<\/span> Solo<\/button>/);
+});
+test('board: rows nested two levels (an outside updater): every line once; a line heading its own category is not also a member', () => {
+  const { board, LABELS } = require('../tools/tracker.js');
+  const { list } = board([
+    { state: 'you', title: 'A', parent: 'Top', time: '09:00' },
+    { state: 'you', title: 'A1', parent: 'A', time: '09:05' },
+    { state: 'you', title: 'A2', parent: 'A', time: '09:06' },
+    { state: 'you', title: 'B', parent: 'Top', time: '09:10' },
+  ], [], LABELS.en, false);
+  const you = list[0];
+  for (const x of ['a', 'a1', 'a2', 'b']) assert.strictEqual(you.split(`aria-controls="d-you-${x}-`).length - 1, 1, `${x} once`);
+  assert.match(you, /<li class="cat"><ul class="ch">\n[^\n]*>A <span class="n">2<\/span><\/button>/);
+  assert.match(you, /<span class="ct">Top ·<\/span> B<\/button>/);
+  const ids = [...you.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  assert.strictEqual(ids.length, new Set(ids).size, 'no id twice');
 });

@@ -44,25 +44,38 @@
  *       array is read as { rows, crew: [] } and kept an array until a crew entry
  *       exists.
  *
- *   Active work (tr "Aktif çalışma", every mode): the strip under the header is
- *       the one list of running work — run rows are never listed in the sections
- *       below. Only what is running now: crew entries in state work and run rows;
- *       an entry waiting on the owner or idle is never a strip line (what waits on
- *       the owner is the owner section's). A head with its line count (and on the
- *       right Voice's icon and each working role's, when there are crew entries),
- *       then one line per row being worked on, per working entry with no row, and
- *       per run row no working entry names (no icon, oldest first); nothing running:
- *       head count 0 and one line "Nothing running right now" / "Şu an çalışan iş
- *       yok". Every role icon carries title and aria-label saying what the role is
- *       doing (L.doing: developer mode "Builder · kod yazıyor", off "Kod yazıyor";
- *       a summary icon leads with its count, "2 · kod yazıyor"). Every
- *       line is a control: an entry with no row but a url is that link; any other
- *       line is a <button aria-expanded aria-controls> that opens its detail (the
- *       row's small text, its "sonraki:/next:" part on its own line, its links and
- *       the entries' links; with nothing more, its title) in a panel directly under that
- *       line (<li class="crew-dl">, the list's next item), one open at a time
- *       (PANEL_JS, <script id="panel"> inside the strip); without script every
- *       detail shows under its own line.
+ *   The board (owner, 2026-10-05, "Tracker yeni düzen"): every row in one line
+ *       shape, [mark] [text ▸] [link] [time], in state groups: Active work (tr
+ *       "Aktif çalışma"), Owner, Waiting, Done today; Plans alone below a faint
+ *       rule. The whole line is a <button aria-expanded aria-controls> that opens
+ *       its detail directly under it (<li class="crew-dl">, the list's next item),
+ *       one open at a time across the page (PANEL_JS); without script every detail
+ *       shows under its line. The detail: the small text, its "sonraki:/next:" part
+ *       on its own line, the crew entries' links, in developer mode their
+ *       model · effort · ctx tail; an owner line leads with the link to where it is
+ *       decided and the reason word. A row's url is a link label on the line
+ *       (label, else "page"/"sayfa"); only http(s). Ids come from titles
+ *       (slugId), so what is open survives a reload: STATE_JS keeps the open
+ *       detail, folds, opened long lists and the scroll position in the browser's
+ *       storage, every access guarded.
+ *       Active work is only what runs now: run rows, the rows crew entries are
+ *       working on, and working entries with no row; never what waits on the
+ *       owner, never idle. Its head has the line count and on the right Voice's
+ *       icon and each working role's; nothing running: count 0 and one line
+ *       "Nothing running right now" / "Şu an çalışan iş yok". Every role icon
+ *       carries title and aria-label saying what the role is doing (L.doing:
+ *       developer mode "Builder · kod yazıyor", off "Kod yazıyor"; a summary icon
+ *       leads with its count, "2 · kod yazıyor").
+ *       Owner: you rows (with the owner entries naming them) and owner entries
+ *       with no such row, as their own lines. Active work and Owner oldest first,
+ *       the rest newest first; ties keep file order; an empty group is left out.
+ *       In a group, two or more lines of one category (a row's parent, by name)
+ *       sit under one category line, indented; one alone reads
+ *       "<category> · <title>"; a parent in the same group is the category line
+ *       itself; a category with a running member says "running"/"sürüyor".
+ *       Done today is one closed <details name="trk"> with its count and last
+ *       time, its categories closed folds inside; Plans one closed fold per group
+ *       (no group: Other). Waiting and Done today clamp after 5 units.
  *       Each entry carries `since` (ISO): when its state began. It is set when the
  *       state changes and kept on an update that keeps it, so a working or waiting
  *       line can say how long it has been so: its <time> carries data-since and a
@@ -78,31 +91,20 @@
  *       {match?, state, title, small?, url?, label?, group?, parent?, time?}, state one of
  *       run (a background agent is working on it right now) | you (the owner's
  *       decision or action) | wait (waiting on someone outside, no AI working) |
- *       ok (done) | plan. The <ol> is rebuilt from it, so a row
+ *       ok (done) | plan. <main> is rebuilt from it (the board above), so a row
  *       removed from the file disappears. A row without `time` is stamped once
  *       with the current local HH:MM and that stamp is written back to
- *       rows.json; a row with `time` keeps it. Run rows are lines of the Active
- *       work strip above the list; the sections, in this order, all open: owner
- *       (you), waiting (wait), plans (plan), done (ok); owner oldest first, the
- *       others newest first,
- *       ties keep file order, an empty section gets no heading. A plan's `group`
- *       leads its small line. Only http(s) urls become links. Rows with a
- *       `parent` form a container under their main job: a header line over the
- *       indented sub-jobs (the main row heads it when it is in the same section,
- *       otherwise its state follows the title); only a done container is a
- *       closed <details name="trk">, one open at a time. A waiting, plans or done
- *       section with more than 5 items shows its first rows and fades, with a
- *       button that opens it in place as a bounded scroll area; active sections
- *       never clamp. The console look (CONSOLE_CSS) and the clamp script
- *       (CLIP_JS) are put back last on every render, and any non-zero radius or
- *       shadow in the page's styles is stripped. Only <main>, those two blocks
- *       and the page's "updated" stamp (data-t) change. Prints `rows: N`.
- *       Exit 1 on a missing dir or rows.json, invalid JSON, unknown state, or two
- *       rows with the same title (case and outer spaces ignored): one job, one row.
+ *       rows.json; a row with `time` keeps it. The console look (CONSOLE_CSS) and
+ *       the clamp, panel and state scripts are put back last on every render, and
+ *       any non-zero radius or shadow in the page's styles is stripped. Only
+ *       <main>, those blocks and the page's "updated" stamp (data-t) change.
+ *       Prints `rows: N`. Exit 1 on a missing dir or rows.json, invalid JSON,
+ *       unknown state, or two rows with the same title (case and outer spaces
+ *       ignored): one job, one row.
  *
  * Developer mode (`devMode: true` in the workspace's .joserah/config.json, found
- * by walking up from <dir>) names the crew only as each icon's title, and adds the
- * faint model · effort tail. Off (the default, and outside any workspace) the strip
+ * by walking up from <dir>) names the role in each icon's title, and adds the
+ * faint model · effort tail to the detail. Off (the default, and outside any workspace) the strip
  * keeps its icons, states, counts and elapsed time but carries no role name and no
  * agent wording, in text, title or data attributes: a line is the work only. The
  * run label is "Active work" (tr "Aktif çalışma") in both modes.
@@ -115,8 +117,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -144,85 +146,106 @@ const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
   + '@keyframes crew-pulse{50%{opacity:.4}}'
   + '@media (prefers-reduced-motion: reduce){.crew-line.work svg,.crew-sum .work svg{animation:none}}';
 
-// Active work (owner, 2026-10-05: "Ajan çalışıyor, kısmını aktif çalışma gibi yapalım ben yukarıdan
-// tıklayınca aşağıyı doldursun … önce işin kategori ismi sonra kısa özet gibi. net yalın olsun."): the
-// strip is a section like the others — a head with its count and the icon summary on the right — and
-// the one list of running work. A line reads "<category> · <summary>"; a line with a detail is a real
-// button (the whole line is its target) that opens the detail in one panel under the lines, one at a
-// time. Without script every detail shows, each under its own title. Theme tokens only.
+// One line shape for every group (owner, 2026-10-05: "Ajan çalışıyor, kısmını aktif çalışma gibi yapalım
+// ben yukarıdan tıklayınca aşağıyı doldursun … önce işin kategori ismi sonra kısa özet gibi. net yalın
+// olsun."; then "Tracker yeni düzen", Architect's build note): [mark] [text ▸] [link] [time]. The whole
+// line is a button that opens its detail right under it (<li class="crew-dl">), one open at a time across
+// the page; lines of one category sit under one category line, indented with the left hairline. Without
+// script every detail shows under its own line. Theme tokens only. The selectors carry :is(.crew,main)
+// so they outweigh the strip's older CREW_CSS on any page, the plugin's or an outside updater's.
+const LN = ':is(.crew,main) li.crew-line';
 const STRIP_CSS = [
   'section.crew{padding:0;border:0}',
   '.crew .hd{flex-wrap:wrap}',
   '.crew .hd .crew-sum{display:flex;flex-wrap:wrap;margin-left:auto;gap:14px;padding:0;border:0;letter-spacing:0}',
   '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
-  '.crew svg{width:16px;height:16px}',
-  '.crew li.crew-line{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) minmax(46px,auto);gap:0 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}',
-  '.crew .ic,.crew .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}',
-  '.crew .tx{min-width:0;overflow-wrap:anywhere;color:var(--ink)}.crew .ct{color:var(--muted)}',
-  '.crew button.tx{display:block;width:100%;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer}',
-  '.crew a.tx{display:block;text-decoration:none}',
-  '.crew button.tx::before,.crew a.tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}',
-  '.crew button.tx[aria-expanded="true"]::before{content:"\\25BE"}.crew a.tx::before{content:"\\2197"}',
-  '.crew .tx::after{content:"";position:absolute;inset:0}',
-  '.crew li.crew-line:hover .tx,.crew button.tx[aria-expanded="true"]{color:var(--link)}',
-  '.crew .tx:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
-  '.crew li.crew-line>time{order:0;align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
-  '.crew-line .cm{display:inline;margin:0 0 0 8px;font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint);white-space:nowrap}.crew-line .cm i{font-style:normal}',
-  '.crew li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;border-left:1px solid var(--line)}.crew .cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
-  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.crew.js .cd:not(.bare)>b{display:none}',
-  '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}',
+  `.crew svg,${LN} svg{width:16px;height:16px}`,
+  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto minmax(46px,auto);grid-template-areas:"m x l t";gap:0 12px;align-items:center;margin:0;padding:8px 0;background:none;border:0;border-bottom:1px solid var(--line);font-size:13.5px}`,
+  `${LN}>.ic{grid-area:m}${LN}>.tx{grid-area:x}${LN}>.lk{grid-area:l}${LN}>time{grid-area:t}`,
+  `${LN} .ic,${LN} .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}`,
+  `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
+  `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
+  `${LN} .tx{display:block;width:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;color:var(--ink)}`,
+  `${LN} .ct{flex:none;color:var(--muted)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
+  `${LN} .tx em,li.cat .jh em,li.cat summary em{margin-left:8px;font:600 10.5px var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--run)}`,
+  `${LN} .tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}`,
+  `${LN} .tx[aria-expanded="true"]::before{content:"\\25BE"}`,
+  `${LN} .tx::after{content:"";position:absolute;inset:0}`,
+  `${LN}:hover .tx,${LN} .tx[aria-expanded="true"]{color:var(--link)}`,
+  `${LN} .tx:focus-visible,${LN} .lk:focus-visible{outline:1px solid var(--link);outline-offset:2px}`,
+  `${LN}>.lk{position:relative;z-index:1;font:500 11px var(--mono);color:var(--link);text-decoration:none;white-space:nowrap}`,
+  `${LN}>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}`,
+  ':is(.crew,main) li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;background:none;border:0;border-left:1px solid var(--line)}',
+  '.cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
+  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.js-cd .cd:not(.bare)>b{display:none}',
+  '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}.cd .dl em{font-style:normal;color:var(--you)}',
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
+  '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
   '.cd[hidden]{display:none}',
-  '.crew li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
-  // phone width: icons and elapsed time on the top line, the text under them (as the rows below)
-  '@media (max-width:560px){.crew li.crew-line{grid-template-columns:minmax(16px,auto) minmax(0,1fr);grid-template-areas:"i t" "x x";gap:4px 12px}.crew li.crew-line>.ic{grid-area:i}.crew li.crew-line>.tx{grid-area:x}.crew li.crew-line>time{grid-area:t}.crew li.crew-dl{padding-left:12px}.crew .cd{padding-left:0}}',
+  ':is(.crew,main) li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
+  // a category line: its title (and "running" when a member runs) and the member count; a done one folds
+  'li.cat{display:block}li.cat>ul.ch,li.cat>ol{list-style:none;margin:0;padding:0}',
+  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:10px 0 9px;border-bottom:1px solid var(--line);font:600 13.5px/1.4 var(--sans);color:var(--ink)}',
+  '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
+  'li.cat>details>summary{cursor:pointer;list-style:none}li.cat>details>summary::-webkit-details-marker{display:none}',
+  'li.cat>details>summary .jt::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}li.cat>details[open]>summary .jt::before{content:"\\25BE"}',
+  'li.cat>details>summary:hover .jt{color:var(--link)}li.cat>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
+  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{font-weight:600}`,
+  'li.cat>ol,li.cat>details>ol{margin:0 0 0 2px;padding-left:16px;border-left:1px solid var(--line)}',
+  // phone width: mark, text and time on the first row, the link label under the text
+  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto;grid-template-areas:"m x t" ". l .";gap:2px 12px}${LN}>.lk{justify-self:start}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:12px}}`,
 ];
-// The panel: with script, every detail starts closed; a line's button opens its own and closes the
-// others; a second click closes it. aria-expanded follows; no scrolling, focus stays on the button.
-const PANEL_JS = '(function(){var s=document.querySelector("section.crew");if(!s)return;var bs=s.querySelectorAll("button.tx");if(!bs.length)return;s.classList.add("js");'
+// The panel: with script, every detail starts closed; a line's button opens its own and closes every
+// other on the page; a second click closes it. aria-expanded follows; no scrolling, focus stays on the
+// button. It waits for the whole document, so it serves lines below the script too.
+const PANEL_JS = '(function(){function all(){return document.querySelectorAll("button.tx[aria-controls]")}'
   + 'function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o}'
-  + 'Array.prototype.forEach.call(bs,function(b){set(b,false)});'
-  + 's.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";'
-  + 'Array.prototype.forEach.call(bs,function(x){if(x!==b)set(x,false)});set(b,o)})})();';
+  + 'function init(){var bs=all();if(!bs.length)return;document.documentElement.classList.add("js-cd");Array.prototype.forEach.call(bs,function(b){set(b,false)})}'
+  + 'document.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx[aria-controls]");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";'
+  + 'Array.prototype.forEach.call(all(),function(x){if(x!==b)set(x,false)});set(b,o)});'
+  + 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init()})();';
+// What is open survives a reload (owner, 2026-10-05: "sayfa güncellenince otomatik yenileniyor expandların
+// durumu da değişmesin"; a republish reloads the page). The open detail, the open folds (by id, a fold
+// without one by its summary text), the opened long lists and the scroll position are kept per viewer in
+// the browser's storage, under the page's path; every read and write is guarded, and with no storage the
+// page simply starts closed. Nothing is saved before the viewer acts. (The artifact runtime 0.2.67
+// promises only claude.use(); it has no hot-reload snapshot to use instead.)
+const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0;'
+  + 'function each(s,f){Array.prototype.forEach.call(document.querySelectorAll(s),f)}'
+  + 'function dk(d){if(d.id)return d.id;var s=d.querySelector("summary");return"S:"+(s?s.textContent:"").trim().slice(0,80)}'
+  + 'function get(){try{return JSON.parse(localStorage.getItem(K)||"null")}catch(e){return null}}'
+  + 'function snap(){var p=null,d=[],c=[];each("button.tx[aria-controls]",function(b){if(b.getAttribute("aria-expanded")==="true")p=b.getAttribute("aria-controls")});'
+  + 'each("details",function(x){if(x.open)d.push(dk(x))});each("button.more[aria-controls]",function(b){if(b.getAttribute("aria-expanded")==="true")c.push(b.getAttribute("aria-controls"))});'
+  + 'return{p:p,d:d,c:c,y:Math.round(window.scrollY||0)}}'
+  + 'function put(){if(!ready)return;try{localStorage.setItem(K,JSON.stringify(snap()))}catch(e){}}'
+  + 'function later(){clearTimeout(t);t=setTimeout(put,150)}'
+  + 'function restore(){var s=get();if(!s||typeof s!=="object")return;var d=s.d||[],c=s.c||[],y=+s.y||0;'
+  + 'each("details",function(x){x.open=d.indexOf(dk(x))>=0});'
+  + 'each("button.tx[aria-controls]",function(b){if(s.p&&b.getAttribute("aria-controls")===s.p){b.setAttribute("aria-expanded","true");var e=document.getElementById(s.p);if(e)e.hidden=false}});'
+  + 'each("button.more[aria-controls]",function(b){if(c.indexOf(b.getAttribute("aria-controls"))>=0&&b.getAttribute("aria-expanded")!=="true")b.click()});'
+  + 'if(y>0){window.scrollTo(0,y);window.addEventListener("load",function(){window.scrollTo(0,y)})}}'
+  + 'function go(){restore();ready=true;document.addEventListener("click",later);document.addEventListener("toggle",later,true);window.addEventListener("scroll",later);window.addEventListener("pagehide",put)}'
+  + 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()})();';
 
 // Console look (owner, 2026-10-05: "kartlar olmasın yuvarlak köşeli … elit admin gibi"): no cards, no
-// rounded corners, no shadows; hairline rows, a mono state tag with a thin left mark, a tabular
-// right-aligned time column; a main job is a container (header line over indented children); a long
-// list shows its first rows, fades, and opens in place as a bounded scroll area. Theme tokens only.
+// rounded corners, no shadows; hairline lines, mono group heads with their counts, a tabular
+// right-aligned time column; a long list shows its first lines, fades, and opens in place as a bounded
+// scroll area; Done today is one fold; Plans stand alone below a faint rule. Theme tokens only.
 // The template carries it as <style id="console"> and every render puts it back last, so it wins over
-// a page's older styles and a re-render reproduces it exactly. The strip's console layout is here too.
+// a page's older styles and a re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
 const CONSOLE_CSS = [
   ':root{--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}',
   '*,*::before,*::after{border-radius:0;box-shadow:none}',
   'main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}',
-  'main ol{list-style:none;margin:0;padding:0}',
+  'main ol,main ul{list-style:none;margin:0;padding:0}',
   'main li{margin:0;padding:0;background:none;border:0}',
   'main>ol{display:grid;gap:28px}',
-  'li.sec,li.job,li.grp{display:block}',
+  'li.sec{display:block}li.sec.pl{padding-top:20px;border-top:1px solid var(--faint)}',
   '.hd{display:flex;align-items:baseline;gap:8px;padding:0 0 8px;font:600 10.5px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--faint)}',
   '.hd span{font-weight:500;letter-spacing:.04em;color:var(--faint);font-variant-numeric:tabular-nums}',
-  'li[data-st]{display:grid;grid-template-columns:120px minmax(0,1fr) 46px;gap:0 16px;align-items:baseline;padding:9px 0 10px;border-bottom:1px solid var(--line)}',
-  'li[data-st]>div{min-width:0;overflow-wrap:anywhere}',
-  'li[data-st] b{display:block;font:500 14px/1.45 var(--sans);color:var(--ink)}',
-  'li[data-st] small,.jt small{display:block;margin-top:2px;font:400 12.5px/1.5 var(--sans);color:var(--muted);overflow-wrap:anywhere}',
-  'li[data-st] small a,.jt small a{color:var(--link)}',
-  'li[data-st] time{align-self:baseline;text-align:right;font:500 11px/1.4 var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
-  '.s{justify-self:start;min-width:0;padding-left:7px;border-left:2px solid currentColor;font:600 10.5px/1.25 var(--mono);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}',
-  '.s.run{color:var(--run)}.s.you{color:var(--you)}.s.ok{color:var(--ok)}.s.wait,.s.plan{color:var(--wait)}',
-  '.jh,li.grp>details>summary{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:baseline;padding:10px 0 9px;border-bottom:1px solid var(--line);font:600 13.5px/1.4 var(--sans);color:var(--ink)}',
-  '.jh::before{content:"";width:5px;height:5px;align-self:center;background:var(--faint)}',
-  '.jt{min-width:0;overflow-wrap:anywhere}.jt em{font-style:normal;font-weight:400;color:var(--faint)}',
-  'li.grp>details>summary{cursor:pointer;list-style:none}',
-  'li.grp>details>summary::-webkit-details-marker{display:none}',
-  'li.grp>details>summary::before{content:"\\25B8";font:500 11px var(--mono);color:var(--faint)}',
-  'li.grp>details[open]>summary::before{content:"\\25BE"}',
-  'li.grp>details>summary:hover .jt{color:var(--link)}',
-  '.jh>span:last-child,li.grp>details>summary>span:last-child{padding-left:12px;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}',
-  'li.job>ol,li.grp>details>ol{margin:0 0 0 2px;padding-left:16px;border-left:1px solid var(--line)}',
-  'li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:102px minmax(0,1fr) 46px;padding:7px 0 8px}',
-  'li.job>ol>li[data-st] b,li.grp>details>ol>li[data-st] b{font-weight:400;font-size:13.5px}',
-  'li.job>ol>li[data-st] small,li.grp>details>ol>li[data-st] small{font-size:12px}',
-  'li.job>ol>li[data-st] .s,li.grp>details>ol>li[data-st] .s{font-size:10px;opacity:.85}',
+  'summary.hd{cursor:pointer;list-style:none}summary.hd::-webkit-details-marker{display:none}',
+  'summary.hd::before{content:"\\25B8";width:14px;letter-spacing:0;color:var(--faint)}details[open]>summary.hd::before{content:"\\25BE"}',
+  'summary.hd .lt{margin-left:auto}summary.hd:hover{color:var(--ink)}summary.hd:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
   '.clip{position:relative}',
   '.clip.clamp{max-height:20rem;overflow:hidden}',
   '.clip.clamp.open{max-height:min(64vh,560px);overflow-y:auto;overscroll-behavior:contain;border-bottom:1px solid var(--faint)}',
@@ -233,21 +256,19 @@ const CONSOLE_CSS = [
   '.more::before{content:"\\25BE";display:inline-block;width:14px;color:var(--faint)}',
   '.more[aria-expanded="true"]::before{content:"\\25B4"}',
   '.more:hover{color:var(--ink)}',
-  '.more:focus-visible,li.grp>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
+  '.more:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
   ...STRIP_CSS,
-  '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}.crew-line .cm i{display:none}'
-    + 'li[data-st],li.job>ol>li[data-st],li.grp>details>ol>li[data-st]{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"s t" "b b";gap:3px 12px}'
-    + 'li[data-st]>.s{grid-area:s}li[data-st]>div{grid-area:b}li[data-st]>time{grid-area:t}li.job>ol,li.grp>details>ol{padding-left:12px}}',
+  '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}}',
 ].join('\n');
 // The clamp: a long list shows its first rows plus a slice of the next (measured; a CSS max-height
 // stands in without script); the button, or a click on the fade, opens it in place as a bounded scroll
 // area and closes it again without moving the page; focus stays on the button.
 const CLIP_JS = [
-  '(function(){var N=5;function fit(c){if(c.classList.contains("open"))return;var l=c.querySelectorAll(":scope>ol>li");if(l.length<=N)return;var t=c.getBoundingClientRect().top,b=l[N-1].getBoundingClientRect().bottom,n=l[N].getBoundingClientRect().height;c.style.maxHeight=Math.round(b-t+Math.min(30,n/2))+"px"}',
+  '(function(){var N=5;function fit(c){if(c.classList.contains("open"))return;var l=c.querySelectorAll(":scope>ol>li:not(.crew-dl)");if(l.length<=N)return;var t=c.getBoundingClientRect().top,b=l[N-1].getBoundingClientRect().bottom,n=l[N].getBoundingClientRect().height;c.style.maxHeight=Math.round(b-t+Math.min(30,n/2))+"px"}',
   'function all(){document.querySelectorAll(".clip.clamp").forEach(fit)}',
   'function toggle(b){var c=document.getElementById(b.getAttribute("aria-controls")),o=b.getAttribute("aria-expanded")!=="true",r=c.getBoundingClientRect(),h0=r.height;b.setAttribute("aria-expanded",String(o));c.classList.toggle("open",o);if(o){c.style.maxHeight=""}else{c.scrollTop=0;fit(c);if(r.top<0){var h1=parseFloat(c.style.maxHeight)||h0;window.scrollBy(0,h1-h0)}}b.textContent=o?b.dataset.less:b.dataset.label}',
   'document.addEventListener("click",function(e){var b=e.target.closest(".more");if(b){toggle(b);return}var f=e.target.closest(".fade");if(f){var m=f.parentNode.querySelector(".more");if(m)toggle(m)}});',
-  'document.addEventListener("toggle",function(e){var c=e.target.closest&&e.target.closest(".clip.clamp");if(c)fit(c)},true);',
+  'document.addEventListener("toggle",function(e){var t=e.target;if(t.querySelectorAll)t.querySelectorAll(".clip.clamp").forEach(fit);var c=t.closest&&t.closest(".clip.clamp");if(c)fit(c)},true);',
   'var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(all,120)});all();window.addEventListener("load",all)})();',
 ].join('\n');
 const CLAMP = 5;
@@ -369,21 +390,15 @@ function checkParents(rows) {
   });
 }
 
-// summary: Voice first, then one icon per role with an entry, a count when 2+ of it are working or
-// waiting on the owner; then one line per entry: icon, "<Role> · <job>", the reason when owner.
-// Developer mode off (owner, 2026-10-05: "ajan dememeli ve ajan isimleri olmamalı. ikonları
-// kalabilir."): the same icons, states and counts, but no role name anywhere — no "<Role> ·",
-// no title, no data-role — so a line is the work only.
-// Developer mode only: a faint `model · effort · ctx @time` after the line, as reported; the context
-// figure only with the time it was reported (never estimated), and at phone width it moves to the title.
-// Several entries on one line (one row): their tails one after another, " / " between them.
+// Developer mode only: `model · effort · ctx @time` as reported, in the line's detail (the build note,
+// 2026-10-05: no longer on the line); the context figure only with the time it was reported (never
+// estimated). Several entries on one line: their tails one after another, " / " between them.
 function crewTail(es) {
-  const parts = es.map((e) => {
-    const me = [e.model, e.effort].filter(Boolean).map(esc).join(' · ');
-    const cx = e.ctx && e.ctxTime ? `${e.ctx >= 1000 ? Math.round(e.ctx / 1000) + 'k' : e.ctx} @${esc(e.ctxTime)}` : '';
-    return { full: [me, cx].filter(Boolean).join(' · '), inline: `${me}${cx ? `<i>${me ? ' · ' : ''}${cx}</i>` : ''}` };
-  }).filter((x) => x.full);
-  return parts.length ? ` <small class="cm" title="${parts.map((x) => x.full).join(' / ')}">${parts.map((x) => x.inline).join(' / ')}</small>` : '';
+  return es.map((e) => {
+    const me = [e.model, e.effort].filter(Boolean).join(' · ');
+    const cx = e.ctx && e.ctxTime ? `${e.ctx >= 1000 ? Math.round(e.ctx / 1000) + 'k' : e.ctx} @${e.ctxTime}` : '';
+    return [me, cx].filter(Boolean).join(' · ');
+  }).filter(Boolean).map(esc).join(' / ');
 }
 
 // a working or waiting line's time carries when that state began; the script reads it as elapsed time
@@ -402,36 +417,65 @@ function stampSince(e, clock) {
 }
 
 const isUrl = (u) => /^https?:\/\//i.test(String(u || ''));
-// A row's detail: its small text, the next step ("sonraki: …" / "next: …" parts of the small line) on
-// its own line, and its links (the row's, then each entry's). Empty when there is nothing to show.
-// (Lines waiting on the owner are no longer strip lines, owner 2026-10-05, so no detail leads with a
-// decision link any more.)
-function detailOf(r, es, L) {
+
+// A stable id from a title (owner, 2026-10-05: what is open survives a reload; an id from a position
+// would point at another line once a row is added above it): a readable slug and a short hash of the
+// whole title, so two titles that slug alike still differ. `hashOf` (default the text) adds to the hash only,
+// never to what is readable: a crew line hashes its role but never shows it.
+function slugId(prefix, text, hashOf = text) {
+  const k = key(text);
+  let h = 5381;
+  for (const ch of key(hashOf)) h = (Math.imul(h, 33) ^ ch.codePointAt(0)) >>> 0;
+  const slug = k.replace(/ı/g, 'i').normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 32).replace(/-+$/, '');
+  return `${prefix}-${slug ? `${slug}-` : ''}${h.toString(36)}`;
+}
+
+// A line's detail: the small text, the next step ("sonraki: …" / "next: …" parts of the small line) on
+// its own line, the crew entries' links, and in developer mode their model tail. A line waiting on the
+// owner leads with the link to where it is decided (an owner entry's url, else the row's, with its
+// label) and the entries' reason words. Empty when there is nothing to show (the panel shows the title).
+function detailOf(r, es, L, { dev = false, decide = false } = {}) {
   const parts = String((r && r.small) || '').split(' · ').map((x) => x.trim()).filter(Boolean);
   const nextRe = /^(sonraki|next)\s*:\s*/i;
   const rest = parts.filter((x) => !nextRe.test(x)).join(' · ');
   const next = parts.filter((x) => nextRe.test(x)).map((x) => x.replace(nextRe, '')).filter(Boolean);
+  const a = (u, l) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`;
+  let dl = ''; let lead = '';
+  if (decide) {
+    const own = es.filter((e) => e.state === 'owner');
+    const eu = (own.find((e) => isUrl(e.url)) || {}).url;
+    lead = eu || (r && isUrl(r.url) ? r.url : '');
+    const label = eu ? L.decide : (r && r.label) || L.decide;
+    const why = [...new Set(own.filter((e) => e.reason).map((e) => (L.reasons || {})[e.reason] || e.reason))].join(', ');
+    if (lead || why) dl = `<p class="dl">${lead ? a(lead, label) : ''}${lead && why ? ' ' : ''}${why ? `<em>${esc(why)}</em>` : ''}</p>`;
+  }
   const urls = [];
-  if (r && isUrl(r.url)) urls.push([r.url, r.label || L.link]);
-  for (const e of es) if (isUrl(e.url) && !urls.some(([u]) => u === e.url)) urls.push([e.url, L.link]);
-  if (!rest && !next.length && !urls.length) return '';
-  return (rest ? `<p>${esc(rest)}</p>` : '')
+  for (const e of es) if (isUrl(e.url) && e.url !== lead && !urls.includes(e.url)) urls.push(e.url);
+  const tail = dev ? crewTail(es) : '';
+  return dl
+    + (rest ? `<p>${esc(rest)}</p>` : '')
     + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
-    + (urls.length ? `<p class="ln">${urls.map(([u, l]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>`).join(' · ')}</p>` : '');
+    + (urls.length ? `<p class="ln">${urls.map((u) => a(u, L.link)).join(' · ')}</p>` : '')
+    + (tail ? `<p class="cm">${tail}</p>` : '');
 }
 
-// The Active work strip, the one list of running work (owner, 2026-10-05): one line per row being
-// worked on — the crew entries that name that row (`row`) share its line, their icons side by side —
-// then one line per entry that names no row (its own job, no detail), then every running row no entry
-// names (no icon, oldest first), so nothing running is hidden. Developer mode on: the role is only the
-// icon's title, and a faint model · effort tail follows; off: icons and elapsed time only, no role name
-// anywhere (owner, 2026-10-05: "ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir.").
-// Only what is running (owner, 2026-10-05: "şu an çalışan bir şey var mı anlamıyorum hepsi beni bekliyor
-// galiba"): entries waiting on the owner or idle are left out, so every line reads as running; with
-// nothing running the strip says so in one line. Each role icon says what the role is doing ("ikonların
-// üstüne gelince planning gibi anlaşılır şeyler yazsın"), as title and aria-label.
-function activeStrip(crew, rows, L, dev = true) {
+// The board (owner, 2026-10-05, "Tracker yeni düzen", Architect's build note; and "şu an çalışan bir
+// şey var mı anlamıyorum hepsi beni bekliyor galiba"): every row of the day in one line shape, in state
+// groups — Active work (run rows and the rows crew entries are working on, plus working entries with no
+// row; never what waits on the owner), Owner (you rows and the entries waiting on the owner), Waiting,
+// Done today (one closed fold) — and Plans below, one closed fold per group. In a group, two or more
+// lines of one category (a row's parent) sit under one category line; one is prefixed "<category> ·";
+// a parent in the same group is the category line itself; a category with a running member says so.
+// Active work and Owner oldest first, the rest newest first. Developer mode on: an icon's title names the
+// role and what it is doing; off: only what it is doing, no role name anywhere (owner, 2026-10-05:
+// "ajan dememeli ve ajan isimleri olmamalı. ikonları kalabilir."; "ikonların üstüne gelince planning
+// gibi anlaşılır şeyler yazsın").
+function board(rows, crew, L, dev) {
   const byTitle = new Map(rows.map((r) => [key(r.title), r]));
+  const mainOf = (r) => (r && hasParent(r) ? byTitle.get(key(r.parent)) || null : null);
+  const catText = (r) => { const m = mainOf(r); return m ? m.title : String(r.parent || r.group || '').trim(); };
+  const idx = new Map(rows.map((r, i) => [r, i]));
   const working = crew.filter((e) => e.state === 'work');
   const act = (role) => (L.doing || LABELS.en.doing)[role];
   const cap = (s) => s.charAt(0).toLocaleUpperCase(L.locale || 'en') + s.slice(1);
@@ -440,58 +484,132 @@ function activeStrip(crew, rows, L, dev = true) {
     const s = esc(n ? `${n} · ${t}` : t);
     return ` role="img" title="${s}" aria-label="${s}"`;
   };
-  const items = []; const byRow = new Map();
-  for (const e of working) {
+  // the categories with a running member: run rows and the rows a working entry names
+  const named = new Set(working.map((e) => key(e.row)).filter(Boolean));
+  const running = new Set();
+  for (const r of rows) if (r.state === 'run' || named.has(key(r.title))) { running.add(key(r.title)); if (hasParent(r)) running.add(key(r.parent)); }
+
+  const G = { run: [], you: [], wait: [], ok: [], plan: [] };
+  const item = (r, es, t, i) => ({ r, es, t: String(t ?? ''), i });
+  const onRow = new Map();
+  working.forEach((e, ci) => {
     const r = key(e.row) ? byTitle.get(key(e.row)) : null;
-    if (!r) { items.push({ r: null, es: [e] }); continue; }
-    if (!byRow.has(r)) { const it = { r, es: [] }; byRow.set(r, it); items.push(it); }
-    byRow.get(r).es.push(e);
-  }
-  rows.map((r, i) => ({ r, i })).filter(({ r }) => r.state === 'run' && !byRow.has(r))
-    .sort((a, b) => String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i)
-    .forEach(({ r }) => items.push({ r, es: [] }));
-  // the summary: Voice, then each role with working entries, its count in the icon's text
+    if (!r) { G.run.push(item(null, [e], e.time, rows.length + ci)); return; }
+    if (!onRow.has(r)) { const it = item(r, [], r.time, idx.get(r)); onRow.set(r, it); G.run.push(it); }
+    onRow.get(r).es.push(e);
+  });
+  rows.forEach((r) => { if (r.state === 'run' && !onRow.has(r)) G.run.push(item(r, [], r.time, idx.get(r))); });
+  const youRow = new Map();
+  rows.forEach((r) => { if (r.state === 'you') { const it = item(r, [], r.time, idx.get(r)); youRow.set(r, it); G.you.push(it); } });
+  crew.forEach((e, ci) => {
+    if (e.state !== 'owner') return;
+    const r = key(e.row) ? byTitle.get(key(e.row)) : null;
+    if (r && youRow.has(r)) youRow.get(r).es.push(e); else G.you.push(item(null, [e], e.time, rows.length + ci));
+  });
+  for (const g of ['wait', 'ok', 'plan']) rows.forEach((r) => { if (r.state === g) G[g].push(item(r, [], r.time, idx.get(r))); });
+
+  // one line and its detail, the next item of the list
+  const lineFor = (g, it, { prefix = true, extra = '' } = {}) => {
+    const { r, es } = it;
+    const cat = r ? catText(r) : '';
+    const title = r ? r.title : es[0].job;
+    const id = r ? slugId(`d-${g}`, title) : slugId(`d-${g}`, es[0].job, `crew ${es[0].role} ${es[0].job}`);
+    const strip = g === 'run';
+    const mark = strip && es.length ? es.map((e) => `<span${tip(e.role, 0)}>${ICONS[e.role]}</span>`).join('') : '<span class="sq"></span>';
+    let time = `<time>${esc(it.t)}</time>`;
+    if (strip && es.length) {
+      const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
+      time = elapsedTime({ state: 'work', since, time: es.map((e) => String(e.time)).sort().pop() });
+    }
+    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${extra}`;
+    const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
+    const d = detailOf(r, es, L, { dev, decide: g === 'you' });
+    const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}`
+      : `data-st="${g}" class="crew-line ${g}"`;
+    return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${time}</li>\n`
+      + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}</div></li>\n`;
+  };
+  const NEWEST = new Set(['wait', 'ok', 'plan']);
+  const order = (g) => (a, b) => (NEWEST.has(g) ? -1 : 1) * a.t.localeCompare(b.t) || a.i - b.i;
+  // a group's units: lines, or a category line over its members, standing where its first member stands
+  // A category is keyed by the parent's name: the row of that title when there is one (always, on the
+  // plugin's own page), else the name alone (an outside updater's rows may name a category no row has).
+  const units = (g, list) => {
+    const its = [...list].sort(order(g));
+    const catOf = (it) => (it.r && hasParent(it.r) ? key(it.r.parent) : '');
+    const subs = new Map();
+    for (const it of its) { const c = catOf(it); if (c) { if (!subs.has(c)) subs.set(c, []); subs.get(c).push(it); } }
+    const heads = new Map(its.filter((it) => it.r && subs.has(key(it.r.title))).map((it) => [key(it.r.title), it]));
+    // one level, as the plugin's own rows are: a line that heads a category is never also a member of
+    // its parent's (an outside updater's rows can nest two levels), so every line shows once
+    const isHead = (it) => !!(it.r && heads.has(key(it.r.title)));
+    for (const [c, ms] of subs) subs.set(c, ms.filter((x) => !isHead(x)));
+    const out = []; const seen = new Set();
+    for (const it of its) {
+      const c = isHead(it) ? key(it.r.title) : catOf(it);
+      if (!c) { out.push(lineFor(g, it)); continue; }
+      if (seen.has(c)) continue;
+      seen.add(c);
+      const ms = subs.get(c); const head = heads.get(c);
+      if (!head && ms.length < 2) { out.push(lineFor(g, ms[0])); continue; }
+      const m = { title: byTitle.has(c) ? byTitle.get(c).title : String(ms[0].r.parent).trim() };
+      const run = running.has(c) ? ` <em>${esc(L.running)}</em>` : '';
+      const kids = ms.map((x) => lineFor(g, x, { prefix: false })).join('');
+      if (g === 'ok') {
+        // a finished category folds, closed; one open at a time inside Done today
+        const all = head ? [head, ...ms] : ms;
+        const last = all.map((x) => x.t).sort().pop();
+        out.push(`  <li class="cat"><details name="trk-ok" id="${slugId('f-ok', m.title)}"><summary class="jh"><span class="jt">${esc(m.title)}${run}</span><span>${all.length} · ${esc(last)}</span></summary><ol>\n${head ? lineFor(g, head, { prefix: false }) : ''}${kids}</ol></details></li>\n`);
+      } else if (head) {
+        out.push(`  <li class="cat"><ul class="ch">\n${lineFor(g, head, { prefix: false, extra: ` <span class="n">${ms.length}</span>${run}` })}</ul><ol>\n${kids}</ol></li>\n`);
+      } else {
+        out.push(`  <li class="cat"><div class="jh"><span class="jt">${esc(m.title)}${run}</span><span>${ms.length}</span></div><ol>\n${kids}</ol></li>\n`);
+      }
+    }
+    return out;
+  };
+
+  // Active work: its head (and on the right Voice's icon and each working role's, with its count), its
+  // lines; nothing running says so
   const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || working.some((e) => e.role === r)).map((r) => {
     const n = working.filter((e) => e.role === r).length;
     return `<span${n ? ' class="work"' : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${tip(r, n)}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
   }).join('')}</div>` : '';
-  const head = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${items.length}</span>${sum}</div>`;
-  if (!items.length) return `${head}<ul>\n  <li class="crew-none">${esc(L.none || LABELS.en.none)}</li>\n</ul>`;
-  const details = [];
-  const lines = items.map(({ r, es }) => {
-    const st = es.length ? 'work' : 'run';
-    // category: the row's main job (its parent row's title) or its group; summary: the row's title
-    const main = r && hasParent(r) ? byTitle.get(key(r.parent)) : null;
-    const cat = r ? (main ? main.title : String(r.parent || r.group || '').trim()) : '';
-    const sumText = r ? r.title : es[0].job;
-    const text = `${cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(sumText)}`;
-    const tail = dev ? crewTail(es) : '';
-    const icons = es.map((e) => `<span${tip(e.role, 0)}>${ICONS[e.role]}</span>`).join('');
-    // the line's time: its latest change; a working or waiting line counts from the earliest start in that state
-    let time = `<time>${esc(r ? r.time : '')}</time>`;
-    if (es.length) {
-      const inSt = es.filter((e) => e.state === st && e.since).map((e) => e.since).sort();
-      time = elapsedTime({ state: st, since: inSt[0], time: es.map((e) => String(e.time)).sort().pop() });
+  const stripLines = units('run', G.run).join('') || `  <li class="crew-none">${esc(L.none || LABELS.en.none)}</li>\n`;
+  const strip = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${G.run.length}</span>${sum}</div><ul>\n${stripLines}</ul>`;
+
+  // the groups below: Owner and Waiting open (Waiting clamps after five), Done today one closed fold,
+  // Plans one closed fold per group; an empty group is left out
+  const sec = (g) => {
+    const its = G[g];
+    if (!its.length) return '';
+    const head = esc(L.groups[GROUP[g]]);
+    if (g === 'plan') {
+      const byG = new Map();
+      for (const it of [...its].sort(order('plan'))) { const k = String(it.r.group || '').trim() || L.other; if (!byG.has(k)) byG.set(k, []); byG.get(k).push(it); }
+      const folds = [...byG].map(([k, xs]) => `  <li class="cat"><details name="trk" id="${slugId('f-plan', k)}"><summary class="jh"><span class="jt">${esc(k)}</span><span>${xs.length}</span></summary><ol>\n${xs.map((x) => lineFor('plan', x, { prefix: false })).join('')}</ol></details></li>\n`).join('');
+      return `<li class="sec pl"><div class="blk" data-k="plan"><div class="hd">${head} <span>${its.length}</span></div><ol>\n${folds}</ol></div></li>`;
     }
-    // every line is a control (Lead, 2026-10-05): a row's line opens its panel; an entry with no row
-    // but a url is the link itself; anything else opens a panel that shows at least its title
-    let body; let panel = '';
-    if (!r && isUrl(es[0].url)) {
-      body = `<a class="tx" href="${esc(es[0].url)}" target="_blank" rel="noopener">${text}${tail}</a>`;
-    } else {
-      const d = r ? detailOf(r, es, L) : '';
-      const id = `cd-${details.length + 1}`;
-      details.push(id);
-      panel = `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}" id="${id}"><b>${cat ? `${esc(cat)} · ` : ''}${esc(sumText)}</b>${d}</div></li>\n`;
-      body = `<button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}${tail}</button>`;
+    const us = units(g, its);
+    const long = (g === 'wait' || g === 'ok') && us.length > CLAMP;
+    const more = `${L.more} (${its.length})`;
+    const list = `<div class="clip${long ? ' clamp' : ''}" id="clip-${g}"><ol>\n${us.join('')}</ol></div>`
+      + (long ? `<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${g}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '');
+    if (g === 'ok') {
+      const last = its.map((x) => x.t).sort().pop();
+      return `<li class="sec"><div class="blk" data-k="ok"><details name="trk" id="f-ok"><summary class="hd">${head} <span>${its.length}</span><span class="lt">${esc(last)}</span></summary>${list}</details></div></li>`;
     }
-    // the detail is the list's next item after its own line, so it opens right under the line clicked
-    // (owner, 2026-10-05: one shared panel after the list opened every detail under the last line)
-    return `  <li class="crew-line ${st}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}><span class="ic">${icons}</span>${body}${time}</li>\n${panel}`;
-  }).join('');
-  return `<div class="hd">${esc(L.groups[GROUP.run])} <span>${items.length}</span>${sum}</div><ul>\n${lines}</ul>`
-    // the panel script sits in the strip, after the list, so the strip is self-contained inside <main>
-    + (details.length ? `<script id="panel">${PANEL_JS}</script>` : '');
+    return `<li class="sec"><div class="blk" data-k="${g}"><div class="hd">${head} <span>${its.length}</span></div>${list}</div></li>`;
+  };
+  return { strip, list: ['you', 'wait', 'ok', 'plan'].map(sec).filter(Boolean) };
+}
+
+// The Active work strip alone, for a page an outside updater keeps (it takes the strip, its styles and
+// scripts from here): with `script` the panel and state scripts come with it; the plugin's own page
+// carries them once at its end instead.
+function activeStrip(crew, rows, L, dev = true, { script = true } = {}) {
+  return board(rows, crew, L, dev).strip
+    + (script ? `<script id="panel">${PANEL_JS}</script><script id="state">${STATE_JS}</script>` : '');
 }
 
 function render(dir, { quiet = false } = {}) {
@@ -524,85 +642,25 @@ function render(dir, { quiet = false } = {}) {
     seen.add(k);
   });
   checkParents(rows);
-  // active sections (in progress, owner) oldest first; the long lists (waiting, done, plans) newest first
-  const NEWEST = [GROUP.wait, GROUP.ok, GROUP.plan];
-  const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
-    .sort((a, b) => a.g - b.g || (NEWEST.includes(a.g) ? -1 : 1) * String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
-  // a row's main job (its `parent`, resolved to that row)
-  const byTitle = new Map(rows.map((r) => [key(r.title), r]));
-  const mainOf = (r) => (hasParent(r) ? byTitle.get(key(r.parent)) : null);
-  const smallOf = (r) => {
-    const link = /^https?:\/\//i.test(String(r.url || ''))
-      ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
-    // a plan's group (its heading in the plans list) leads the small line
-    return [r.state === 'plan' && r.group ? esc(r.group) : '', r.small ? esc(r.small) : '', link].filter(Boolean).join(' · ');
-  };
-  const li = (r) => {
-    const small = smallOf(r);
-    return `<li data-st="${r.state}"><span class="s ${r.state}">${L[r.state]}</span><div><b>${esc(r.title)}</b>${small ? `<small>${small}</small>` : ''}</div><time>${esc(r.time)}</time></li>`;
-  };
-  // One section's top-level items: a row, or a container — a main job's header line over its sub-jobs,
-  // indented. The main row heads its container when it is in the same section; otherwise the header
-  // carries its state. A container sorts by its newest row. Only a finished (done) container is a
-  // <details>, closed, one open at a time; active and waiting ones never fold.
-  const units = (it, g) => {
-    const subsOf = new Map();
-    for (const x of it) { const m = mainOf(x.r); if (m) { if (!subsOf.has(m)) subsOf.set(m, []); subsOf.get(m).push(x); } }
-    const headOf = new Map(it.filter((x) => subsOf.has(x.r)).map((x) => [x.r, x]));
-    const out = []; const done = new Set();
-    for (const x of it) {
-      const m = mainOf(x.r) || (subsOf.has(x.r) ? x.r : null);
-      if (!m) { out.push({ t: String(x.r.time), i: x.i, html: li(x.r) }); continue; }
-      if (done.has(m)) continue;
-      done.add(m);
-      const subs = subsOf.get(m); const head = headOf.get(m);
-      const all = head ? [head, ...subs] : subs;
-      const t = all.map((y) => String(y.r.time)).sort().pop();
-      const note = head ? smallOf(m) : '';
-      const jt = `<span class="jt">${esc(m.title)}${head ? '' : ` <em>· ${L[m.state]}</em>`}${note ? `<small>${note}</small>` : ''}</span>`;
-      const meta = `<span>${subs.length} · ${esc(t)}</span>`;
-      const kids = `<ol>${subs.map((y) => li(y.r)).join('')}</ol>`;
-      out.push({ t, i: Math.min(...all.map((y) => y.i)), html: g === GROUP.ok
-        ? `<li class="grp"><details name="trk"><summary>${jt}${meta}</summary>${kids}</details></li>`
-        : `<li class="job"><div class="jh">${jt}${meta}</div>${kids}</li>` });
-    }
-    return out.sort((a, b) => (NEWEST.includes(g) ? -1 : 1) * a.t.localeCompare(b.t) || a.i - b.i);
-  };
-  // A section block: a head with its row count, then the list. A long finished list (more than five
-  // items) is clamped: its first rows show, the rest fades, and a button opens it in place. Active
-  // sections are never clamped. Lists are never fully closed.
-  const KEY = ['run', 'you', 'wait', 'ok', 'plan'];
-  const block = (g) => {
-    const it = sorted.filter((x) => x.g === g);
-    if (!it.length) return '';
-    const us = units(it, g); const k = KEY[g];
-    const long = NEWEST.includes(g) && us.length > CLAMP;
-    const more = `${L.more} (${it.length})`;
-    return `<div class="blk" data-k="${k}"><div class="hd">${L.groups[g]} <span>${it.length}</span></div>`
-      + `<div class="clip${long ? ' clamp' : ''}" id="clip-${k}"><ol>\n${us.map((u) => '  ' + u.html + '\n').join('')}</ol></div>`
-      + (long ? `<div class="fade" aria-hidden="true"></div><button type="button" class="more" aria-expanded="false" aria-controls="clip-${k}" data-label="${esc(more)}" data-less="${esc(L.less)}">${esc(more)}</button>` : '')
-      + '</div>';
-  };
-  // one list, active work first (owner, 2026-10-05, replacing the 2026-10-03 placement of waiting and
-  // plans at the top): in progress, owner, waiting, plans, done
-  const secs = [GROUP.you, GROUP.wait, GROUP.plan, GROUP.ok].map(block).filter(Boolean).map((b) => `<li class="sec">${b}</li>`);
-  const ol = `<ol>\n${secs.map((x) => '  ' + x + '\n').join('')}</ol>`;
-  // the Crew strip: shown whenever it has entries; developer mode decides only whether roles are named
-  const stripHtml = activeStrip(crew, rows, L, dev);
-  const strip = stripHtml ? `<section class="crew">${stripHtml}</section>\n` : '';
+  const { strip: stripHtml, list } = board(rows, crew, L, dev);
+  const ol = `<ol>\n${list.map((x) => '  ' + x + '\n').join('')}</ol>`;
+  // the Active work strip is always there: what runs, or that nothing does
+  const strip = `<section class="crew">${stripHtml}</section>\n`;
   if (!/<main>[\s\S]*<\/main>/.test(html) || !/data-t="[^"]*"/.test(html)) die('index.html is not a tracker page');
   html = html.replace(/<main>[\s\S]*<\/main>/, () => `<main>\n<!-- crew -->\n${strip}${ol}\n</main>`)
     .replace(/data-t="[^"]*"/, () => `data-t="${clock.toISOString()}"`);
   // the console style and the clamp script are rebuilt last; no rounded corner or shadow survives in any style
   html = html.replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
-    .replace(/<script id="since">[\s\S]*?<\/script>\n/, '');
+    .replace(/<script id="since">[\s\S]*?<\/script>\n/, '')
+    .replace(/<script id="panel">[\s\S]*?<\/script>\n/, '').replace(/<script id="state">[\s\S]*?<\/script>\n/, '');
   html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) => a
     + css.replace(/border-radius:(?!0[;}\s!])[^;}]*;?/g, '').replace(/box-shadow:(?!none[;}\s!])[^;}]*;?/g, '') + b);
   // a page made before the strip gets its styles once
   if (crew.length && !html.includes('@keyframes crew-pulse')) html = html.replace('</style>', `${CREW_CSS}\n</style>`);
   const at = html.lastIndexOf('</style>') + '</style>'.length;
   html = `${html.slice(0, at)}\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
-  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n</body>`);
+  // the clamp first (a restored long list opens through its button), then the panel, then the saved state
+  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n</body>`);
   // the elapsed-time script only when a strip line has something to count
   if (crew.some(ticks)) html = html.replace('</body>', () => `<script id="since">${SINCE_JS}</script>\n</body>`);
   fs.writeFileSync(pagePath, html);
@@ -699,4 +757,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, activeStrip, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, activeStrip, board, slugId, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
