@@ -112,6 +112,25 @@ if (!WORKER && cfg.dailyTracker !== false) {
 if (!WORKER && cfg.sharedMemoryAutoPush === true) {
   who.push("Shared-memory pushes: automatic — push a joined shared memory without waiting for a yes and report the push notice's file list in one line; ask first only when something is genuinely problematic (another member's content removed, personal data, a rules change you are unsure of). Off when `sharedMemoryAutoPush` is not true in .joserah/config.json.");
 }
+// 0.18.0 (owner, 2026-10-05): the crew. On unless `"crew": false` or
+// `"crew": { "enabled": false }`; a block with a typo still counts as on here —
+// the generator refuses it loudly and doctor reports it. Voice is the main
+// session: it only talks, and the work goes to Lead. Lines kept short: they share
+// the 8,000-character budget with the owner's layers. Read inline, not through
+// the plugin's crew-config module: this file reads nothing outside the workspace.
+const CREW_ON = !(cfg.crew === false || (cfg.crew && typeof cfg.crew === 'object' && cfg.crew.enabled === false));
+if (!WORKER && CREW_ON) {
+  const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours.' : '';
+  who.push('Crew: on — you only talk; a one-lookup question you answer, every other job goes to Lead (opened at the first job, resumed by message after).' + tracker + ' A worker\'s completion notice goes to Lead verbatim; it is done when Lead says so. How: the orchestrate skill.');
+}
+// Developer mode decides only whether the owner SEES the crew (owner, 2026-10-05:
+// "like a dev mode"). Off — the default, crew on or off — no agent talk at all.
+// On with crew off, agents are named as before, so there is nothing to say.
+if (!WORKER && cfg.devMode !== true) {
+  who.push('Developer mode: off — speak of the work in the first person and never name an agent, a role or a model to the owner.');
+} else if (!WORKER && CREW_ON) {
+  who.push('Developer mode: on — the crew may be named to the owner.');
+}
 if (cfg.trust === 'guest') {
   who.push('Trust: **guest** — stay inside this workspace folder; do not read, write or act on anything else on this machine.');
 }
@@ -181,9 +200,14 @@ if (directives) parts.push(directives);
 // shrinks by its length.
 // 0.17.0 (owner, 2026-10-01): delegation may nest — a Manager opens workers
 // and they may open their own — so the line names the rules, never "do not delegate".
-const workerLine = WORKER
-  ? 'You are a sub-agent dispatched by another session: do the task you were given and report back as text. You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.\n\n'
-  : '';
+// 0.18.0, crew on: the result lives in a log, not in the reply — a completion
+// notice may land in another conversation than the launcher's (spec "Message
+// protocol"), so the file is written first and the reply is its path + one line.
+const NESTING = 'You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.';
+const workerLine = !WORKER ? ''
+  : CREW_ON
+    ? `You are a sub-agent dispatched by another session: do the task you were given. Write the result to your log before you reply — the log your brief names, else .joserah/desk/crew/<YYYY-MM-DD>/<your role>/<HHMM>-<short-slug>.md — then reply with that path and one line; a read-only agent replies in text. ${NESTING}\n\n`
+    : `You are a sub-agent dispatched by another session: do the task you were given and report back as text. ${NESTING}\n\n`;
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {

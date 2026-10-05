@@ -690,7 +690,9 @@ test('session-brief hands back no more than the per-command budget', (t) => {
 test('both SessionStart commands are registered, each as its own command string', () => {
   const hooks = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8'));
   const commands = hooks.hooks.SessionStart[0].hooks;
-  assert.strictEqual(commands.length, 2, 'one command per half — that is what gives each its own budget');
+  // 0.18.0: a third command, hooks/crew.js, acts only on `compact` (tests/crew-hooks.test.js)
+  assert.strictEqual(commands.length, 3, 'one command per half — that is what gives each its own budget — plus crew.js');
+  assert.match(commands[2].command, /hooks\/crew\.js" session-start$/);
   const joined = commands.map((c) => c.command).join(' ');
   assert.match(joined, /session-start\.js/);
   assert.match(joined, /session-brief\.js/);
@@ -751,7 +753,9 @@ test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   }
   assert.doesNotMatch(worker, /Open by greeting/, 'a worker greets nobody');
   assert.doesNotMatch(worker, /you sign/, 'a worker signs nothing');
-  assert.ok(worker.includes('You are a sub-agent dispatched by another session: do the task you were given and report back as text. You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.'), 'the worker line');
+  // 0.18.0, crew on (the default): result to the log first, the nesting sentence kept
+  assert.ok(worker.includes('Write the result to your log before you reply'), 'the worker line');
+  assert.ok(worker.includes('You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.'), 'the nesting sentence');
   assert.doesNotMatch(worker, /do not delegate/i, 'nested delegation is allowed (owner, 2026-10-01)');
   assert.doesNotMatch(worker, /Daily Tracker/, 'a worker does not keep the owner tracker');
   assert.ok(lead.includes("Daily Tracker: on — keep the owner's Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
@@ -806,7 +810,9 @@ test('SubagentStart is registered for every subagent, standing layers only', () 
   assert.ok(!('matcher' in entries[0]),
     'no matcher key — an omitted matcher is what means every subagent');
   const commands = entries[0].hooks;
-  assert.strictEqual(commands.length, 1);
+  // 0.18.0: the second command is hooks/crew.js (Ledger, strip safety net); it adds no standing layer
+  assert.strictEqual(commands.length, 2);
+  assert.match(commands[1].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/crew\.js" subagent-start$/);
   assert.strictEqual(commands[0].type, 'command');
   assert.strictEqual(commands[0].shell, 'bash');
   assert.match(commands[0].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/session-start\.js" subagent$/);
@@ -1190,4 +1196,56 @@ test('new day: the line is in the owner\'s language', (t) => {
   setCfg(dir, (c) => { c.dialogueLanguage = 'Turkish'; });
   dailyTrackerOn(dir, yesterday(), [{ state: 'you', title: 'b' }]);
   assert.match(brief(dir), /\[new day\] Yeni gün/);
+});
+
+// ---- 0.18.0: the crew hooks and the Voice, developer-mode and worker lines -----
+test('crew.js is registered for its five events, each one command string', () => {
+  const h = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')).hooks;
+  const cmd = (ev) => JSON.stringify(h[ev]);
+  for (const [ev, arg] of [['SubagentStart', 'subagent-start'], ['SubagentStop', 'subagent-stop'],
+    ['PreCompact', 'pre-compact'], ['SessionEnd', 'session-end'], ['SessionStart', 'session-start']])
+    assert.ok(cmd(ev).includes(`hooks/crew.js\\" ${arg}`), ev);
+  assert.ok(JSON.stringify(h).match(/"shell":"bash"/g).length >= 11);
+});
+test('Voice line with crew on; developer-mode line off by default, on with devMode', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /only talk/i);
+  assert.match(ctx, /first person/);
+  assert.match(ctx, /never name an agent, a role or a model/);
+  const p = path.join(dir, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), devMode: true }));
+  ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(ctx, /never name an agent, a role or a model/);
+});
+test('worker line: result to the log first, then path and one line', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  const ctx = JSON.parse(runHook('session-start.js', dir, '', null, ['subagent']).stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /\.joserah\/desk\/crew\//);
+  assert.match(ctx, /write the result to (your|the) log before you reply/i);
+});
+test('crew off: no Voice line, the worker line as before, the developer-mode off line stays', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  const p = path.join(dir, '.joserah', 'config.json');
+  for (const crew of [false, { enabled: false }]) {
+    fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), crew }));
+    const main = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+    assert.doesNotMatch(main, /only talk/i, JSON.stringify(crew));
+    assert.match(main, /never name an agent, a role or a model/);
+    const worker = JSON.parse(runHook('session-start.js', dir, '', null, ['subagent']).stdout).hookSpecificOutput.additionalContext;
+    assert.doesNotMatch(worker, /\.joserah\/desk\/crew\//);
+    assert.match(worker, /^You are a sub-agent dispatched by another session: do the task you were given and report back as text\./);
+  }
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), crew: false, devMode: true }));
+  const main = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(main, /Developer mode/, 'crew off with devMode on: agents named as today, no line');
+});
+test('a worker gets neither the Voice nor the developer-mode line', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  const worker = JSON.parse(runHook('session-start.js', dir, '', null, ['subagent']).stdout).hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(worker, /only talk|Developer mode/i);
 });
