@@ -11,6 +11,7 @@ import { register as eventsRoutes } from './routes/events.ts';
 import { register as jobsRoutes } from './routes/jobs.ts';
 import { register as homeRoutes } from './routes/home.ts';
 import { register as wikiRoutes } from './routes/wiki.ts';
+import { register as ingestRoutes } from './routes/ingest.ts';
 
 export type Env = { Bindings: HttpBindings; Variables: { signedIn: boolean } };
 export type App = Hono<Env>;
@@ -35,6 +36,7 @@ export function createApp(deps: AppDeps): App {
   jobsRoutes(app, deps);
   homeRoutes(app, deps);
   wikiRoutes(app, deps);
+  ingestRoutes(app, deps);
   // Later tasks register their routes here, after authRoutes and before notFound.
   app.notFound((c) => (c.req.path.startsWith('/api/') ? jsonError(c, 404, 'not-found') : c.html('<!doctype html><title>404</title><p>Not found.</p>', 404)));
   return app;
