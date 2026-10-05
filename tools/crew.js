@@ -2,7 +2,7 @@
 /**
  * crew.js — writes the crew's five agent definitions into a workspace.
  *
- *   node crew.js <workspace>
+ *   node crew.js <workspace> [--check]
  *
  * Reads the `crew` block of .joserah/config.json (tools/lib/crew-config.js)
  * and writes `.claude/agents/{lead,architect,builder,scout,sentry}.md` in the
@@ -18,9 +18,14 @@
  * a subagent's shell does not carry that variable (measured 2026-10-05), so
  * the definition names the tools by their real path.
  *
- * One line per role on stdout: `wrote|kept-owner|skipped-off <role>`.
- * Exit 0 on success; 1 on a config error (its message, naming the key, on
- * stderr) or when no workspace is found.
+ * `--check` writes nothing: it builds each expected text and compares it
+ * byte for byte with the file; a stamped file that differs, or a missing one,
+ * is `drift`. An owner's file and a crew switched off are not drift.
+ *
+ * One line per role on stdout: `wrote|ok|kept-owner|skipped-off|drift <role>`
+ * (`ok` only with --check). Exit 0 on success or a clean check; 1 on a
+ * config error (its message, naming the key, on stderr), on drift with
+ * --check, or when no workspace is found.
  */
 'use strict';
 const fs = require('fs');
@@ -50,17 +55,23 @@ function definition(role, { model, effort }) {
 const isOwners = (file) => fs.existsSync(file) && !fs.readFileSync(file, 'utf8').includes(STAMP);
 
 /**
- * Resolve the config and write the definitions. Returns one
- * `{ role, action }` per role; throws the resolver's error on a bad config.
+ * Resolve the config and write the definitions (or, with `check`, only
+ * compare them). Returns one `{ role, action }` per role; throws the
+ * resolver's error on a bad config.
  */
-function generate(root) {
+function generate(root, { check = false } = {}) {
   const crew = resolveCrew(readConfig(root) || {});
   if (!crew.enabled) return ROLES.map((role) => ({ role, action: 'skipped-off' }));
   return ROLES.map((role) => {
     const file = agentPath(root, role);
     if (isOwners(file)) return { role, action: 'kept-owner' };
+    const text = definition(role, crew.roles[role]);
+    if (check) {
+      const same = fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text;
+      return { role, action: same ? 'ok' : 'drift' };
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, definition(role, crew.roles[role]), 'utf8');
+    fs.writeFileSync(file, text, 'utf8');
     return { role, action: 'wrote' };
   });
 }
@@ -74,13 +85,13 @@ function main(argv) {
   }
   let results;
   try {
-    results = generate(root);
+    results = generate(root, { check: argv.includes('--check') });
   } catch (e) {
     process.stderr.write(e.message + '\n');
     return 1;
   }
   for (const { role, action } of results) process.stdout.write(`${action} ${role}\n`);
-  return 0;
+  return results.some((r) => r.action === 'drift') ? 1 : 0;
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));

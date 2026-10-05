@@ -108,3 +108,33 @@ test('description from the template first line; plugin root resolved in the body
   assert.doesNotMatch(lead, /\$\{CLAUDE_PLUGIN_ROOT\}/, 'a subagent has no CLAUDE_PLUGIN_ROOT in its shell');
   assert.ok(lead.includes(PLUGIN_ROOT.replace(/\\/g, '/') + '/tools/ledger.js'));
 });
+
+test('--check finds drift and writes nothing', (t) => {
+  const dir = ws(t);
+  runTool('crew.js', [dir]);
+  const p = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(p, 'utf8')); cfg.crew = { scout: { effort: 'low' } };
+  fs.writeFileSync(p, JSON.stringify(cfg));
+  const before = fs.readFileSync(agent(dir, 'scout'), 'utf8');
+  const r = runTool('crew.js', [dir, '--check']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /drift scout/);
+  assert.strictEqual(fs.readFileSync(agent(dir, 'scout'), 'utf8'), before);
+  assert.strictEqual(runTool('crew.js', [dir]).status, 0);
+  assert.strictEqual(runTool('crew.js', [dir, '--check']).status, 0);
+});
+
+test('--check: a missing definition is drift; an owner file and crew off are not', (t) => {
+  const dir = ws(t);
+  let r = runTool('crew.js', [dir, '--check']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stdout, /drift lead/);
+  assert.ok(!fs.existsSync(agent(dir, 'lead')), '--check never writes');
+  runTool('crew.js', [dir]);
+  fs.writeFileSync(agent(dir, 'scout'), 'mine');
+  r = runTool('crew.js', [dir, '--check']);
+  assert.strictEqual(r.status, 0, r.stdout);
+  assert.match(r.stdout, /kept-owner scout/);
+  const off = ws(t, { crew: false });
+  assert.strictEqual(runTool('crew.js', [off, '--check']).status, 0);
+});
