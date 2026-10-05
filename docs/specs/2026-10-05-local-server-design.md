@@ -29,10 +29,10 @@ terms, stack, skills, existing projects; every claim with its source).
    interface — layouts must work at phone width and on a large read-only TV view; no native apps in this spec.
 10. **Engine:** the logged-in Claude Code CLI on whichever machine hosts the server; OpenRouter will be the recommended
     engine later (owner: "ama biz openrouter önericez gelecekte") — the job runner keeps the engine behind one
-    interface () so a second engine slots in without touching routes.
+    interface (`Engine.start(job) → stream`) so a second engine slots in without touching routes.
 11. **Device runner, for its own spec** (owner chose C): by default runs only the tools a device allows; a device may
-    opt in to running jobs with its own Claude Code. This server only reserves for it: a  field on every job
-    ( in v1) and the  path prefix — no device code in v1.
+    opt in to running jobs with its own Claude Code. This server only reserves for it: a `target` field on every job
+    (`"server"` in v1) and the `/api/devices` path prefix — no device code in v1.
 
 ## 1. Structure and parts (approved)
 
