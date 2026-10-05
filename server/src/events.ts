@@ -13,10 +13,14 @@ export type BusEvent =
 /** Numbers every event and keeps the last `size` so a dropped browser can resume with `since(lastSeenId)`. */
 export class EventBus {
   #ring: Array<{ id: number; event: BusEvent }> = [];
-  #next = 1;
+  #next: number;
   #subs = new Set<(id: number, e: BusEvent) => void>();
   #size: number;
-  constructor(size = 1000) { this.#size = Math.max(1, Math.floor(size)); }
+  /**
+   * Ids start at the clock (`start`), not at 1: after a server restart every id a browser still holds is below the new
+   * ring, so `since()` answers null and the page resets instead of resuming into a different run's events.
+   */
+  constructor(size = 1000, start: number = Date.now()) { this.#size = Math.max(1, Math.floor(size)); this.#next = Math.max(1, Math.floor(start)); }
   publish(event: BusEvent): number {
     const id = this.#next++;
     this.#ring.push({ id, event });

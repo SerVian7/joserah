@@ -14,3 +14,15 @@ export const noteFormat = require('../../tools/lib/note-format.js') as {
   findClaimAnomalies(body: string): Array<{ line: number; kind: string; detail?: string }>;
   extractWikilinks(text: string): string[];
 };
+export interface AnswerDoc { row?: string; key?: string; label?: string; note?: string; at?: string; state?: string; from?: string }
+export type AnswerResult = { ok: true; doc: AnswerDoc; id?: string } | { ok: false; code: string };
+/** tools/lib/answers.js: put, markRead and reply take a lock and can throw (lock held too long, or taken over). */
+export const answersLib = require('../../tools/lib/answers.js') as {
+  FILE: string; ID_RE: RegExp; isReplyId(id: string): boolean;
+  read(dir: string): { version: 1; docs: Record<string, AnswerDoc> };
+  put(dir: string, id: string, doc: unknown, author: 'owner' | 'assistant'): AnswerResult;
+  list(dir: string, o?: { onlyNew?: boolean }): Array<AnswerDoc & { id: string }>;
+  markRead(dir: string, id: string): AnswerResult;
+  reply(dir: string, baseId: string, note: string, nowMs?: number): AnswerResult;
+  newCounts(workspace: string, days?: number): Array<{ page: string; dir: string; count: number }>;
+};
