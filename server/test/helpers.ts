@@ -108,5 +108,6 @@ export function runnerFor(t: TestContext, o: { env?: Record<string, string>; con
   const runner = new JobRunner({ workspace: ws, store: deps.store, bus: deps.bus, engine: fakeEngine(o.env), config: () => cfg,
     tracker: cliTracker(ws, 'en'), checkpoint: o.checkpointer ? new GitCheckpointer(ws, deps.store) : o.checkpoint, jobUrl: (id) => `${ORIGIN}/jobs/${id}`, lang: 'en' });
   deps.jobs = runner;
+  deps.answers = new AnswerTrigger({ workspace: ws, bus: deps.bus, jobs: runner, config: () => cfg });
   return { runner, deps, ws };
 }

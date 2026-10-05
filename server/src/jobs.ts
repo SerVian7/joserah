@@ -263,7 +263,8 @@ export class JobRunner {
     // Only a resume that never started a session falls back; a timeout, a cancel or a missing CLI would fail again.
     if (job.state === 'failed' && !live.stop && !exit.spawnError && job.resumeSessionId && !job.sessionId && !job.fallbackOf && job.parentId && !this.#stopping) {
       const p = this.#jobs.get(job.parentId);
-      this.submit({ type: job.type, text: job.text, fallbackOf: job.id, parentId: job.parentId, pointers: p ? [`${jobsDir(p.day)}/${p.id}.md`] : [] });
+      try { this.submit({ type: job.type, text: job.text, fallbackOf: job.id, parentId: job.parentId, pointers: p ? [`${jobsDir(p.day)}/${p.id}.md`] : [] }); }
+      catch (e) { if (!(e instanceof Refused)) throw e; job.error = `${job.error ?? ''}; fallback not started: ${e.message}`; this.#save(job); this.#digest(job); }
     }
   }
 

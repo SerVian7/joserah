@@ -108,3 +108,17 @@ test('(f) the daily budget answers 429 to the browser', async (t) => {
   assert.equal(r.status, 429);
   assert.equal((await r.json()).error, 'daily-budget');
 });
+
+test('(d) an answer the owner changes after it was handed to a job is handed again', async (t) => {
+  const { runner, ws } = runnerFor(t, { config: { answerStartsJob: true } });
+  const d1 = trackerPage(ws, DAY);
+  const trig = new AnswerTrigger({ workspace: ws, bus: undefined as never, jobs: runner, config: () => ({ answerStartsJob: true, answerBatchSec: 3600 }) as never });
+  t.after(() => trig.stop());
+  answersLib.put(d1, 'row-1', { key: 'A' }, 'owner');
+  assert.ok(trig.fire());
+  await runner.idle();
+  assert.equal(trig.fire(), null, 'the same content is not handed twice');
+  answersLib.put(d1, 'row-1', { key: 'B' }, 'owner');
+  assert.ok(trig.fire(), 'a changed answer on the same id is new work');
+  await runner.idle();
+});
