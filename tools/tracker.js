@@ -57,8 +57,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { run: 'Agent working', runPlain: 'In progress', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated' },
-  tr: { run: 'Ajan çalışıyor', runPlain: 'Sürüyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme' },
+  en: { reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Agent working', runPlain: 'In progress', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', groups: ['Agent working', 'Owner', 'Waiting', 'Done', 'Plans'], link: 'page', other: 'Other', upd: 'updated' },
+  tr: { reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Ajan çalışıyor', runPlain: 'Sürüyor', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', groups: ['Ajan çalışıyor', 'Sizde', 'Beklemede', 'Bitenler', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -66,6 +66,24 @@ const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
 const CREW_ROLES = ['voice', 'lead', 'architect', 'builder', 'scout', 'sentry'];
 const CREW_STATES = ['work', 'owner', 'idle'];
 const CREW_REASONS = ['decision', 'sign-in', 'connection', 'approval'];
+const { ICONS } = require('./lib/crew-icons');
+const ROLE_NAME = { voice: 'Voice', lead: 'Lead', architect: 'Architect', builder: 'Builder', scout: 'Scout', sentry: 'Sentry' };
+// The strip's look, theme tokens only (owner, 2026-10-05: calm, no new hues): icons in the muted text
+// token; working pulses slowly; owner takes the page's owner colour; idle is dimmed; reduced motion,
+// no pulse. The template carries the same line; a page made before the strip gets it once.
+const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
+  + '.crew-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:2px 0 6px}'
+  + '.crew-sum span{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}'
+  + '.crew svg{width:18px;height:18px;flex:none;color:var(--muted)}'
+  + '.crew ul{list-style:none;margin:0;padding:0}'
+  + '.crew li.crew-line{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;background:none;border:0;border-radius:0;font-size:13px}'
+  + '.crew-line span{flex:1;min-width:0;overflow-wrap:anywhere}.crew-line a{color:inherit}'
+  + '.crew-line em{font-style:normal;color:var(--you)}'
+  + '.crew-line.work svg,.crew-sum .work svg{animation:crew-pulse 2.4s ease-in-out infinite}'
+  + '.crew-line.owner svg{color:var(--you)}.crew-sum .owner svg{color:var(--you)}'
+  + '.crew-line.idle,.crew-sum .idle{opacity:.5}'
+  + '@keyframes crew-pulse{50%{opacity:.4}}'
+  + '@media (prefers-reduced-motion: reduce){.crew-line.work svg,.crew-sum .work svg{animation:none}}';
 
 // Developer mode decides only whether the owner sees the crew; no workspace → off.
 function devModeFor(dir) {
@@ -151,6 +169,25 @@ function checkCrew(e, where) {
   if (!String(e.job ?? '').trim()) die(`${where}: a job is required`);
 }
 
+// summary: Voice first, then one icon per role with an entry, a count when 2+ of it are working or
+// waiting on the owner; then one line per entry: icon, "<Role> · <job>", the reason when owner.
+function crewStrip(crew, L) {
+  const live = (e) => e.state === 'work' || e.state === 'owner';
+  const sum = CREW_ROLES.filter((r) => r === 'voice' || crew.some((e) => e.role === r)).map((r) => {
+    const mine = crew.filter((e) => e.role === r);
+    const n = mine.filter(live).length;
+    const st = mine.some((e) => e.state === 'owner') ? 'owner' : mine.some((e) => e.state === 'work') ? 'work' : mine.length ? 'idle' : '';
+    return `<span${st ? ` class="${st}"` : ''} data-role="${r}"${n >= 2 ? ` data-count="${n}"` : ''} title="${ROLE_NAME[r]}">${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+  }).join('');
+  const lines = crew.map((e) => {
+    const text = `${ROLE_NAME[e.role]} · ${esc(e.job)}`;
+    const body = /^https?:\/\//i.test(String(e.url || '')) ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${text}</a>` : text;
+    const why = e.state === 'owner' && e.reason ? ` <em>${esc((L.reasons || {})[e.reason] || e.reason)}</em>` : '';
+    return `  <li class="crew-line ${e.state}" data-role="${e.role}">${ICONS[e.role]}<span>${body}${why}</span><time>${esc(e.time)}</time></li>\n`;
+  }).join('');
+  return `<div class="crew-sum">${sum}</div><ul>\n${lines}</ul>`;
+}
+
 function render(dir) {
   const pagePath = path.join(dir, 'index.html');
   const rowsPath = path.join(dir, 'rows.json');
@@ -213,6 +250,14 @@ function render(dir) {
   // pages made before the folds keep working: their style gets the rule once
   if (!html.includes('.folds details{')) html = html.replace('</style>', '.folds details{border-bottom:1px solid var(--line);padding:8px 0}.folds summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}.folds ul{list-style:none;margin:6px 0 0;padding:0}\n</style>');
   if (!html.includes('.folds details.sub{')) html = html.replace('</style>', '.folds details.sub{border-bottom:0;padding:4px 0 4px 12px}.folds details.sub summary{text-transform:none;letter-spacing:0}\n</style>');
+  // the Crew strip: developer mode only; without it the page carries no strip at all
+  html = html.replace(/<section class="crew">[\s\S]*?<\/section>\n?/, '');
+  if (dev && crew.length) {
+    if (!html.includes('.crew{')) html = html.replace('</style>', `${CREW_CSS}\n</style>`);
+    const strip = `<section class="crew">${crewStrip(crew, L)}</section>\n`;
+    if (html.includes('<!-- crew -->\n')) html = html.replace('<!-- crew -->\n', () => `<!-- crew -->\n${strip}`);
+    else html = html.replace(/<main>\n?/, (m) => `${m}${strip}`);
+  }
   fs.writeFileSync(pagePath, html);
   if (stamped) writeStore(rowsPath, store);
   console.log(`rows: ${rows.length}`);
@@ -262,4 +307,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { devModeFor, LABELS };
+module.exports = { devModeFor, LABELS, CREW_CSS };

@@ -318,3 +318,54 @@ test('icons carry no colour of their own (calm, theme tokens only)', () => {
     assert.doesNotMatch(svg, /\b(style|fill|stroke)="(?!none|currentColor)/, r);
   }
 });
+
+const devWs = (t) => {
+  const ws = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', ws, '--workspace', 'w', '--owner', 'A B']);
+  const p = path.join(ws, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), devMode: true }));
+  const dir = path.join(ws, '.joserah', 'desk', 'artifacts', 'x', 'tracker');
+  init(dir);
+  return dir;
+};
+test('strip: icon, line, state class, reason; counts only working or waiting', (t) => {
+  const dir = devWs(t);
+  crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
+  crew(dir, ['--role', 'scout', '--job', 'B', '--state', 'owner', '--reason', 'approval']);
+  crew(dir, ['--role', 'scout', '--job', 'C', '--state', 'idle']);
+  crew(dir, ['--role', 'lead', '--job', 'Conversation', '--state', 'work']);
+  const html = page(dir);
+  assert.match(html, /class="crew"/);
+  assert.match(html, /data-role="scout"[^>]*data-count="2"/);
+  assert.doesNotMatch(html, /data-role="lead"[^>]*data-count=/, 'a single one has no badge');
+  assert.match(html, /class="crew-line owner"[\s\S]*?approval/);
+  assert.match(html, /Scout · A/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
+  // template tokens: icons in the muted text token, `owner` in the page's owner colour (no --accent exists)
+  assert.match(html, /\.crew svg\{[^}]*color:var\(--muted\)/);
+  assert.match(html, /\.crew-line\.owner svg\{[^}]*color:var\(--you\)/);
+  // the strip sits under the header, above the row groups
+  assert.ok(html.indexOf('class="crew"') > html.indexOf('</header>') && html.indexOf('class="crew"') < html.indexOf('<ol>'));
+  // Voice leads the summary
+  assert.match(html, /<div class="crew-sum"><span[^>]*data-role="voice"/);
+});
+test('no strip with devMode off, even with crew entries', (t) => {
+  const dir = tmpdir(t); init(dir);
+  crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
+  assert.doesNotMatch(page(dir), /class="crew"/);
+});
+test('the template carries the strip styles and the crew slot; an old page gets them once', (t) => {
+  const { CREW_CSS } = require('../tools/tracker.js');
+  const f = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'tracker', 'index.html'), 'utf8');
+  assert.ok(f.includes(CREW_CSS), 'template and renderer agree');
+  assert.match(f, /<main>\n<!-- crew -->\n<ol>/);
+  const dir = devWs(t);
+  const old = page(dir).replace(CREW_CSS + '\n', '').replace('<!-- crew -->\n', '');
+  fs.writeFileSync(path.join(dir, 'index.html'), old);
+  crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
+  crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'idle']);
+  const html = page(dir);
+  assert.strictEqual(html.split('.crew{').length, 2, 'styles injected once');
+  assert.strictEqual(html.split('<section class="crew">').length, 2, 'one strip');
+  assert.ok(html.indexOf('<section class="crew">') < html.indexOf('<ol>'));
+});
