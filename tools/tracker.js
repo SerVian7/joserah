@@ -101,7 +101,9 @@ function devModeFor(dir) {
   return !!(cfg && cfg.devMode === true);
 }
 
-const die = (msg) => { console.error(`tracker: ${msg}`); process.exit(1); };
+// A refusal throws; the CLI prints it and exits 1, a caller (hooks/crew.js) catches it.
+class Refused extends Error {}
+const die = (msg) => { throw new Refused(msg); };
 const now = () => (process.env.JOSERAH_NOW ? new Date(process.env.JOSERAH_NOW) : new Date());
 const pad = (n) => String(n).padStart(2, '0');
 const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -215,7 +217,7 @@ function crewStrip(crew, L) {
   return `<div class="crew-sum">${sum}</div><ul>\n${lines}</ul>`;
 }
 
-function render(dir) {
+function render(dir, { quiet = false } = {}) {
   const pagePath = path.join(dir, 'index.html');
   const rowsPath = path.join(dir, 'rows.json');
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) die(`${dir} is not a directory`);
@@ -327,7 +329,7 @@ function render(dir) {
   }
   fs.writeFileSync(pagePath, html);
   if (stamped) writeStore(rowsPath, store);
-  console.log(`rows: ${rows.length}`);
+  if (!quiet) console.log(`rows: ${rows.length}`);
 }
 
 function upsert(dir, opt) {
@@ -352,8 +354,14 @@ function upsert(dir, opt) {
   render(dir);
 }
 
-function upsertCrew(dir, opt) {
-  if (!dir || !opt.role || !opt.job || !opt.state) die(`usage: tracker.js crew <dir> --role ${CREW_ROLES.join('|')} --job "<text>" --state ${CREW_STATES.join('|')} [--reason ${CREW_REASONS.join('|')}] [--url u]`);
+/**
+ * Upserts one Crew strip entry by role + job (case and outer spaces ignored),
+ * stamps its time now and re-renders without printing. Throws on a refusal
+ * (unknown role, state or reason; no rows.json; invalid JSON) before writing.
+ * Shared by the CLI's `crew` branch and the hooks' safety net.
+ */
+function upsertCrew(dir, opt, { quiet = true } = {}) {
+  if (!dir || !opt || !opt.role || !opt.job || !opt.state) die(`usage: tracker.js crew <dir> --role ${CREW_ROLES.join('|')} --job "<text>" --state ${CREW_STATES.join('|')} [--reason ${CREW_REASONS.join('|')}] [--url u]`);
   const entry = { role: opt.role, job: opt.job, state: opt.state };
   if (opt.reason) entry.reason = opt.reason;
   if (opt.url) entry.url = opt.url;
@@ -365,17 +373,30 @@ function upsertCrew(dir, opt) {
   const i = store.crew.findIndex((e) => e && e.role === entry.role && key(e.job) === key(entry.job));
   if (i >= 0) store.crew[i] = entry; else store.crew.push(entry);
   writeStore(rowsPath, store);
-  render(dir);
+  render(dir, { quiet });
+}
+
+/** The Crew strip entries of the Tracker in `dir`, read-only. Throws on a refusal. */
+function readCrew(dir) {
+  return readStore(path.join(dir, 'rows.json')).crew;
 }
 
 function main() {
   const { pos, opt } = parseArgs(process.argv.slice(2));
   if (pos[0] === 'init') init(pos[1], opt);
   else if (pos[0] === 'row') upsert(pos[1], opt);
-  else if (pos[0] === 'crew') upsertCrew(pos[1], opt);
+  else if (pos[0] === 'crew') upsertCrew(pos[1], opt, { quiet: false });
   else if (pos.length === 1) render(pos[0]);
   else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js crew <dir> --role r --job t --state s  |  tracker.js <dir>');
 }
 
-if (require.main === module) main();
-module.exports = { devModeFor, LABELS, CREW_CSS };
+if (require.main === module) {
+  try {
+    main();
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e;
+    console.error(`tracker: ${e.message}`);
+    process.exit(1);
+  }
+}
+module.exports = { devModeFor, LABELS, CREW_CSS, CREW_ROLES, upsertCrew, readCrew, Refused };

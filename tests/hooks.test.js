@@ -1161,6 +1161,14 @@ test('new day: an earlier Daily Tracker with an open row gives one line, once a 
   assert.doesNotMatch(brief(dir), /\[new day\]/, 'the second session of the day is not told again');
 });
 
+// 0.18.0: once a Crew strip entry exists (Lead's, or the hooks' safety net) rows.json is
+// { rows, crew } — the open row must still be seen.
+test('new day: a Daily Tracker whose rows.json carries a crew strip still counts', (t) => {
+  const dir = hookWs(t);
+  dailyTrackerOn(dir, yesterday(), { rows: [{ state: 'run', title: 'b' }], crew: [{ role: 'scout', job: 'x', state: 'idle', time: '09:00' }] });
+  assert.match(brief(dir), /\[new day\]/);
+});
+
 test('new day: no line when the earlier tracker is frozen, fully done, off, or today\'s', (t) => {
   let dir = hookWs(t);
   dailyTrackerOn(dir, yesterday(), [{ state: 'run', title: 'b' }], ['.frozen']);

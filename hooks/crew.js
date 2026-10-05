@@ -23,6 +23,9 @@
  *   session-start   source `compact` only: re-injects this session's Ledger
  *                   (open jobs, owner lines, last decisions, Lead's agent id)
  *                   and, for the main session, the Daily Tracker's open rows.
+ *   subagent-start / subagent-stop  the Crew strip's safety net: a crew role
+ *                   with no entry on today's Daily Tracker gets one (work), and
+ *                   the hook's own entry is dimmed (idle) at the stop.
  *
  * Every path exits 0: a hook that fails must never block a spawn, a compaction
  * or the end of a session. Tests fix the clock with JOSERAH_NOW.
@@ -31,7 +34,7 @@
 const fs = require('fs');
 const path = require('path');
 const { findWorkspace, readConfig } = require('./lib/workspace');
-const { resolveCrew } = require('../tools/lib/crew-config');
+const { resolveCrew, ROLES: CREW_ROLES } = require('../tools/lib/crew-config');
 const L = require('../tools/lib/ledger');
 const { append: appendLine } = require('../tools/ledger');
 
@@ -175,8 +178,36 @@ function reinject(root, input) {
   return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } };
 }
 
+/**
+ * The Crew strip's safety net (spec "Tracker Crew strip", Mechanics): a crew
+ * worker with no entry for its role on today's Daily Tracker gets one at start,
+ * `{ role, job: <agent_id>, state: work }`, dimmed to `idle` at its stop. An
+ * entry Lead already wrote for the role is left as is; the hook writes only
+ * what the payload carries (agent type and id), never for a type that is not a
+ * crew role, and never publishes. Any refusal or error leaves the file alone.
+ */
+function stripSafetyNet(root, input, starting) {
+  const role = roleOf(input.agent_type);
+  const agent = id(input.agent_id);
+  if (!CREW_ROLES.includes(role) || !agent) return;
+  const dir = dailyTracker(root);
+  if (!dir) return;
+  try {
+    const tracker = require('../tools/tracker');
+    const crew = tracker.readCrew(dir);
+    const mine = crew.find((e) => e && e.role === role && String(e.job).trim().toLowerCase() === agent.toLowerCase());
+    if (starting) {
+      if (crew.some((e) => e && e.role === role)) return;
+      tracker.upsertCrew(dir, { role, job: agent, state: 'work' });
+    } else if (mine && mine.state !== 'idle') {
+      tracker.upsertCrew(dir, { role, job: agent, state: 'idle' });
+    }
+  } catch { /* the strip is a convenience; the spawn and the stop go on */ }
+}
+
 function handle(event, root, input) {
   if (event === 'session-start') return reinject(root, input);
+  if (event === 'subagent-start' || event === 'subagent-stop') stripSafetyNet(root, input, event === 'subagent-start');
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
   // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
   // may not fire at all when a background shell is still running: best effort only.

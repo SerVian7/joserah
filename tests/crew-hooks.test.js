@@ -195,3 +195,65 @@ test('compact with nothing open adds nothing', (t) => {
   assert.strictEqual(r.status, 0);
   assert.strictEqual(r.stdout, '');
 });
+
+// Safety net (spec "Tracker Crew strip", Mechanics): a crew-role subagent with no strip entry gets one.
+function trackerFixture(t) {
+  const ws = wsFor(t);
+  const tr = path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-05', 'daily-tracker');
+  runTool('tracker.js', ['init', tr, '--title', 'Daily Tracker'], { env: { JOSERAH_NOW: '2026-10-05T08:00:00' } });
+  return { ws, tr, store: () => JSON.parse(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8')) };
+}
+const sub = (ws, ev, type, agent = 'A7', now = '2026-10-05T09:00:00') =>
+  hook(ws, ev, JSON.stringify({ session_id: 'S1', agent_id: agent, agent_type: type }), now);
+
+test('safety net: a crew worker with no entry is added at start and dimmed at stop', (t) => {
+  const { ws, store } = trackerFixture(t);
+  const r = sub(ws, 'subagent-start', 'scout');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout, '', 'a worker\'s start prints nothing');
+  assert.deepStrictEqual(store().crew.map(({ role, job, state }) => ({ role, job, state })), [{ role: 'scout', job: 'A7', state: 'work' }]);
+  sub(ws, 'subagent-stop', 'scout', 'A7', '2026-10-05T09:20:00');
+  const e = store().crew[0];
+  assert.strictEqual(e.state, 'idle');
+  assert.strictEqual(e.time, '09:20');
+});
+
+test('safety net: an existing entry for the role is left as is at start', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  sub(ws, 'subagent-start', 'scout');
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+  sub(ws, 'subagent-stop', 'scout');
+  assert.strictEqual(store().crew[0].state, 'work', 'the stop of an agent the hook did not add touches no other entry');
+});
+
+test('safety net: not a crew role, or no Tracker today, writes nothing', (t) => {
+  const { ws, tr } = trackerFixture(t);
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  for (const type of ['general-purpose', '', 'Explore']) {
+    assert.strictEqual(sub(ws, 'subagent-start', type).status, 0);
+    assert.strictEqual(sub(ws, 'subagent-stop', type).status, 0);
+  }
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+  const bare = wsFor(t);
+  const r = sub(bare, 'subagent-start', 'scout');
+  assert.strictEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(bare, '.joserah', 'desk', 'artifacts')));
+});
+
+test('safety net: Lead\'s start adds its entry and still prints only its Ledger path', (t) => {
+  const { ws, store } = trackerFixture(t);
+  const r = sub(ws, 'subagent-start', 'lead', 'A1');
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /^Your Ledger: \.joserah\/desk\/crew\/2026-10-05\/lead\/ledger-0900\.md$/);
+  assert.deepStrictEqual(store().crew.map((e) => [e.role, e.job, e.state]), [['lead', 'A1', 'work']]);
+});
+
+test('safety net: a broken rows.json is left alone and the hook exits 0', (t) => {
+  const { ws, tr } = trackerFixture(t);
+  fs.writeFileSync(path.join(tr, 'rows.json'), '{ broken');
+  const r = sub(ws, 'subagent-start', 'scout');
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout, '');
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), '{ broken');
+});
