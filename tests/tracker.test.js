@@ -369,3 +369,33 @@ test('the template carries the strip styles and the crew slot; an old page gets 
   assert.strictEqual(html.split('<section class="crew">').length, 2, 'one strip');
   assert.ok(html.indexOf('<section class="crew">') < html.indexOf('<ol>'));
 });
+
+const row = (dir, args) => runTool('tracker.js', ['row', dir, ...args], { env: { JOSERAH_NOW: T1 } });
+test('row --parent sets, clears, and refuses an unknown parent', (t) => {
+  const dir = tmpdir(t); init(dir);
+  row(dir, ['--title', 'Main', '--state', 'run']);
+  assert.strictEqual(row(dir, ['--title', 'Sub', '--state', 'ok', '--parent', 'main ']).status, 0);
+  const rows = () => JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
+  assert.strictEqual(rows().find((r) => r.title === 'Sub').parent, 'main ');
+  assert.strictEqual(row(dir, ['--title', 'Sub', '--state', 'ok', '--parent', '']).status, 0);
+  assert.strictEqual(rows().find((r) => r.title === 'Sub').parent, undefined);
+  const r = row(dir, ['--title', 'Sub2', '--state', 'ok', '--parent', 'Nope']);
+  assert.strictEqual(r.status, 1);
+  assert.match(r.stderr, /parent "Nope" is not a row/);
+  assert.ok(!rows().some((x) => x.title === 'Sub2'), 'a refused row is not written');
+});
+test('one level only, and not its own parent', (t) => {
+  const dir = tmpdir(t); init(dir);
+  setRows(dir, [{ state: 'run', title: 'A' }, { state: 'ok', title: 'B', parent: 'A' }, { state: 'ok', title: 'C', parent: 'B' }]);
+  assert.match(render(dir).stderr, /one level only/);
+  setRows(dir, [{ state: 'run', title: 'A', parent: 'A' }]);
+  assert.strictEqual(render(dir).status, 1);
+});
+test('row without --parent keeps the parent it had (only --parent "" ungroups)', (t) => {
+  const dir = tmpdir(t); init(dir);
+  row(dir, ['--title', 'Main', '--state', 'run']);
+  row(dir, ['--title', 'Sub', '--state', 'run', '--parent', 'Main']);
+  assert.strictEqual(row(dir, ['--title', 'Sub', '--state', 'ok']).status, 0);
+  const sub = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8')).find((r) => r.title === 'Sub');
+  assert.strictEqual(sub.parent, 'Main');
+});

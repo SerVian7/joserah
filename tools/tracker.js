@@ -18,6 +18,11 @@
  *       Upserts ONE row by title (case and outer spaces ignored) into rows.json
  *       and re-renders; nothing has to be read first. A changed row loses its
  *       `time` and is re-stamped now; small/url/label not given are cleared.
+ *       [--parent "<title>"]: the row's main job (a row title, case and outer
+ *       spaces ignored); its finished sub-jobs fold under it. One level only: a
+ *       row with a parent cannot be a parent, nor its own. A row re-run without
+ *       --parent keeps the one it had; --parent "" ungroups it. A refused row is
+ *       not written.
  *
  *   node tools/tracker.js crew <dir> --role voice|lead|architect|builder|scout|sentry
  *                         --job "<text>" --state work|owner|idle
@@ -104,7 +109,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
-    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -169,6 +174,19 @@ function checkCrew(e, where) {
   if (!String(e.job ?? '').trim()) die(`${where}: a job is required`);
 }
 
+// A row's `parent` names its main job's row: it must exist, must not be the row itself, and must not
+// have a parent of its own (one level only).
+const hasParent = (r) => !!(r && key(r.parent));
+function checkParents(rows) {
+  rows.forEach((r, i) => {
+    if (!hasParent(r)) return;
+    if (key(r.parent) === key(r.title)) die(`row ${i + 1}: "${r.title}" cannot be its own parent`);
+    const main = rows.find((x) => x && key(x.title) === key(r.parent));
+    if (!main) die(`row ${i + 1}: parent "${r.parent}" is not a row`);
+    if (hasParent(main)) die(`row ${i + 1}: one level only (parent "${r.parent}" has a parent itself)`);
+  });
+}
+
 // summary: Voice first, then one icon per role with an entry, a count when 2+ of it are working or
 // waiting on the owner; then one line per entry: icon, "<Role> · <job>", the reason when owner.
 function crewStrip(crew, L) {
@@ -216,6 +234,7 @@ function render(dir) {
     if (k && seen.has(k)) die(`row ${i + 1}: duplicate title "${r.title}" (one job, one row: change the existing row)`);
     seen.add(k);
   });
+  checkParents(rows);
   const sorted = rows.map((r, i) => ({ r, i, g: GROUP[r.state] }))
     .sort((a, b) => a.g - b.g || (a.g === GROUP.ok ? -1 : 1) * String(a.r.time).localeCompare(String(b.r.time)) || a.i - b.i);
   const li = (r) => {
@@ -276,7 +295,11 @@ function upsert(dir, opt) {
   if (opt.label) row.label = opt.label;
   if (opt.group) row.group = opt.group;
   const i = rows.findIndex((r) => r && key(r.title) === key(opt.title));
+  // the parent stays unless given: re-running a sub-job's row must not ungroup it
+  const parent = opt.parent !== undefined ? opt.parent : (i >= 0 ? rows[i].parent : undefined);
+  if (parent) row.parent = parent;
   if (i >= 0) rows[i] = row; else rows.push(row);
+  checkParents(rows); // before writing: a refused row leaves rows.json alone
   writeStore(rowsPath, store);
   render(dir);
 }
