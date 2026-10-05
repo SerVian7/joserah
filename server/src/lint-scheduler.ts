@@ -12,6 +12,8 @@ import { localDay, hhmm, now } from './paths.ts';
 const K = '.joserah/knowledge';
 const LATEST = '.joserah/desk/lint/latest.json';
 const HASHES = '.joserah/desk/lint/hashes.json';
+/** The brief carries 20 file pointers and cuts the rest (briefs.ts); a pass claims no more than it can show the model. */
+const PASS_MAX = 20;
 const CONFLICTS = `${K}/.lint/conflicts.json`;
 
 const TEXT = {
@@ -76,12 +78,14 @@ export class LintScheduler {
     }
     const pages = wikiLib.scan(this.#o.workspace);
     const seen = this.#o.store.readJson<Record<string, string>>(HASHES) ?? {};
-    const set = pages.filter((p) => seen[p.rel] !== p.sha1).map((p) => p.rel);
-    if (!set.length) return null;
+    const changed = pages.filter((p) => seen[p.rel] !== p.sha1);
+    if (!changed.length) return null;
+    const batch = changed.slice(0, PASS_MAX); // the remainder stays in changedSet() for the next pass
+    const set = batch.map((p) => p.rel);
     this.#o.store.remove(CONFLICTS); // a file left by an earlier run is never read as this run's answer
-    const job = this.#o.jobs.submit({ type: 'lint', text: `Check these ${set.length} wiki pages against each other and the rest of the wiki; quote any two sentences that contradict each other.`,
+    const job = this.#o.jobs.submit({ type: 'lint', text: `Check these ${set.length} wiki pages${changed.length > batch.length ? ` (the first of ${changed.length} changed; the rest wait for the next pass)` : ''} against each other and the rest of the wiki; quote any two sentences that contradict each other.`,
       pointers: set.map((r) => `${K}/${r}`) });
-    this.#pending.set(job.id, Object.fromEntries(pages.map((p) => [p.rel, p.sha1])));
+    this.#pending.set(job.id, Object.fromEntries(batch.map((p) => [p.rel, p.sha1])));
     return job;
   }
 

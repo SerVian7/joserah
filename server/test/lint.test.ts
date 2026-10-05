@@ -125,3 +125,14 @@ test('POST /api/lint/llm: nothing changed answers 200 with a reason', async (t) 
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), { id: null, reason: 'nothing changed' });
 });
+
+test('a pass covers at most what the brief can carry; the rest stays in the changed set for the next pass', async (t) => {
+  const { s, ws, runner } = sched(t);
+  for (let i = 0; i < 25; i++) put(ws, `wiki/topics/p${String(i).padStart(2, '0')}.md`, `# P${i}\n`);
+  const job = s.runLlm()!;
+  assert.equal(job.pointers!.length, 20);
+  await runner.idle();
+  assert.equal(s.changedSet().length, 5, 'the five the model never saw are still unchecked');
+  s.runLlm(); await runner.idle();
+  assert.deepEqual(s.changedSet(), []);
+});
