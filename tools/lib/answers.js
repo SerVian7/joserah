@@ -16,25 +16,50 @@ const FILE = 'answers.json';
 const ID_RE = /^[a-z0-9-]{1,160}$/;
 const FIELDS = ['row', 'key', 'label', 'note', 'at'];
 const TRANSIENT = ['EPERM', 'EBUSY', 'EACCES'];
+const STALE_MS = 5000; // the critical section takes milliseconds; a lock this old is a dead writer's
+const WAIT_MS = 7000;
+const held = new Map(); // lock path -> this process's token while it holds that lock
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const rm = (p) => fs.rmSync(p, { force: true, maxRetries: 5, retryDelay: 20 });
+const readLock = (lock) => { try { return fs.readFileSync(lock, 'utf8'); } catch { return null; } };
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const isReplyId = (id) => /--r[a-z0-9]+$/.test(id);
 const empty = () => ({ version: 1, docs: {} });
 const shape = (j) => (j && typeof j.docs === 'object' && j.docs && !Array.isArray(j.docs) ? { version: 1, docs: j.docs } : null);
 
-// The lock is a file created exclusively; a lock older than 10 s is a dead writer's and is taken over.
-// Not re-entrant: nothing inside fn may call withLock on the same dir.
+// The lock is a file created exclusively, holding its writer's token. A lock older than STALE_MS is a
+// dead writer's: one waiter at a time (an exclusive .reap file) removes it, and only if it is still the
+// stale lock that waiter saw. A writer releases only a lock holding its own token, and write() refuses
+// to rename when its lock was taken over, so a writer that slept past STALE_MS cannot put a stale
+// snapshot over a newer one. Not re-entrant: nothing inside fn may call withLock on the same dir.
+function reap(lock, seen) {
+  const r = lock + '.reap';
+  try { fs.writeFileSync(r, '', { flag: 'wx' }); } catch {
+    try { if (Date.now() - fs.statSync(r).mtimeMs > STALE_MS) rm(r); } catch { /* gone */ }
+    return;
+  }
+  try {
+    if (Date.now() - fs.statSync(lock).mtimeMs > STALE_MS && readLock(lock) === seen) rm(lock);
+  } catch { /* gone */ } finally { rm(r); }
+}
+
 function withLock(dir, fn) {
   const lock = path.join(dir, FILE + '.lock');
-  const until = Date.now() + 5000;
+  const token = `${process.pid}.${crypto.randomBytes(6).toString('hex')}`;
+  const until = Date.now() + WAIT_MS;
   for (;;) {
-    try { fs.closeSync(fs.openSync(lock, 'wx')); break; } catch (e) {
+    try { fs.writeFileSync(lock, token, { flag: 'wx' }); break; } catch (e) {
       if (e.code !== 'EEXIST' && !TRANSIENT.includes(e.code)) throw e;
-      try { if (Date.now() - fs.statSync(lock).mtimeMs > 10000) { fs.rmSync(lock, { force: true }); continue; } } catch { /* gone or busy: retry */ }
+      try { if (Date.now() - fs.statSync(lock).mtimeMs > STALE_MS) reap(lock, readLock(lock)); } catch { /* gone: retry */ }
       if (Date.now() > until) throw new Error(`answers: ${lock} is held by another writer`);
       sleep(10 + Math.floor(Math.random() * 20));
     }
   }
-  try { return fn(); } finally { fs.rmSync(lock, { force: true }); }
+  held.set(lock, token);
+  try { return fn(); } finally {
+    held.delete(lock);
+    if (readLock(lock) === token) rm(lock);
+  }
 }
 
 // For readers: a missing or broken file reads as empty.
@@ -65,9 +90,14 @@ function write(dir, store) {
   const p = path.join(dir, FILE);
   const tmp = `${p}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(store, null, 2) + '\n');
+  const lock = p + '.lock';
+  if (!held.has(lock) || readLock(lock) !== held.get(lock)) {
+    rm(tmp);
+    throw new Error(`answers: the lock on ${dir} was taken over by another writer; nothing written`);
+  }
   for (let i = 0; ; i++) {
     try { fs.renameSync(tmp, p); return; } catch (e) {
-      if (i >= 6 || !TRANSIENT.includes(e.code)) { fs.rmSync(tmp, { force: true }); throw e; }
+      if (i >= 6 || !TRANSIENT.includes(e.code)) { rm(tmp); throw e; }
       sleep(20 * (i + 1));
     }
   }
@@ -94,7 +124,7 @@ function check(id, doc, author) {
 
 // Merge c into the store s under the lock; the caller writes.
 function merge(s, id, c, author) {
-  const cur = s.docs[id];
+  const cur = own(s.docs, id) ? s.docs[id] : undefined;
   if (cur && (cur.from === 'assistant') !== (author === 'assistant')) return { ok: false, code: 'not-yours' };
   const next = author === 'assistant' ? { ...cur, ...c, from: 'assistant', state: 'reply' } : { ...cur, ...c, state: 'new' };
   if (!next.at) next.at = new Date().toISOString();
@@ -124,7 +154,7 @@ function markRead(dir, id) {
   if (typeof id !== 'string' || !ID_RE.test(id) || !fs.existsSync(path.join(dir, FILE))) return { ok: false, code: 'not-found' };
   return withLock(dir, () => {
     const s = readForWrite(dir);
-    const d = s.docs[id];
+    const d = own(s.docs, id) ? s.docs[id] : null;
     if (!d) return { ok: false, code: 'not-found' };
     if (d.from === 'assistant') return { ok: false, code: 'not-yours' };
     s.docs[id] = { ...d, state: 'read' };
@@ -144,10 +174,10 @@ function reply(dir, baseId, note, nowMs = Date.now()) {
   return withLock(dir, () => {
     const s = readForWrite(dir);
     let t = nowMs;
-    while (s.docs[`${base}--r${t.toString(36)}`]) t++;
+    while (own(s.docs, `${base}--r${t.toString(36)}`)) t++;
     const id = `${base}--r${t.toString(36)}`;
     if (!ID_RE.test(id)) return { ok: false, code: 'bad-id' };
-    const row = (s.docs[baseId] || s.docs[base] || {}).row;
+    const row = ((own(s.docs, baseId) && s.docs[baseId]) || (own(s.docs, base) && s.docs[base]) || {}).row;
     const c = clean({ ...(typeof row === 'string' ? { row } : {}), note: String(note), at: new Date(nowMs).toISOString() });
     const r = merge(s, id, c, 'assistant');
     if (!r.ok) return r;
@@ -174,4 +204,4 @@ function newCounts(workspace, days = 2) {
   return out;
 }
 
-module.exports = { FILE, ID_RE, isReplyId, read, put, list, markRead, reply, newCounts, withLock };
+module.exports = { FILE, ID_RE, isReplyId, read, put, list, markRead, reply, newCounts, withLock, _writeLocked: write };

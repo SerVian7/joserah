@@ -130,3 +130,30 @@ test('answers.js reply refuses an id that is not on the page', (t) => {
   assert.match(r.stderr, /answers: not-found/);
   assert.equal(Object.keys(A.read(d).docs).length, 1);
 });
+
+test('the lock: a dead writer\'s lock is taken over, another writer\'s lock is never released', (t) => {
+  const d = tmpdir(t);
+  const lock = path.join(d, 'answers.json.lock');
+  fs.writeFileSync(lock, 'dead');
+  const old = new Date(Date.now() - 60000);
+  fs.utimesSync(lock, old, old);
+  assert.ok(A.put(d, 'a-x-1', { note: 'n' }, 'owner').ok);
+  assert.ok(!fs.existsSync(lock));
+  A.withLock(d, () => fs.writeFileSync(lock, 'someone-else'));
+  assert.equal(fs.readFileSync(lock, 'utf8'), 'someone-else');
+});
+
+test('a write whose lock was taken over is refused, not written over the other', (t) => {
+  const d = tmpdir(t);
+  fs.writeFileSync(path.join(d, 'answers.json'), '{"version":1,"docs":{}}\n');
+  const lock = path.join(d, 'answers.json.lock');
+  assert.throws(() => A.withLock(d, () => { fs.writeFileSync(lock, 'someone-else'); A._writeLocked(d, { version: 1, docs: { 'a-1': { note: 'x' } } }); }), /lock/);
+  assert.deepEqual(A.read(d).docs, {});
+});
+
+test('object prototype names are not documents', (t) => {
+  const d = tmpdir(t);
+  A.put(d, 'a-1', { note: 'n' }, 'owner');
+  assert.deepEqual(A.markRead(d, 'constructor'), { ok: false, code: 'not-found' });
+  assert.deepEqual(Object.keys(A.read(d).docs), ['a-1']);
+});
