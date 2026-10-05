@@ -175,6 +175,9 @@ per other audience.
   (`run`, `you`, `wait`, `ok`, `plan` in rows.json).
 - **The agent-working row is added in the same turn the agent is started** — never later — and moved
   when the agent ends.
+- **The reply that finishes a job closes its row** — inline or by an agent: it finds that job's
+  existing row, whatever its state, and moves it to done with the result in the same reply; a job
+  reported done in chat with its row still open is not done.
 - **The handoff.** Every open row ends with the next step and where it happens: the Daily Tracker is
   what lets a new chat continue without loss.
 - **A new day opens a new Daily Tracker.** At the first message of a new day the assistant opens that
