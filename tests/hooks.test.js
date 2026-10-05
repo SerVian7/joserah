@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { tmpdir, runTool, PLUGIN_ROOT, HERMETIC_CONFIG_DIR, fakeMarketplace } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, HERMETIC_CONFIG_DIR, fakeMarketplace, crewOn } = require('./helpers');
 
 function hookWs(t) {
   const dir = path.join(tmpdir(t), 'ws');
@@ -739,6 +739,7 @@ test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   const cfgPath = path.join(dir, '.joserah', 'config.json');
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   cfg.assistantName = 'Yarkın';
+  cfg.crew = true;
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
   const sub = runHook('session-start.js', dir, undefined, undefined, ['subagent']);
   assert.strictEqual(sub.status, 0, sub.stderr);
@@ -1210,6 +1211,7 @@ test('crew.js is registered for its five events, each one command string', () =>
 test('Voice line with crew on; developer-mode line off by default, on with devMode', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  crewOn(dir);
   let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /only talk/i);
   assert.match(ctx, /first person/);
@@ -1222,6 +1224,7 @@ test('Voice line with crew on; developer-mode line off by default, on with devMo
 test('Voice line: Voice writes the Crew strip at start and end; not with the Daily Tracker off', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  crewOn(dir);
   let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /Crew strip: you write it/);
   assert.match(ctx, /Lead's `started:` line -> work/);
@@ -1234,11 +1237,12 @@ test('Voice line: Voice writes the Crew strip at start and end; not with the Dai
 test('worker line: result to the log first, then path and one line', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
+  crewOn(dir);
   const ctx = JSON.parse(runHook('session-start.js', dir, '', null, ['subagent']).stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /\.joserah\/desk\/crew\//);
   assert.match(ctx, /write the result to (your|the) log before you reply/i);
 });
-test('crew off: no Voice line, the worker line as before, the developer-mode off line stays', (t) => {
+test('crew off (absent, false, disabled): no Voice line, the worker line as before, the developer-mode off line stays', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
   const p = path.join(dir, '.joserah', 'config.json');

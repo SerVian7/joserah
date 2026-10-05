@@ -672,7 +672,7 @@ const CHECKS = [
     // 0.18.0: the five agent definitions crew.js writes from config. The check
     // is crew.js --check's own function (generate with check: true), fed the
     // config this run already read — one comparison, not a second copy of it.
-    // Crew off: nothing to report.
+    // Crew off (the default since 2026-10-05): listed, ok, nothing to generate.
     run({ root, cfg }) {
       if (!cfg) return null;
       const { generate } = require('../crew');
@@ -683,7 +683,7 @@ const CHECKS = [
         const what = e.message.replace(/^crew(?:\.(\w+))?: /, (m, role) => (role ? `${role}: ` : ''));
         return check('crew definitions current', false, `crew config: ${what}`);
       }
-      if (results.every((r) => r.action === 'skipped-off')) return null;
+      if (results.every((r) => r.action === 'skipped-off')) return check('crew definitions current', true, 'the crew is off: nothing to generate');
       const drift = results.filter((r) => r.action === 'drift')
         .map((r) => `crew definition ${r.missing ? 'missing' : 'stale'}: ${r.role}`);
       if (drift.length) return check('crew definitions current', false, `${drift.join(', ')} — run crew.js`);

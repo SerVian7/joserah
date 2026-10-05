@@ -3,11 +3,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { PLUGIN_ROOT, tmpdir, runTool } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool, crewOn } = require('./helpers');
 const { resolveCrew, ROLES } = require('../tools/lib/crew-config');
 
-test('no crew block means on, with defaults, devMode off', () => {
-  const c = resolveCrew({});
+test('no crew key means off; crew true means on, with defaults, devMode off', () => {
+  assert.strictEqual(resolveCrew({}).enabled, false, 'absent -> off');
+  const c = resolveCrew({ crew: true });
   assert.strictEqual(c.enabled, true);
   assert.strictEqual(c.devMode, false);
   assert.deepStrictEqual(c.roles.lead, { model: 'opus', effort: 'medium' });
@@ -67,6 +68,9 @@ const ws = (t, cfgExtra = {}) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
   const p = path.join(dir, '.joserah', 'config.json');
+  // The crew is off by default: switch it on and generate, as an owner would, then apply the extras.
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), crew: true }, null, 2));
+  runTool('crew.js', [dir]);
   fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), ...cfgExtra }, null, 2));
   return dir;
 };
@@ -156,8 +160,10 @@ test('crew off removes only stamped definitions, one line each; an unstamped fil
   fs.writeFileSync(agent(dir, 'scout'), 'mine');
   const p = path.join(dir, '.joserah', 'config.json');
   for (const off of [false, { enabled: false }]) {
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    cfg.crew = true; fs.writeFileSync(p, JSON.stringify(cfg));
     runTool('crew.js', [dir]);
-    const cfg = JSON.parse(fs.readFileSync(p, 'utf8')); cfg.crew = off;
+    cfg.crew = off;
     fs.writeFileSync(p, JSON.stringify(cfg));
     const r = runTool('crew.js', [dir]);
     assert.strictEqual(r.status, 0, r.stderr);
@@ -168,7 +174,6 @@ test('crew off removes only stamped definitions, one line each; an unstamped fil
     assert.strictEqual(fs.readFileSync(agent(dir, 'scout'), 'utf8'), 'mine', 'owner file untouched');
     assert.doesNotMatch(r.stdout, /removed scout/);
     assert.strictEqual(runTool('crew.js', [dir]).stdout.match(/^removed /mg), null, 'a second run removes nothing');
-    delete cfg.crew; fs.writeFileSync(p, JSON.stringify(cfg));
   }
 });
 

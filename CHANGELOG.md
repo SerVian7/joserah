@@ -5,6 +5,7 @@ any of them.
 
 ## Unreleased
 
+- **The crew is off by default.** A workspace without a `crew` key now runs as before the crew existed: the assistant does the work itself, and uses an agent only for heavy reading. Switch the crew on with `"crew": true` in `.joserah/config.json` when the work gets heavy. Workspaces that set `"crew": false` are unchanged; ones that relied on the old default turn it on that way.
 - **Rows under their project.** Every Tracker row sits under its project's group; a loose row that is a step of a known project plan is moved there unasked, named as a step of that plan, and the assistant says so in one line.
 
 ## 0.18.0

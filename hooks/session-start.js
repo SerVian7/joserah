@@ -112,13 +112,13 @@ if (!WORKER && cfg.dailyTracker !== false) {
 if (!WORKER && cfg.sharedMemoryAutoPush === true) {
   who.push("Shared-memory pushes: automatic — push a joined shared memory without waiting for a yes and report the push notice's file list in one line; ask first only when something is genuinely problematic (another member's content removed, personal data, a rules change you are unsure of). Off when `sharedMemoryAutoPush` is not true in .joserah/config.json.");
 }
-// 0.18.0 (owner, 2026-10-05): the crew. On unless `"crew": false` or
-// `"crew": { "enabled": false }`; a block with a typo still counts as on here —
+// 0.18.0 (owner, 2026-10-05): the crew. Off by default; on with `"crew": true` or a
+// `crew` block not saying `"enabled": false`; a block with a typo still counts as on here —
 // the generator refuses it loudly and doctor reports it. Voice is the main
 // session: it only talks, and the work goes to Lead. Lines kept short: they share
 // the 8,000-character budget with the owner's layers. Read inline, not through
 // the plugin's crew-config module: this file reads nothing outside the workspace.
-const CREW_ON = !(cfg.crew === false || (cfg.crew && typeof cfg.crew === 'object' && cfg.crew.enabled === false));
+const CREW_ON = cfg.crew === true || (!!cfg.crew && typeof cfg.crew === 'object' && !Array.isArray(cfg.crew) && cfg.crew.enabled !== false);
 if (!WORKER && CREW_ON) {
   // The strip is written by the session that sees the event (owner, 2026-10-05): Voice.
   const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours. Crew strip: you write it (`tracker.js crew`): Lead\'s `started:` line -> work, `owner ·` -> owner, a completion notice -> idle.' : '';

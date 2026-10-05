@@ -116,7 +116,7 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/crew.js" <workspace-root>
 It writes `.claude/agents/{lead,architect,builder,scout,sentry}.md` in the workspace, one line per
 role. `kept-owner <role>` → a same-named file the owner wrote is there and was left alone: name it in
 one line, overwrite nothing. Exit 1 → a typo in the `crew` block of `config.json`: its message names the
-key; say it in one line and let the owner fix it. With the crew off (`"crew": false` or
+key; say it in one line and let the owner fix it. With the crew off (no `crew` key, `"crew": false` or
 `"enabled": false`) it writes nothing and removes only the definitions it wrote itself (stamped),
 one `removed <role>` line each; an owner's same-named file is never touched.
 

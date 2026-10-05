@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { PLUGIN_ROOT, tmpdir, runTool, fakeMarketplace } = require('./helpers');
+const { PLUGIN_ROOT, tmpdir, runTool, fakeMarketplace, crewOn } = require('./helpers');
 const nf = require(path.join(PLUGIN_ROOT, 'tools', 'lib', 'note-format'));
 
 function freshWs(t) {
@@ -735,8 +735,8 @@ test('doctor still fails on a broken link to a missing knowledge file', (t) => {
 });
 
 // 0.18.0 (crew plan, Task 6.3): doctor runs crew.js --check's own function.
-test('doctor: crew definitions — missing, stale, config typo, fresh pass, crew off silent', (t) => {
-  const dir = freshWs(t);
+test('doctor: crew definitions — missing, stale, config typo, fresh pass, crew off ok', (t) => {
+  const dir = crewOn(freshWs(t));
   let r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);
   assert.match(r.stdout, /^ok\s+crew definitions current/m);
@@ -762,13 +762,17 @@ test('doctor: crew definitions — missing, stale, config typo, fresh pass, crew
   assert.strictEqual(r.status, 1);
   assert.match(r.stdout, /crew config: unknown role "scuot"/);
 
-  setCfg({ crew: false });
-  r = runTool('doctor.js', [dir]);
-  assert.doesNotMatch(r.stdout, /crew/i, 'crew off: no crew finding');
+  for (const off of [{ crew: false }, { crew: undefined }]) {
+    setCfg(off);
+    r = runTool('doctor.js', [dir]);
+    assert.strictEqual(r.status, 0, r.stdout);
+    assert.match(r.stdout, /^ok\s+crew definitions current\s+— the crew is off: nothing to generate$/m, 'crew off or absent: listed, ok');
+    assert.doesNotMatch(r.stdout, /^(warn|FAIL)\s+crew/m, 'and never a finding');
+  }
 });
 
 test('doctor: an owner file under a crew role name is reported, not failed', (t) => {
-  const dir = freshWs(t);
+  const dir = crewOn(freshWs(t));
   fs.writeFileSync(path.join(dir, '.claude', 'agents', 'scout.md'), 'mine');
   const r = runTool('doctor.js', [dir]);
   assert.strictEqual(r.status, 0, r.stdout);

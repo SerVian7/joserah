@@ -63,4 +63,12 @@ function fakeMarketplace(t, version, mutate, { pluginVersion = null } = {}) {
   return configDir;
 }
 
-module.exports = { PLUGIN_ROOT, HERMETIC_CONFIG_DIR, tmpdir, runTool, fakeMarketplace };
+// The crew is off by default (owner, 2026-10-05); a test about the crew switches it on.
+function crewOn(dir) {
+  const p = path.join(dir, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), crew: true }, null, 2) + '\n');
+  runTool('crew.js', [dir]); // and generates the definitions, as an owner switching it on would
+  return dir;
+}
+
+module.exports = { crewOn, PLUGIN_ROOT, HERMETIC_CONFIG_DIR, tmpdir, runTool, fakeMarketplace };

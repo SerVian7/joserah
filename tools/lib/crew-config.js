@@ -1,7 +1,9 @@
 'use strict';
 // Resolves the `crew` block of .joserah/config.json into the five role
-// definitions the generator (tools/crew.js) writes. No block means on, with
-// defaults; `"crew": false` or `"enabled": false` means off. `devMode` is a
+// definitions the generator (tools/crew.js) writes. Off by default (owner,
+// 2026-10-05): no `crew` key means off; `"crew": true` means on with defaults;
+// a block of overrides means on unless it says `"enabled": false`; `"crew": false`
+// is off. `devMode` is a
 // top-level key and decides only whether the owner sees the crew.
 // A typo is an error that names the key, never a silent fallback to defaults.
 
@@ -20,9 +22,9 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 function resolveCrew(cfg = {}) {
   const block = cfg.crew;
   const devMode = cfg.devMode === true;
-  if (block === false) return { enabled: false, devMode, roles: clone(DEFAULTS) };
-  if (block !== undefined && !isObj(block)) throw new Error('crew: must be an object or false');
-  const b = block || {};
+  if (block === undefined || block === false) return { enabled: false, devMode, roles: clone(DEFAULTS) };
+  if (block !== true && !isObj(block)) throw new Error('crew: must be true, false or an object');
+  const b = block === true ? {} : block;
   for (const k of Object.keys(b)) {
     if (k !== 'enabled' && !ROLES.includes(k)) throw new Error(`crew: unknown role "${k}"`);
   }

@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 28);
+  assert.strictEqual(cfg.promptVersion, 29);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 28);
+  assert.strictEqual(cfg.promptVersion, 29);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,7 +262,8 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 28);
+  assert.strictEqual(prompt.readPromptVersion(text), 29);
+  assert.ok(text.includes('**with the crew on** (off by default; on when `crew` is true)'), '§5 (v29): the crew is off by default (owner, 2026-10-05)');
   assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
   assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
   assert.ok(text.includes("the verdict is \"none fits — we don't choose\" plus the one question that would change it"), '§5 (v24): no recommendation for its own sake (owner, 2026-10-02)');

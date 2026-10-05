@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, crewOn } = require('./helpers');
 
 test('scaffold creates root keys/AGENTS.md and keys-rooted gitignore', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
@@ -154,21 +154,28 @@ test('scaffold records the prompt version and sha of the AGENTS.md it installs',
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(installed));
 });
 
-test('a fresh scaffold has the five crew definitions, each stamped, and no devMode key', (t) => {
+// The crew is off by default (owner, 2026-10-05): a fresh workspace has no crew definitions; "crew": true and
+// crew.js write the five, each stamped.
+test('a fresh scaffold has no crew definitions and no crew or devMode key; switched on, crew.js writes the five, stamped', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   const r = runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
   assert.strictEqual(r.status, 0, r.stderr);
   const { STAMP } = require(path.join(PLUGIN_ROOT, 'tools', 'crew'));
-  for (const role of ['lead', 'architect', 'builder', 'scout', 'sentry']) {
+  const roles = ['lead', 'architect', 'builder', 'scout', 'sentry'];
+  for (const role of roles) assert.ok(!fs.existsSync(path.join(dir, '.claude', 'agents', `${role}.md`)), `${role}.md not written while the crew is off`);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
+  assert.ok(!('devMode' in cfg), 'devMode absent means off; never written');
+  assert.ok(!('crew' in cfg), 'crew absent means off; never written');
+  const d = runTool('doctor.js', [dir]);
+  assert.strictEqual(d.status, 0, d.stdout + d.stderr);
+  crewOn(dir);
+  for (const role of roles) {
     const f = path.join(dir, '.claude', 'agents', `${role}.md`);
     assert.ok(fs.existsSync(f), `${role}.md written`);
     assert.ok(fs.readFileSync(f, 'utf8').includes(STAMP), `${role}.md stamped`);
   }
-  const cfg = JSON.parse(fs.readFileSync(path.join(dir, '.joserah', 'config.json'), 'utf8'));
-  assert.ok(!('devMode' in cfg), 'devMode absent means off; never written');
-  assert.ok(!('crew' in cfg), 'no crew block needed; defaults apply');
-  const d = runTool('doctor.js', [dir]);
-  assert.strictEqual(d.status, 0, d.stdout + d.stderr);
+  const on = runTool('doctor.js', [dir]);
+  assert.strictEqual(on.status, 0, on.stdout + on.stderr);
 });
 
 // Task 6.5: templates/ holds two kinds of thing — what a workspace is made of,

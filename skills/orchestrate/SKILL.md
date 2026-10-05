@@ -74,8 +74,9 @@ A wave with one folder or one stage gets no manager: the layer costs a full agen
 
 ## Crew
 
-On by default; `"crew": false` (or `"enabled": false` in the `crew` block) in `.joserah/config.json`
-switches it off, and the rest of this skill then holds as written for crew off. With it on, a small
+Off by default; `"crew": true` in `.joserah/config.json` switches it on (a `crew` block of overrides
+also counts as on, unless it carries `"enabled": false`); without it the rest of this skill holds as
+written for crew off. With it on, a small
 fixed crew does the work, each role on the model and effort its generated definition in
 `.claude/agents/` carries (from config):
 

@@ -2,13 +2,13 @@
 // hooks/crew.js — the crew's payload-reading hook (spec "The Ledger", safety net).
 const test = require('node:test'); const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const { spawnSync } = require('child_process');
-const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
+const { tmpdir, runTool, PLUGIN_ROOT, crewOn } = require('./helpers');
 // the hook's own state (the pending descriptions) in a folder of this test run alone
 process.env.JOSERAH_STATE_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'joserah-crew-test-'));
 const hook = (cwd, event, payload, now = '2026-10-05T09:00:00') => spawnSync(process.execPath,
   [path.join(PLUGIN_ROOT, 'hooks', 'crew.js'), event],
   { cwd, input: payload, encoding: 'utf8', env: { ...process.env, JOSERAH_NOW: now }, timeout: 5000 });
-const wsFor = (t) => { const d = path.join(tmpdir(t), 'ws'); runTool('scaffold.js', ['--target', d, '--workspace', 'w', '--owner', 'A B']); return d; };
+const wsFor = (t) => { const d = path.join(tmpdir(t), 'ws'); runTool('scaffold.js', ['--target', d, '--workspace', 'w', '--owner', 'A B']); return crewOn(d); };
 const leadDir = (ws, day = '2026-10-05') => path.join(ws, '.joserah', 'desk', 'crew', day, 'lead');
 
 test('SubagentStart for lead creates the Ledger and names it', (t) => {
