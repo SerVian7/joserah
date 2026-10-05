@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: d4f8a59 · 2026-10-05 22:28 +0300 · release 0.18.1: crew off by default, the Tracker's one reading order, artifacts switch
+Last change: f8915fb · 2026-10-05 22:45 +0300 · local server: research and design spec for review
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
@@ -46,6 +46,11 @@ Six runs, same model and prompts, crew off vs on; details and caveats: [measurem
   date: 2026-10-05 10:03:27Z–10:05:09Z · by: Builder · source: ~/.claude/projects/<j3-on folder>/71e18f8b-a70d-4a84-8a15-ac8b8d2faeae.jsonl and its subagents/
 
 ## Decisions
+
+- [decision] Joserah local server -> thin Hono/TypeScript server inside the plugin, beside the terminal plugin, driving the user's own Claude Code; Docker self-contained (no host folders) or native; access local/tailnet/internet by setting; OpenRouter later
+  date: 2026-10-05
+  by: Serkan
+  source: chat 2026-10-05; docs/specs/2026-10-05-local-server-design.md
 
 - [decision] Everything left for the owner is a Daily Tracker row at once, never only in chat -> in force since 0.17.1
   date: 2026-10-01
