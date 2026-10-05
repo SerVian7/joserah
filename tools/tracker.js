@@ -73,7 +73,11 @@
  *       two or more, keys unique; recommend, one of the keys; why, one line. Else
  *       render, row and crew refuse it before writing (checkDecisions). Its detail
  *       shows the question, one option per line with its key as a tag, the
- *       recommended one marked with its why. Active work and Owner oldest first,
+ *       recommended one marked with its why, then a hidden answer form (a
+ *       button per option, a note, Send) that ANSWER_JS shows when the page has
+ *       its database (published with capabilities {db: {}}): Send writes
+ *       answers/<slugId('a', title)> = {row, key, label, note, at, state: "new"}
+ *       and the line says "cevaplandı: A · HH:MM", also after a reload. Active work and Owner oldest first,
  *       the rest newest first; ties keep file order; an empty group is left out.
  *       In a group, two or more lines of one category (a row's parent, by name)
  *       sit under one category line, indented; one alone reads
@@ -126,8 +130,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', rec: 'recommended', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', rec: 'önerim', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', send: 'Send', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', running: 'running', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', send: 'Gönder', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', running: 'sürüyor', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -198,6 +202,13 @@ const STRIP_CSS = [
   '.cd ul.opt .k{position:absolute;left:0;top:6px;min-width:18px;padding:0 4px;font:600 10.5px/1.5 var(--mono);text-align:center;color:var(--muted);border:1px solid var(--line)}',
   '.cd ul.opt .ol{color:var(--ink);font-weight:500}.cd ul.opt .ot{display:block}.cd ul.opt .ol+.ot{margin-top:1px}',
   '.cd ul.opt em{margin-left:8px;padding:0 5px;font:600 10px/1.6 var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--you);border:1px solid currentColor}',
+  'form.ans{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 2px}form.ans[hidden]{display:none}',
+  'form.ans .ak{display:flex;gap:6px}form.ans .ak button{min-width:36px;min-height:34px;padding:0 10px;font:600 12px var(--mono);color:var(--ink);background:none;border:1px solid var(--line);cursor:pointer}',
+  'form.ans .ak button.rec{border-color:var(--you);color:var(--you)}form.ans .ak button[aria-pressed="true"]{background:var(--you);border-color:var(--you);color:var(--bg)}',
+  'form.ans input{flex:1 1 160px;min-width:0;min-height:34px;padding:0 8px;font:400 13px var(--sans);color:var(--ink);background:none;border:1px solid var(--line)}',
+  'form.ans .send{min-height:34px;padding:0 14px;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--bg);background:var(--ink);border:0;cursor:pointer}form.ans .send[disabled]{opacity:.4;cursor:default}',
+  'form.ans button:focus-visible,form.ans input:focus-visible{outline:1px solid var(--link);outline-offset:2px}form.ans .err{flex-basis:100%;color:var(--you)}form.ans .err[hidden]{display:none}',
+  ':is(.crew,main) li.crew-line .tx .an{margin-left:8px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ok)}:is(.crew,main) li.crew-line .tx .an[hidden]{display:none}',
   '.cd ul.opt>li.rec .k{color:var(--you);border-color:currentColor}.cd ul.opt .why{display:block;margin-top:2px;color:var(--you)}',
   ':is(.crew,main) li.crew-none{display:block;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted)}',
   // a category line: its title (and "running" when a member runs) and the member count; a done one folds
@@ -252,6 +263,27 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0;'
 // (tools/lib/theme.js); the board's own layout follows it. The template carries it as
 // <style id="console"> and every render puts it back last, so it wins over a page's older styles and a
 // re-render reproduces it exactly. The line and category shapes are STRIP_CSS.
+// The answer (owner, 2026-10-05: "textbox ve seçim yetenekleri getirelim"): with the artifact's database
+// (capability `db`, declared on publish as {db: {}}) a question row's form shows; a key button chooses (one
+// at a time, aria-pressed), Send writes answers/<id> = {row, key, label, note, at, state: "new"} and the row
+// says "cevaplandı: A · HH:MM"; one subscription marks answers already stored, also after a reload. No
+// database, no right to write, or any failure to reach it: the form stays hidden, the row reads as before.
+const ANSWER_JS = '(function(){var D=document,forms=D.querySelectorAll("form.ans[data-ans]");if(!forms.length)return;'
+  + 'var W=typeof window!=="undefined"?window:{};if(!W.claude||typeof W.claude.use!=="function")return;'
+  + 'var tr=D.documentElement.lang==="tr",T=tr?{done:"cevaplandı",fail:"gönderilemedi, tekrar deneyin"}:{done:"answered",fail:"could not send, try again"};'
+  + 'function each(l,f){Array.prototype.forEach.call(l,f)}'
+  + 'function hm(iso){var d=new Date(iso);if(isNaN(d.getTime()))return"";return("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)}'
+  + 'function mark(id,a){var t=T.done+": "+a.key+(hm(a.at)?" · "+hm(a.at):"");each(D.querySelectorAll("[data-an]"),function(e){if(e.getAttribute("data-an")===id){e.textContent=t;e.hidden=false}});'
+  + 'each(forms,function(f){if(f.getAttribute("data-ans")===id)f.hidden=true})}'
+  + 'var p;try{p=W.claude.use("db")}catch(e){return}Promise.resolve(p).then(function(db){if(!db)return;var col=db.collection("answers");'
+  + 'each(forms,function(f){var keys=f.querySelectorAll(".ak button"),note=f.querySelector("input"),send=f.querySelector(".send"),err=f.querySelector(".err"),pick=null;'
+  + 'each(keys,function(b){b.addEventListener("click",function(){pick=b;each(keys,function(x){x.setAttribute("aria-pressed",String(x===b))});send.disabled=false})});'
+  + 'f.addEventListener("submit",function(e){e.preventDefault();if(!pick)return;var id=f.getAttribute("data-ans"),a={row:f.getAttribute("data-row"),key:pick.getAttribute("data-k"),label:pick.getAttribute("data-l"),note:String(note&&note.value||"").trim().slice(0,500),at:new Date().toISOString(),state:"new"};'
+  + 'send.disabled=true;err.hidden=true;col.doc(id).set(a).then(function(){mark(id,a)},function(x){var c=x&&x.code;'
+  + 'if(c==="invalid_argument"||c==="not_granted"||c==="revoked"||c==="capability_disabled"||c==="capability_removed"){f.hidden=true;return}err.textContent=T.fail;err.hidden=false;send.disabled=false})});'
+  + 'f.hidden=false});'
+  + 'col.onSnapshot(function(snap){each(snap.docs,function(d){if(!d.exists)return;var a=d.data();if(a&&a.key)mark(d.id,a)})},function(){})},function(){})})();';
+
 const CONSOLE_CSS = [
   theme.BASE_CSS,
   'main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}',
@@ -483,7 +515,16 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
       + (rec && String(r.why ?? '').trim() ? `<span class="why">${esc(String(r.why).trim())}</span>` : '')
       + '</li>';
   }).join('')}</ul>` : '';
-  return dl + ask
+  // answered on the page (owner, 2026-10-05): one button per option, a short note, Send — hidden until the
+  // page's database is there (ANSWER_JS); the answer's id is made from the title, so it survives a move
+  const form = os.length && r.state === 'you'
+    ? `<form class="ans" data-ans="${slugId('a', r.title)}" data-row="${esc(r.title)}" hidden><div class="ak" role="group" aria-label="${esc(L.choice || LABELS.en.choice)}">${os.map((o) => {
+      const rec = key(o.key) === key(r.recommend);
+      const t = (o.label || o.text) + (rec ? ` · ${L.rec || LABELS.en.rec}` : '');
+      return `<button type="button"${rec ? ' class="rec"' : ''} data-k="${esc(o.key)}" data-l="${esc(o.label || o.text)}" aria-pressed="false" title="${esc(t)}">${esc(o.key)}</button>`;
+    }).join('')}</div><input type="text" name="note" maxlength="500" placeholder="${esc(L.note || LABELS.en.note)}" aria-label="${esc(L.note || LABELS.en.note)}"><button type="submit" class="send" disabled>${esc(L.send || LABELS.en.send)}</button><span class="err" role="status" hidden></span></form>`
+    : '';
+  return dl + ask + form
     + (rest ? `<p>${esc(rest)}</p>` : '')
     + next.map((x) => `<p class="nx"><span>${esc(L.next)}</span> ${esc(x)}</p>`).join('')
     + (urls.length ? `<p class="ln">${urls.map((u) => a(u, L.link)).join(' · ')}</p>` : '')
@@ -555,7 +596,8 @@ function board(rows, crew, L, dev) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
       time = elapsedTime({ state: 'work', since, time: es.map((e) => String(e.time)).sort().pop() });
     }
-    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${extra}`;
+    const answerable = r && g === 'you' && optionsOf(r).some((o) => o.key && (o.label || o.text));
+    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
     const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const d = detailOf(r, es, L, { dev, decide: g === 'you' });
     const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}`
@@ -692,7 +734,8 @@ function render(dir, { quiet = false } = {}) {
   // survives in any style
   html = html.replace(/\n<style id="theme">[\s\S]*?<\/style>/, '').replace(/\n<style id="console">[\s\S]*?<\/style>/, '').replace(/<script id="clip">[\s\S]*?<\/script>\n/, '')
     .replace(/<script id="since">[\s\S]*?<\/script>\n/, '')
-    .replace(/<script id="panel">[\s\S]*?<\/script>\n/, '').replace(/<script id="state">[\s\S]*?<\/script>\n/, '');
+    .replace(/<script id="panel">[\s\S]*?<\/script>\n/, '').replace(/<script id="state">[\s\S]*?<\/script>\n/, '')
+    .replace(/<script id="answer">[\s\S]*?<\/script>\n/, '');
   html = html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (m, a, css, b) => a
     + css.replace(/border-radius:(?!0[;}\s!])[^;}]*;?/g, '').replace(/box-shadow:(?!none[;}\s!])[^;}]*;?/g, '') + b);
   // a page made before the strip gets its styles once
@@ -701,7 +744,7 @@ function render(dir, { quiet = false } = {}) {
   // the Theme's tokens after the page's own styles (one source for every page: tools/lib/theme.js), then the console
   html = `${html.slice(0, at)}\n<style id="theme">\n${theme.TOKENS_CSS}\n</style>\n<style id="console">\n${CONSOLE_CSS}\n</style>${html.slice(at)}`;
   // the clamp first (a restored long list opens through its button), then the panel, then the saved state
-  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n</body>`);
+  html = html.replace('</body>', () => `<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n</body>`);
   // the elapsed-time script only when a strip line has something to count
   if (crew.some(ticks)) html = html.replace('</body>', () => `<script id="since">${SINCE_JS}</script>\n</body>`);
   fs.writeFileSync(pagePath, html);
@@ -803,4 +846,4 @@ if (require.main === module) {
     process.exit(1);
   }
 }
-module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, activeStrip, board, slugId, checkDecisions, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };
+module.exports = { devModeFor, LABELS, CREW_CSS, CONSOLE_CSS, STRIP_CSS, CLIP_JS, SINCE_JS, PANEL_JS, STATE_JS, ANSWER_JS, activeStrip, board, slugId, checkDecisions, stampSince, CREW_ROLES, upsertCrew, readCrew, Refused };

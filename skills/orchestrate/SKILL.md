@@ -262,7 +262,10 @@ per other audience.
   (`tracker.js row … --option "A|<label>|<text>" --option "B|<label>" --recommend A --why "<one line>"`).
   The updater refuses a decision row without them, and an owner entry with reason decision makes its
   row one. Never invent options to pass the check: ask whoever knows them. An action row (a sign-in, a
-  reload, an approval of one thing) needs only the action and where it is done.
+  reload, an approval of one thing) needs only the action and where it is done. The owner answers such a
+  row on the page itself (a button per option, a short note, Send) when the Daily Tracker is published
+  with `capabilities: {db: {}}`; read the answers with `ArtifactData` `query` on collection `answers`,
+  `where [["state","==","new"]]`, act on each, then set its `state` to `"read"`.
 
 ### Crew strip
 

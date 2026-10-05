@@ -562,7 +562,8 @@ test('the template carries the console style and the clamp script; a re-render i
   const f = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'tracker', 'index.html'), 'utf8');
   assert.ok(f.includes(`<style id="console">\n${CONSOLE_CSS}\n</style>`), 'template and renderer agree (style)');
   const { PANEL_JS, STATE_JS } = require('../tools/tracker.js');
-  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n</body>`), 'template and renderer agree (scripts)');
+  const { ANSWER_JS } = require('../tools/tracker.js');
+  assert.ok(f.includes(`<script id="clip">${CLIP_JS}</script>\n<script id="panel">${PANEL_JS}</script>\n<script id="state">${STATE_JS}</script>\n<script id="answer">${ANSWER_JS}</script>\n</body>`), 'template and renderer agree (scripts)');
   const dir = tmpdir(t); init(dir);
   const fresh = page(dir);
   render(dir, '2026-10-01T09:05:00Z');
@@ -1235,9 +1236,9 @@ test('decision rows: the detail shows the question, each option on its own line,
   setRows(dir, [DEC, { state: 'you', title: 'Eklentileri yeniden yükle', small: 'Claude Code: /reload-plugins', time: '09:05' }]);
   assert.strictEqual(render(dir).status, 0);
   const cd = (page(dir).match(/<div class="cd" id="d-you-soru-rapor-nasil-kurulsun-[0-9a-z]+">([\s\S]*?)<\/div>/) || [])[1];
-  assert.strictEqual(cd, '<b>Soru: rapor nasıl kurulsun?</b><p class="ask">Soru: rapor nasıl kurulsun?</p><ul class="opt">'
+  assert.ok(cd.startsWith('<b>Soru: rapor nasıl kurulsun?</b><p class="ask">Soru: rapor nasıl kurulsun?</p><ul class="opt">'
     + '<li class="rec"><span class="k">A</span><span class="ol">İki aşama</span> <em>önerim</em><span class="ot">önce acil kapanacaklar, sonra taşıma</span><span class="why">açıklar hemen kapanır</span></li>'
-    + '<li><span class="k">B</span><span class="ol">Tek tasarım</span><span class="ot">hepsi birlikte</span></li></ul>');
+    + '<li><span class="k">B</span><span class="ol">Tek tasarım</span><span class="ot">hepsi birlikte</span></li></ul><form class="ans"'), cd);
   assert.doesNotMatch(cd, /cevap:/, 'no answer boilerplate');
   assert.match(page(dir), />Eklentileri yeniden yükle<\/button>/, 'an action row needs only the action and where');
   const en = tmpdir(t); init(en);
@@ -1295,4 +1296,132 @@ test('decision rows: row --option key|label|text --recommend --why writes them; 
 test('decision rows: the rule is written in the orchestrate skill', () => {
   const skill = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
   for (const w of ['its title is the question', '`options` (two or more, each `{key, label, text}`)', '`recommend` (one of the keys)', '`why` (one line)', 'An action row (a sign-in, a reload, an approval of one thing) needs only the action and where it is done']) assert.ok(skill.includes(w), w);
+});
+
+// Owner, 2026-10-05: "hatta bunlara textbox ve seçim yetenekleri getirelim widgetlara yine tema ve
+// fikirlerimize uyan cinsten ihtiyacı net karşılayan." An owner question row is answered on the page: one
+// button per option (the recommended one marked), an optional short note and Send; the answer is kept in
+// the artifact's own database (the `db` capability: collection `answers`, one document per question, its id
+// made from the row's title), so the main session reads it; the row then says "cevaplandı: A · HH:MM",
+// also after a reload. Without the capability the form stays hidden and the row reads as before.
+const ANS = {
+  state: 'you', title: 'Soru: rapor nasıl kurulsun?', time: '09:00',
+  options: [{ key: 'A', label: 'İki aşama', text: 'önce acil kapanacaklar' }, { key: 'B', label: 'Tek tasarım' }],
+  recommend: 'A', why: 'açıklar hemen kapanır',
+};
+test('answers: a question row carries a hidden answer form — one button per option, the recommended one marked, a note, Send', (t) => {
+  const { slugId } = require('../tools/tracker.js');
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [ANS, { state: 'you', title: 'Eklentileri yeniden yükleyin', time: '09:05' }, { ...ANS, state: 'ok', title: 'Eski soru?' }]);
+  render(dir);
+  const html = page(dir);
+  const id = slugId('a', ANS.title);
+  assert.match(id, /^a-soru-rapor-nasil-kurulsun-[0-9a-z]+$/);
+  assert.strictEqual(html.split('<form class="ans"').length, 2, 'only the open question row');
+  const f = html.match(/<form class="ans"[\s\S]*?<\/form>/)[0];
+  assert.strictEqual(f, `<form class="ans" data-ans="${id}" data-row="Soru: rapor nasıl kurulsun?" hidden>`
+    + '<div class="ak" role="group" aria-label="Seçiminiz">'
+    + '<button type="button" class="rec" data-k="A" data-l="İki aşama" aria-pressed="false" title="İki aşama · önerim">A</button>'
+    + '<button type="button" data-k="B" data-l="Tek tasarım" aria-pressed="false" title="Tek tasarım">B</button></div>'
+    + '<input type="text" name="note" maxlength="500" placeholder="not (isteğe bağlı)" aria-label="not (isteğe bağlı)">'
+    + '<button type="submit" class="send" disabled>Gönder</button><span class="err" role="status" hidden></span></form>');
+  assert.match(html, new RegExp(`>Soru: rapor nasıl kurulsun\\? <span class="an" data-an="${id}" hidden></span></button>`), 'the line has a hidden answered tag');
+  const en = tmpdir(t); init(en); setRows(en, [ANS]); render(en);
+  assert.match(page(en), /aria-label="Your choice"[\s\S]*placeholder="note \(optional\)"[\s\S]*>Send<\/button>/);
+  assert.strictEqual(page(dir).split('<script id="answer">').length, 2, 'one answer script on the page');
+});
+
+// a small DOM for the answer script: only what it touches
+function answerDom(ids) {
+  const el = (attrs = {}, extra = {}) => {
+    const a = { ...attrs }; const ls = {};
+    return { a, hidden: !!extra.hidden, disabled: !!extra.disabled, textContent: '', value: '', ...extra,
+      getAttribute(k) { return k in a ? a[k] : null; }, setAttribute(k, v) { a[k] = String(v); },
+      addEventListener(ev, f) { (ls[ev] = ls[ev] || []).push(f); }, fire(ev, e = {}) { for (const f of ls[ev] || []) f({ preventDefault() {}, target: this, ...e }); } };
+  };
+  const forms = []; const tags = [];
+  for (const id of ids) {
+    const keys = [el({ 'data-k': 'A', 'data-l': 'İki aşama', 'aria-pressed': 'false' }), el({ 'data-k': 'B', 'data-l': 'Tek tasarım', 'aria-pressed': 'false' })];
+    const input = el({}, { value: '' }); const send = el({}, { disabled: true }); const err = el({}, { hidden: true });
+    const f = el({ 'data-ans': id, 'data-row': `row ${id}` }, { hidden: true });
+    f.querySelectorAll = (s) => (s === '.ak button' ? keys : []);
+    f.querySelector = (s) => ({ input, '.send': send, '.err': err })[s] || null;
+    f.keys = keys; f.input = input; f.send = send; f.err = err;
+    forms.push(f); tags.push(el({ 'data-an': id }, { hidden: true }));
+  }
+  const document = { documentElement: { lang: 'tr' }, querySelectorAll: (s) => (s === 'form.ans[data-ans]' ? forms : s === '[data-an]' ? tags : []) };
+  return { document, forms, tags };
+}
+function fakeDb({ existing = {}, fail } = {}) {
+  const writes = []; let listener = null;
+  const db = { collection(c) {
+    return {
+      doc(id) { return { set(data) { writes.push([c, id, data]); return fail ? Promise.reject(fail) : Promise.resolve(); } }; },
+      onSnapshot(next) { listener = next; next({ docs: Object.entries(existing).map(([id, d]) => ({ id, exists: true, data: () => d })) }); return () => {}; },
+    };
+  } };
+  return { db, writes, listener: () => listener };
+}
+const flush = () => new Promise((r) => setImmediate(r));
+const runAnswer = (dom, use) => {
+  const vm = require('vm');
+  const { ANSWER_JS } = require('../tools/tracker.js');
+  vm.runInNewContext(ANSWER_JS, { document: dom.document, window: use === undefined ? {} : { claude: { use } }, Date, Promise, String });
+};
+test('answers: with the database, the form shows; a choice and Send store the answer and the row says it is answered', async () => {
+  const dom = answerDom(['a-q1']);
+  const fdb = fakeDb();
+  runAnswer(dom, (n) => Promise.resolve(n === 'db' ? fdb.db : null));
+  await flush();
+  const f = dom.forms[0];
+  assert.strictEqual(f.hidden, false, 'shown once the database answers');
+  assert.strictEqual(f.send.disabled, true, 'nothing chosen yet');
+  f.keys[1].fire('click');
+  assert.deepStrictEqual(f.keys.map((k) => k.getAttribute('aria-pressed')), ['false', 'true'], 'one choice at a time');
+  f.keys[0].fire('click');
+  assert.deepStrictEqual(f.keys.map((k) => k.getAttribute('aria-pressed')), ['true', 'false']);
+  assert.strictEqual(f.send.disabled, false);
+  f.input.value = '  hemen başlayalım  ';
+  f.fire('submit');
+  await flush();
+  assert.strictEqual(fdb.writes.length, 1);
+  const [col, id, data] = fdb.writes[0];
+  assert.deepStrictEqual([col, id, data.row, data.key, data.label, data.note, data.state], ['answers', 'a-q1', 'row a-q1', 'A', 'İki aşama', 'hemen başlayalım', 'new']);
+  assert.ok(!Number.isNaN(Date.parse(data.at)), 'an ISO time');
+  assert.strictEqual(f.hidden, true, 'the form gives way to the answer');
+  assert.match(dom.tags[0].textContent, /^cevaplandı: A · \d\d:\d\d$/);
+  assert.strictEqual(dom.tags[0].hidden, false);
+});
+test('answers: an answer already stored shows on load', async () => {
+  const dom = answerDom(['a-q1', 'a-q2']);
+  const fdb = fakeDb({ existing: { 'a-q2': { key: 'B', at: '2026-10-05T11:42:00.000Z', state: 'new' } } });
+  runAnswer(dom, () => Promise.resolve(fdb.db));
+  await flush();
+  assert.deepStrictEqual([dom.forms[0].hidden, dom.forms[1].hidden], [false, true]);
+  assert.match(dom.tags[1].textContent, /^cevaplandı: B · \d\d:\d\d$/);
+  assert.strictEqual(dom.tags[0].hidden, true);
+});
+test('answers: without the capability, or with no write right, the row reads as before; nothing throws', async () => {
+  for (const use of [undefined, () => Promise.resolve(null), () => Promise.reject(new Error('x'))]) {
+    const dom = answerDom(['a-q1']);
+    assert.doesNotThrow(() => runAnswer(dom, use));
+    await flush();
+    assert.strictEqual(dom.forms[0].hidden, true);
+  }
+  const dom = answerDom(['a-q1']);
+  const denied = fakeDb({ fail: { code: 'invalid_argument', message: 'no' } });
+  runAnswer(dom, () => Promise.resolve(denied.db));
+  await flush();
+  dom.forms[0].keys[0].fire('click'); dom.forms[0].fire('submit');
+  await flush();
+  assert.strictEqual(dom.forms[0].hidden, true, 'no right to write: the form goes away');
+  assert.strictEqual(dom.tags[0].hidden, true, 'and nothing claims an answer');
+  const dom2 = answerDom(['a-q1']);
+  const busy = fakeDb({ fail: { code: 'unavailable', message: 'later' } });
+  runAnswer(dom2, () => Promise.resolve(busy.db));
+  await flush();
+  dom2.forms[0].keys[0].fire('click'); dom2.forms[0].fire('submit');
+  await flush();
+  assert.deepStrictEqual([dom2.forms[0].hidden, dom2.forms[0].err.hidden, dom2.forms[0].send.disabled], [false, false, false], 'a passing failure: say so, keep the choice, Send again');
+  assert.match(dom2.forms[0].err.textContent, /gönderilemedi/);
 });
