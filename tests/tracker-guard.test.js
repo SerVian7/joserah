@@ -145,3 +145,42 @@ test('tracker-guard.js is registered on Stop and on the Artifact tool\'s PostToo
   assert.ok(pt);
   assert.deepStrictEqual(pt.hooks, [cmd('post-tool-use')]);
 });
+
+// owner, 2026-10-05: "Otomatik Artifact yayınlamayı bırak. ama dosyaları yine de oluştur. MD olarak oluştur."
+// `"artifacts": false` in config.json: no publish is asked for (A2 off), a deliverable is a Markdown file
+// named in the reply instead of a page link (B2); B1 is unchanged.
+const switchOff = (f) => {
+  const cfg = path.join(f.ws, '.joserah', 'config.json');
+  fs.writeFileSync(cfg, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfg, 'utf8')), artifacts: false }));
+};
+const long = Array.from({ length: 20 }, (_, i) => `madde ${i + 1}`).join('\n');
+
+test('artifacts off: an unpublished Tracker no longer holds the turn (A2 skipped)', (t) => {
+  const f = setup(t);
+  assert.strictEqual(f.out(f.stop()).decision, 'block', 'on by default');
+  switchOff(f);
+  assert.strictEqual(f.stop().stdout, '');
+  assert.ok(fs.existsSync(path.join(f.tr, 'tracker.md')), 'the Markdown file is there instead');
+});
+test('artifacts off: B1 still holds a decision row without options', (t) => {
+  const f = setup(t);
+  switchOff(f);
+  fs.writeFileSync(path.join(f.tr, 'rows.json'), JSON.stringify([{ state: 'you', title: 'Hangisi?', time: '09:00' }]));
+  assert.match(f.out(f.stop()).reason, /owner row "Hangisi\?" waits on a decision/);
+});
+test('artifacts off: a deliverable must name a local .md file, a page link no longer does', (t) => {
+  const f = setup(t);
+  switchOff(f);
+  const o = f.out(f.stop({ last_assistant_message: long }));
+  assert.strictEqual(o.reason, 'deliverable must be saved as a Markdown file: write it and name the file in one line');
+  assert.strictEqual(f.stop({ last_assistant_message: `${long}\nhttps://claude.ai/artifact/abc123` }).stdout !== '', true, 'a page link is not a file');
+  assert.strictEqual(f.stop({ last_assistant_message: `${long}\nhttps://example.com/readme.md` }).stdout !== '', true, 'a URL is not a local path');
+  for (const named of ['Dosya: C:\\Users\\x\\notes\\rapor.md', 'Yazdım: ./notes/rapor.md', 'Yazdım: `rapor.md`', 'bkz. [rapor](docs/rapor.md)']) {
+    assert.strictEqual(f.stop({ last_assistant_message: `${long}\n${named}` }).stdout, '', named);
+  }
+});
+test('artifacts on or absent: a .md path does not stand in for the page link', (t) => {
+  const f = setup(t);
+  f.publish();
+  assert.match(f.out(f.stop({ last_assistant_message: `${long}\n./notes/rapor.md` })).reason, /deliverable must be a page/);
+});

@@ -209,7 +209,9 @@ When the first piece of work of the day starts, the assistant opens it without b
 it inline — quietly: it never asks about it, never announces
 it, never interrupts for it. Every reply to the owner ends with its link, a short plain label with the
 URL embedded. At most three Trackers are open at once: the Daily Tracker and, only when needed, one
-per other audience.
+per other audience. With `"artifacts": false` in config.json nothing is published: every render still writes
+`tracker.md` beside `index.html`, a deliverable is written as a Markdown file, and the reply ends with the path of
+`tracker.md` instead of a link (owner, 2026-10-05).
 
 - Built with `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js"`: `init <dir> --title "<Owner> · Daily Tracker" --lang <en|tr>`
   once, then `row <dir> --title … --state … [--small … --url … --label …]` upserts one row by title

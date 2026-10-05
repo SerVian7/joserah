@@ -5,6 +5,8 @@
  * the turn it already held open (stop_hook_active), when nothing is new since
  * its last reminder, and on any error.
  *
+ * Does nothing when config.json says `"artifacts": false`.
+ *
  * Reads the transcript the hook is handed (main thread only): the last publish
  * of each report-like artifact (its <title>, title, description or label says
  * Rapor, Report, Gün Sonu, Takip or Status), and what changed after it — files
@@ -122,6 +124,7 @@ function readStdin(idleMs = 1000) {
 async function main() {
   const root = findWorkspace(process.cwd());
   if (!root) return;
+  if ((readConfig(root) || {}).artifacts === false) return; // no pages are published in this workspace
   const input = JSON.parse(await readStdin());
   if (input.stop_hook_active || input.agent_id || !input.transcript_path) return;
   const calls = toolCalls(fs.readFileSync(input.transcript_path, 'utf8'));

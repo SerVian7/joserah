@@ -118,3 +118,24 @@ test('a report filed under a past day is closed; later changes do not make it st
   const now = `desk/artifacts/${today}/wrap/index.html`;
   assert.ok(staleReport([call(0, 'Artifact', { file_path: now }), call(1, 'Edit', { file_path: 'a.md' })], r));
 });
+
+test('artifacts off (config.json "artifacts": false): the hook does nothing', (t) => {
+  const dir = path.join(tmpdir(t), 'ws');
+  runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'O', '--language', 'Turkish', '--role', 'r']);
+  const report = path.join(dir, 'report.html');
+  fs.writeFileSync(report, '<html><head><title>Gün Sonu 01.10</title></head></html>');
+  const tool = (ts, name, input) => JSON.stringify({ timestamp: ts, message: { content: [{ type: 'tool_use', name, input }] } });
+  const transcript = path.join(dir, 't.jsonl');
+  fs.writeFileSync(transcript, [
+    tool('2026-10-01T09:00:00Z', 'Artifact', { file_path: report }),
+    tool('2026-10-01T09:05:00Z', 'Edit', { file_path: path.join(dir, 'a.md') }),
+  ].join('\n'));
+  const run = (session_id) => spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'report-fresh.js')],
+    { cwd: dir, encoding: 'utf8', input: JSON.stringify({ transcript_path: transcript, session_id }) });
+  assert.strictEqual(JSON.parse(run(`on-${process.pid}-${Date.now()}`).stdout).decision, 'block', 'on by default');
+  const cfg = path.join(dir, '.joserah', 'config.json');
+  fs.writeFileSync(cfg, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfg, 'utf8')), artifacts: false }));
+  const off = run(`off-${process.pid}-${Date.now()}`);
+  assert.strictEqual(off.status, 0, off.stderr);
+  assert.strictEqual(off.stdout, '');
+});

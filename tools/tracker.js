@@ -126,6 +126,9 @@
  * agent wording, in text, title or data attributes: a line is the work only. The
  * run label is "Active work" (tr "Aktif çalışma") in both modes.
  *
+ * Every render also writes tracker.md beside index.html: the same sections and groups as plain Markdown
+ * (a workspace with `"artifacts": false` publishes no page and keeps this file instead).
+ *
  * Labels follow <html lang> (en, tr). Tests may fix the clock with
  * JOSERAH_NOW=<ISO timestamp>. No dependencies.
  */
@@ -613,6 +616,10 @@ function detailOf(r, es, L, { dev = false, decide = false } = {}) {
     + (tail ? `<p class="cm">${tail}</p>` : '');
 }
 
+// a time sorts as a time of today; a day mark DD.MM (a carried-over row, a plan's day) by its date and
+// before any time of today (the year is not known: a December mark after a January one sorts wrong)
+const tkey = (t) => { const m = /^(\d\d)\.(\d\d)$/.exec(t); return m ? `0 ${m[2]}.${m[1]}` : `1 ${t}`; };
+
 // The board (owner, 2026-10-05, "Tracker yeni düzen", Architect's build note; and "şu an çalışan bir
 // şey var mı anlamıyorum hepsi beni bekliyor galiba"): every row of the day in one line shape, in state
 // groups — Active work (run rows and the rows crew entries are working on, plus working entries with no
@@ -639,9 +646,6 @@ function board(rows, crew, L, dev) {
     return ` role="img" title="${s}" aria-label="${s}"`;
   };
   const G = { run: [], you: [], wait: [], ok: [], plan: [] };
-  // a time sorts as a time of today; a day mark DD.MM (a carried-over row, a plan's day) by its date and
-  // before any time of today (the year is not known: a December mark after a January one sorts wrong)
-  const tkey = (t) => { const m = /^(\d\d)\.(\d\d)$/.exec(t); return m ? `0 ${m[2]}.${m[1]}` : `1 ${t}`; };
   const item = (r, es, t, i) => ({ r, es, t: String(t ?? ''), k: tkey(String(t ?? '')), i });
   const latest = (xs) => xs.slice().sort((a, b) => a.k.localeCompare(b.k)).pop().t;
   const onRow = new Map();
@@ -763,6 +767,61 @@ function board(rows, crew, L, dev) {
   return { strip, list: ['you', 'wait', 'ok', 'plan'].map(sec).filter(Boolean) };
 }
 
+// tracker.md (owner, 2026-10-05: stop publishing pages automatically, keep the files, as Markdown): the same
+// board as plain text, written by every render. Sections in page order, a row's category (its parent's
+// title, else its group) a line of its own with its rows under it; nothing in it moves but the updated line.
+function markdown(rows, crew, L, title, clock) {
+  const byTitle = new Map(rows.map((r) => [key(r.title), r]));
+  const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+  const G = { run: [], you: [], wait: [], ok: [], plan: [] };
+  const working = new Set(crew.filter((e) => e.state === 'work' && byTitle.has(key(e.row))).map((e) => byTitle.get(key(e.row))));
+  rows.forEach((r, i) => G[working.has(r) ? 'run' : r.state].push({ r, t: String(r.time ?? ''), i }));
+  crew.forEach((e, i) => {
+    const row = byTitle.get(key(e.row));
+    if ((e.state === 'work' && !row) || (e.state === 'owner' && !(row && row.state === 'you'))) {
+      G[e.state === 'work' ? 'run' : 'you'].push({ e, t: String(e.time ?? ''), i: rows.length + i });
+    }
+  });
+  const line = (it, pad) => {
+    const r = it.r;
+    const parts = [];
+    if (r && one(r.small)) parts.push(one(r.small));
+    if (r && isUrl(r.url)) parts.push(`[${one(r.label) || L.link}](${r.url})`);
+    const head = `${pad}- ${it.t ? `${one(it.t)} ` : ''}**${one(r ? r.title : it.e.job)}**${parts.length ? ` — ${parts.join(' — ')}` : ''}`;
+    const opts = r ? optionsOf(r).filter((o) => o.key && (o.label || o.text)).map((o) => {
+      const rec = key(o.key) === key(r.recommend);
+      return `${pad}  - ${one(o.key)}: ${[one(o.label), one(o.text)].filter(Boolean).join(' — ')}${rec ? ` (${L.rec}: ${one(r.why)})` : ''}`;
+    }) : [];
+    return [head, ...opts];
+  };
+  const out = [`# ${title}`, '', `${L.upd}: ${hm(clock)}`];
+  for (const g of Object.keys(GROUP)) {
+    const newest = g !== 'run' && g !== 'you';
+    const its = G[g].slice().sort((a, b) => (newest ? -1 : 1) * tkey(a.t).localeCompare(tkey(b.t)) || a.i - b.i);
+    if (!its.length) continue;
+    out.push('', `## ${L.groups[GROUP[g]]} (${its.length})`, '');
+    // Plans stand under their group; the other sections under a row's parent, else its group
+    const catOf = (it) => (it.r ? key(g === 'plan' ? (it.r.group || it.r.parent) : (hasParent(it.r) ? it.r.parent : it.r.group)) : '');
+    const subs = new Map();
+    for (const it of its) { const c = catOf(it); if (c) { if (!subs.has(c)) subs.set(c, []); subs.get(c).push(it); } }
+    const heads = new Map(g === 'plan' ? [] : its.filter((it) => it.r && subs.has(key(it.r.title))).map((it) => [key(it.r.title), it]));
+    const isHead = (it) => !!(it.r && heads.has(key(it.r.title)));
+    for (const [c, ms] of subs) subs.set(c, ms.filter((x) => !isHead(x)));
+    const seen = new Set();
+    for (const it of its) {
+      const c = isHead(it) ? key(it.r.title) : catOf(it);
+      if (!c) { out.push(...line(it, '')); continue; }
+      if (seen.has(c)) continue;
+      seen.add(c);
+      const ms = subs.get(c);
+      if (heads.has(c)) out.push(...line(heads.get(c), ''));
+      else { const f = ms[0].r; out.push(`- **${one(g === 'plan' ? f.group || f.parent : (byTitle.get(c) || {}).title || f.parent || f.group)}**`); }
+      for (const x of ms) out.push(...line(x, '  '));
+    }
+  }
+  return `${out.join('\n')}\n`;
+}
+
 // The Active work strip alone, for a page an outside updater keeps (it takes the strip, its styles and
 // scripts from here): with `script` the panel and state scripts come with it; the plugin's own page
 // carries them once at its end instead.
@@ -835,6 +894,8 @@ function render(dir, { quiet = false } = {}) {
   // the elapsed-time script only when a strip line has something to count
   if (crew.some(ticks)) html = html.replace('</body>', () => `<script id="since">${SINCE_JS}</script>\n</body>`);
   fs.writeFileSync(pagePath, html);
+  const heading = ((html.match(/<title>([^<]*)<\/title>/) || [])[1] || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim();
+  fs.writeFileSync(path.join(dir, 'tracker.md'), markdown(rows, crew, L, heading || 'Tracker', clock));
   if (stamped) writeStore(rowsPath, store);
   if (!quiet) console.log(`rows: ${rows.length}`);
 }

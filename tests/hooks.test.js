@@ -780,6 +780,24 @@ test('dailyTracker: false removes the Daily Tracker line from the main session',
   assert.match(JSON.parse(on.stdout).hookSpecificOutput.additionalContext, /Daily Tracker: on/, 'only false turns it off');
 });
 
+test('artifacts: false changes the Daily Tracker line: keep the files current and end with the path of tracker.md', (t) => {
+  const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  cfg.artifacts = false;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const c = ctx();
+  assert.ok(c.includes("Daily Tracker: on — keep the owner's Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with the path of tracker.md. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), c);
+  assert.doesNotMatch(c, /end every reply with its link/);
+  cfg.artifacts = true;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  assert.match(ctx(), /end every reply with its link/, 'only false switches it');
+  cfg.artifacts = false; cfg.dailyTracker = false;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  assert.doesNotMatch(ctx(), /Daily Tracker/, 'dailyTracker false still removes the line');
+});
+
 test('sharedMemoryAutoPush: true adds the auto-push line to the main session; off by default (owner, 2026-10-01)', (t) => {
   const dir = hookWs(t);
   const cfgPath = path.join(dir, '.joserah', 'config.json');

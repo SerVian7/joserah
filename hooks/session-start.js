@@ -104,8 +104,13 @@ if (!WORKER) who.push(cfg.assistantName
 // Owner decision 2026-10-01: the Daily Tracker is native and automatic, quiet,
 // and opt-out. Main session only (a worker does not keep it); on unless
 // config.json says `"dailyTracker": false`.
+// `"artifacts": false` (owner, 2026-10-05): no page is published; the files are kept and the reply ends
+// with the path of tracker.md.
 if (!WORKER && cfg.dailyTracker !== false) {
-  who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
+  const ending = cfg.artifacts === false
+    ? 'keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with the path of tracker.md'
+    : 'end every reply with its link';
+  who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); ' + ending + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
 }
 // Owner decision 2026-10-01: a per-workspace opt-in. Off (absent or anything but
 // true) keeps the standing rule: a shared-memory push waits for the owner's yes.

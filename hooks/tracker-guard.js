@@ -16,6 +16,8 @@
  *       B2  the reply (the payload's last_assistant_message) is a deliverable — a fenced block of 4 or
  *           more lines, or more than 15 non-empty lines — with no claude.ai artifact link in it.
  *       A2 and B1 only when a Tracker for today exists and `dailyTracker` is not false.
+ *       `"artifacts": false` in config.json (owner, 2026-10-05: stop publishing pages automatically, keep the
+ *       files as Markdown): A2 is skipped, and B2 is met by a reply naming a local .md file, not a page link.
  *
  * Payload fields used, all measured 2026-10-05 (tests/fixtures/hook-payloads): Stop — hook_event_name,
  * session_id, cwd, stop_hook_active, last_assistant_message (no agent_id: a subagent fires SubagentStop
@@ -46,6 +48,8 @@ const same = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLower
 const FENCE_MIN = 4;
 const LINES_MAX = 15;
 const PAGE_LINK = /https:\/\/claude\.ai\/(?:code\/)?artifact\//;
+// a local Markdown file named in the reply: a path or bare file name ending in .md, never a URL
+const MD_FILE = /(?<![\w:/.-])(?:[A-Za-z]:[\\/])?[^\s`"'()<>[\]|*?:]*[^\s`"'()<>[\]|*?:\\/]\.md(?![\w-])/;
 
 function readStdin(idleMs = 1000) {
   return new Promise((resolve) => {
@@ -104,8 +108,8 @@ function undecided(dir) {
   return out;
 }
 
-function deliverable(text) {
-  if (typeof text !== 'string' || !text.trim() || PAGE_LINK.test(text)) return false;
+function deliverable(text, { artifacts = true } = {}) {
+  if (typeof text !== 'string' || !text.trim() || (artifacts ? PAGE_LINK : MD_FILE).test(text)) return false;
   let inFence = false; let fenced = 0; let most = 0;
   for (const line of text.split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) { if (inFence) { most = Math.max(most, fenced); fenced = 0; } inFence = !inFence; continue; }
@@ -122,13 +126,16 @@ function guard(input) {
   if (!root) return null;
   const reasons = [];
   const dir = tracker(root);
+  const artifacts = (readConfig(root) || {}).artifacts !== false;
   if (dir) {
-    try { if (staleTracker(dir)) reasons.push({ key: 'a2', text: 'Daily Tracker changed since its last publish: publish it (Artifact, the same file) before ending the turn' }); } catch { /* fail-open */ }
+    try { if (artifacts && staleTracker(dir)) reasons.push({ key: 'a2', text: 'Daily Tracker changed since its last publish: publish it (Artifact, the same file) before ending the turn' }); } catch { /* fail-open */ }
     try {
       for (const t of undecided(dir)) reasons.push({ key: `b1:${t.toLowerCase()}`, text: `owner row "${t}" waits on a decision without options, recommend and why: add them (tracker.js row --option/--recommend/--why), never invented — ask whoever knows them` });
     } catch { /* fail-open */ }
   }
-  if (deliverable(input.last_assistant_message)) reasons.push({ key: 'b2', text: 'deliverable must be a page: publish it as an artifact and reply with one line and its link' });
+  if (deliverable(input.last_assistant_message, { artifacts })) {
+    reasons.push({ key: 'b2', text: artifacts ? 'deliverable must be a page: publish it as an artifact and reply with one line and its link' : 'deliverable must be saved as a Markdown file: write it and name the file in one line' });
+  }
 
   const held = input.stop_hook_active === true;
   const file = path.join(stateDir(), `joserah-guard-${safe(input.session_id)}.json`);

@@ -1754,3 +1754,45 @@ test('hot: the answer note field has a stable id, so the viewer can keep what wa
   const { slugId } = require('../tools/tracker.js');
   assert.match(page(dir), new RegExp(`<input type="text" id="n-${slugId('a', 'Hangisi?')}" name="note"`));
 });
+
+// artifacts switch (owner, 2026-10-05: "Otomatik Artifact yayınlamayı bırak. ama dosyaları yine de oluştur.
+// MD olarak oluştur. Yani kaybolmasın."): every render also leaves tracker.md next to index.html
+test('render writes tracker.md: title, sections in page order, groups, options and links', (t) => {
+  const dir = tmpdir(t);
+  init(dir, ['--lang', 'tr']);
+  setRows(dir, [
+    { state: 'run', title: 'Kurulum', small: 'devam ediyor', time: '09:10' },
+    { state: 'you', title: 'Hangi sunucu?', time: '09:20', group: 'Altyapı', options: [{ key: 'A', label: 'Yeni', text: 'sıfırdan' }, { key: 'B', label: 'Eski' }], recommend: 'A', why: 'daha hızlı', url: 'https://example.com/k', label: 'karar' },
+    { state: 'wait', title: 'Teklif', time: '09:30', parent: 'Altyapı' },
+    { state: 'ok', title: 'Yedek alındı', small: 'tamam', time: '08:00' },
+    { state: 'plan', title: 'Taşıma', time: '09:40', group: 'Sonra' },
+    { state: 'you', title: 'Altyapı', time: '09:00' },
+  ]);
+  assert.strictEqual(render(dir).status, 0);
+  const md = fs.readFileSync(path.join(dir, 'tracker.md'), 'utf8');
+  assert.match(md, /^# Demo board · 01\.10\.2026\n/);
+  const at = (s) => md.indexOf(s);
+  assert.ok(at('## Aktif çalışma') >= 0 && at('## Aktif çalışma') < at('## Sizde') && at('## Sizde') < at('## Beklemede') && at('## Beklemede') < at('## Bugün biten') && at('## Bugün biten') < at('## Planlar'), md);
+  assert.match(md, /^- 09:10 \*\*Kurulum\*\* — devam ediyor$/m);
+  assert.match(md, /^- 09:00 \*\*Altyapı\*\*$/m);
+  assert.match(md, /^ {2}- 09:20 \*\*Hangi sunucu\?\*\* — \[karar\]\(https:\/\/example\.com\/k\)$/m);
+  assert.match(md, /^ {4}- A: Yeni — sıfırdan \(önerim: daha hızlı\)$/m);
+  assert.match(md, /^ {4}- B: Eski$/m);
+  assert.match(md, /^- \*\*Altyapı\*\*\n {2}- 09:30 \*\*Teklif\*\*$/m, 'a parent in another section is only a category line');
+  assert.match(md, /^- \*\*Sonra\*\*\n {2}- 09:40 \*\*Taşıma\*\*$/m);
+});
+
+test('tracker.md is deterministic and follows the page language', (t) => {
+  const dir = tmpdir(t);
+  init(dir);
+  setRows(dir, [{ state: 'ok', title: 'Done thing', time: '08:00' }]);
+  render(dir);
+  const a = fs.readFileSync(path.join(dir, 'tracker.md'), 'utf8');
+  render(dir);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'tracker.md'), 'utf8'), a);
+  assert.match(a, /## Done today \(1\)/);
+  assert.match(a, /^updated: 09:05$/m);
+  assert.doesNotMatch(a, /## Owner/, 'an empty section is left out');
+  render(dir, T2);
+  assert.match(fs.readFileSync(path.join(dir, 'tracker.md'), 'utf8'), /^updated: 17:40$/m);
+});
