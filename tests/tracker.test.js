@@ -301,3 +301,20 @@ test('a legacy array rows.json renders as before', (t) => {
   assert.strictEqual(render(dir).status, 0);
   assert.ok(Array.isArray(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))));
 });
+
+test('one inline line icon per role, no emoji', () => {
+  const { ICONS } = require('../tools/lib/crew-icons');
+  for (const r of ['voice', 'lead', 'architect', 'builder', 'scout', 'sentry']) {
+    assert.match(ICONS[r], /^<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"/, r);
+    assert.doesNotMatch(ICONS[r], /[\u{1F300}-\u{1FAFF}]/u, r);
+    assert.doesNotMatch(ICONS[r], /<(image|use|text)\b/, `${r}: paths only`);
+  }
+  assert.strictEqual(new Set(Object.values(ICONS)).size, 6, 'all six differ');
+});
+test('icons carry no colour of their own (calm, theme tokens only)', () => {
+  const { ICONS } = require('../tools/lib/crew-icons');
+  for (const [r, svg] of Object.entries(ICONS)) {
+    assert.doesNotMatch(svg, /#[0-9a-f]{3,8}\b|rgb\(|hsl\(/i, r);
+    assert.doesNotMatch(svg, /\b(style|fill|stroke)="(?!none|currentColor)/, r);
+  }
+});
