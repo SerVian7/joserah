@@ -3,6 +3,17 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.19.0
+
+0.19.0 — the web server: the workspace in your browser, jobs behind it. Owner, 2026-10-05.
+
+- **Your pages, live in the browser.** `joserah serve` (or the Docker image) serves the Daily Tracker, Trails, Cases, Markdown reports and the knowledge wiki on this computer only, behind a password. Pages update by themselves when something changes; a phone works, and `/tv` shows the Tracker large for a screen on the wall.
+- **Answer on the page.** Choices and notes you leave on a row are kept in the page's folder; the assistant reads them at the next session start (`tools/answers.js`) and replies in the same thread. Nothing is overwritten: your answer and the assistant's reply are separate.
+- **Give a job from the browser.** It runs with your own Claude Code, starts fresh every time, shows its stream, its changed files and an estimated cost; it can be stopped, answered, retried. Before each job the workspace is saved, and any deletion or write outside the job's area waits for you on the Tracker.
+- **The wiki, visible.** Pages with backlinks, a search, a claims view where a measurement stands beside the calculation it outranks, a log, and checks that run on every change at no cost. Drop a file to have it read into the wiki; a file that looks like it holds a password is held back for you first.
+- **Spending stays yours.** Jobs that start by themselves are off until you switch them on; there is a cap per job and per day.
+- **Not yet proven in Docker.** The Docker image and its smoke run have not been run yet. Running them once (build the image, sign Claude Code in inside it, run the test job) is the owner's step before relying on the Docker install; the native `joserah serve` is the tested path.
+
 ## 0.18.1
 
 0.18.1 — the crew is off by default, the Tracker reads in one order, and automatic page publishing can be switched off. Owner, 2026-10-05.
