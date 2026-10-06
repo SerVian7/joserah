@@ -104,7 +104,7 @@
       p.running.forEach(function (j) {
         var li = el('li'); li.setAttribute('data-job', j.id); li.setAttribute('data-state', j.state);
         var a = el('a', '', j.title); a.href = '/jobs/' + encodeURIComponent(j.id);
-        li.appendChild(a); li.appendChild(D.createTextNode(' ')); li.appendChild(el('span', 'state', j.state)); li.appendChild(el('span', 'last muted'));
+        li.appendChild(a); li.appendChild(D.createTextNode(' ')); li.appendChild(el('span', 'state', (WORDS.states && WORDS.states[j.state]) || j.state)); li.appendChild(el('span', 'last muted'));
         run.appendChild(li);
       });
     }

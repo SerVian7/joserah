@@ -20,7 +20,7 @@ export function register(app: App, deps: AppDeps): void {
     // A stale-raw finding names a source under imports/, not a wiki page: no link.
     const where = (f: (typeof latest.findings)[number]) => { const t = `${esc(f.rel)}${f.line ? `:${f.line}` : ''}`; return f.kind === 'stale-raw' ? t : `<a href="${esc(pageUrl(f.rel))}">${t}</a>`; };
     const body = `<h1>${esc(L.lint)}</h1><p class="muted">${esc(latest.at)}</p>
-<p><button data-lint="now">${esc(L.lint)}</button> <button data-lint="llm">${esc(L.lint)} + model</button></p>
+<p><button data-lint="now">${esc(L.lint)}</button> <button data-lint="llm">${esc(L.lint)} (${esc(L.withModel)})</button></p>
 ${[...byKind].map(([k, fs]) => `<h2>${esc(k)} (${fs.length})</h2><ul>${fs.map((f) => `<li>${where(f)} — ${esc(f.detail)}</li>`).join('')}</ul>`).join('')}
 <script>document.querySelectorAll('button[data-lint]').forEach(function(b){b.addEventListener('click',function(){fetch(b.getAttribute('data-lint')==='llm'?'/api/lint/llm':'/api/lint',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){location.href=j.id?'/jobs/'+j.id:'/w/lint'})})})</script>`;
     return c.html(shell({ title: L.lint, lang: lang(), body }));

@@ -114,9 +114,10 @@ test('the frame stays out of the TV view and out of a page shown inside another 
   const { app, deps, cookie } = await signedIn(t);
   trackerPage(deps.workspace, DAY, []);
   const tv = await (await app.request('/tv', { headers: { cookie } })).text();
-  assert.doesNotMatch(tv, /jz-frame|frame\.css/);
+  // The page's own styles may name the frame's classes; what must be absent is the header itself and its stylesheet.
+  assert.doesNotMatch(tv, /<header class="jz-top|\/_\/s\/frame\.css/);
   const framed = await (await app.request(`/p/${DAY}/daily-tracker/`, { headers: { cookie, 'sec-fetch-dest': 'iframe' } })).text();
-  assert.doesNotMatch(framed, /jz-frame|frame\.css/);
+  assert.doesNotMatch(framed, /<header class="jz-top|\/_\/s\/frame\.css/);
 });
 
 test('the shim shares its event stream with the interface', () => {

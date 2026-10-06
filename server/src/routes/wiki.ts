@@ -66,7 +66,7 @@ export function register(app: App, deps: AppDeps): void {
     if (!page) return c.notFound();
     const back = (wikiLib.backlinks(pages).get(rel) ?? []).map((b) => pages.find((p) => p.rel === b)!).filter(Boolean);
     const L = LABELS[lang()];
-    const body = `${wikiHtml(page, pages)}${back.length ? `<h2>←</h2><ul>${back.map((p) => `<li><a href="${esc(pageUrl(p.rel))}">${esc(p.title)}</a></li>`).join('')}</ul>` : ''}${nav(L)}`;
+    const body = `${wikiHtml(page, pages)}${back.length ? `<h2>${esc(L.backlinks)}</h2><ul>${back.map((p) => `<li><a href="${esc(pageUrl(p.rel))}">${esc(p.title)}</a></li>`).join('')}</ul>` : ''}${nav(L)}`;
     return c.html(shell({ title: page.title, lang: lang(), head: CSS, here: '/w/', body }));
   });
   app.get('/w/claims', (c) => {
@@ -81,10 +81,10 @@ export function register(app: App, deps: AppDeps): void {
       const speaks = live.some((x) => x.type === 'measurement') && live.some((x) => x.type === 'calculation');
       return list.map((x) => {
         const v = esc(`${x.subject}${x.value !== null ? ` -> ${x.value}` : ''}`);
-        return `<tr class="${x.struck ? 'struck' : ''}"><td>${esc(x.type)}${speaks && x.type === 'measurement' && !x.struck ? ' <span class="speaks">· measurement speaks</span>' : ''}</td><td>${x.struck ? `<s>${v}</s>` : v}${x.fields.superseded ? `<br><span class="muted">superseded: ${esc(x.fields.superseded)}</span>` : ''}</td><td>${esc(x.fields.condition ?? '')}</td><td>${esc(x.fields.date ?? '')}</td><td>${esc(x.fields.source ?? '')}</td><td><a href="${esc(pageUrl(x.page))}">${esc(x.page)}</a></td></tr>`;
+        return `<tr class="${x.struck ? 'struck' : ''}"><td>${esc(x.type)}${speaks && x.type === 'measurement' && !x.struck ? ` <span class="speaks">· ${esc(L.speaks)}</span>` : ''}</td><td>${x.struck ? `<s>${v}</s>` : v}${x.fields.superseded ? `<br><span class="muted">${esc(L.superseded)}: ${esc(x.fields.superseded)}</span>` : ''}</td><td>${esc(x.fields.condition ?? '')}</td><td>${esc(x.fields.date ?? '')}</td><td>${esc(x.fields.source ?? '')}</td><td><a href="${esc(pageUrl(x.page))}">${esc(x.page)}</a></td></tr>`;
       }).join('');
     }).join('');
-    return c.html(shell({ title: L.claims, lang: lang(), head: CSS, body: `<h1>${esc(L.claims)}</h1><table class="claims"><tr><th>kind</th><th>claim</th><th>condition</th><th>date</th><th>source</th><th>page</th></tr>${rows}</table>` }));
+    return c.html(shell({ title: L.claims, lang: lang(), head: CSS, body: `<h1>${esc(L.claims)}</h1><table class="claims"><tr><th>${esc(L.kindH)}</th><th>${esc(L.claimH)}</th><th>${esc(L.condH)}</th><th>${esc(L.dateH)}</th><th>${esc(L.sourceH)}</th><th>${esc(L.pageH)}</th></tr>${rows}</table>` }));
   });
   app.get('/w/search', (c) => {
     const L = LABELS[lang()]; const q = c.req.query('q') ?? '';
