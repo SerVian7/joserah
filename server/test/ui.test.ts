@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { createApp } from '../src/app.ts';
 import { SHIM_JS } from '../src/shim.ts';
 import { baseDeps, readyAuth, signedIn, trackerPage, REPO_ROOT } from './helpers.ts';
@@ -120,4 +121,17 @@ test('the frame stays out of the TV view and out of a page shown inside another 
 
 test('the shim shares its event stream with the interface', () => {
   assert.match(SHIM_JS, /es=W\.jzES=new W\.EventSource\('\/events'\)/);
+});
+
+test('text files go out compressed when the browser accepts it', async (t) => {
+  const app = createApp(baseDeps(t));
+  const r = await app.request('/_/s/ui.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+  assert.equal(r.headers.get('content-encoding'), 'gzip');
+  assert.match(r.headers.get('vary') ?? '', /Accept-Encoding/i);
+  const body = zlib.gunzipSync(Buffer.from(await r.arrayBuffer()));
+  assert.deepEqual(body, fs.readFileSync(path.join(import.meta.dirname, '..', 'static', 'ui.js')));
+  const plain = await app.request('/_/s/ui.js');
+  assert.equal(plain.headers.get('content-encoding'), null);
+  const font = await app.request('/_/s/fonts/sora-latin-wght-normal.woff2', { headers: { 'accept-encoding': 'gzip' } });
+  assert.equal(font.headers.get('content-encoding'), null, 'a woff2 is already compressed');
 });

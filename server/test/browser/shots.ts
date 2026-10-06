@@ -83,6 +83,15 @@ try {
     await p2.screenshot({ path: path.join(OUT, 'home-phone-working-dark-full.png'), fullPage: true });
     await c2.close();
   }
+  // Reduced motion: no load sequence, a still field, the page at once.
+  {
+    const c = await browser.newContext({ viewport: sizes.phone, deviceScaleFactor: 2, colorScheme: 'dark', reducedMotion: 'reduce' }); const p = await c.newPage();
+    await p.goto(`${base}/login`); await p.fill('input[name="password"]', PW);
+    await Promise.all([p.waitForURL(`${base}/`), p.click('form[action="/login"] button')]);
+    times['reduced-motion-boot'] = await p.evaluate(() => document.documentElement.classList.contains('boot'));
+    await p.waitForTimeout(300); await shot(p, 'home-phone-reduced-motion-dark');
+    await c.close();
+  }
   // 3. Sign-in, and a recording of the load sequence.
   for (const size of ['phone', 'desktop'] as const) {
     const c = await ctx(size, 'dark', true); const p = await c.newPage();
