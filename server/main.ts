@@ -60,7 +60,7 @@ const store = new Store(workspace, bus, { pollDirs: () => {
   const d = now(); const y = new Date(d.getTime() - 86400000);
   return [`.joserah/desk/artifacts/${localDay(d)}`, `.joserah/desk/artifacts/${localDay(y)}`, '.joserah/knowledge'];
 } });
-const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude' });
+const engine = new ClaudeCliEngine({ command: process.env.JOSERAH_CLAUDE_BIN || 'claude', prefixArgs: process.env.JOSERAH_CLAUDE_PREFIX ? [process.env.JOSERAH_CLAUDE_PREFIX] : [] });
 const lang = workspaceLang(workspace);
 const tracker = cliTracker(workspace, lang);
 const jobs = new JobRunner({ workspace, store, bus, engine, config: () => cfg, tracker, checkpoint: new GitCheckpointer(workspace, store), jobUrl: (id) => `${baseUrl}/jobs/${id}`, lang });

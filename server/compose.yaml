@@ -1,0 +1,25 @@
+name: joserah
+services:
+  joserah:
+    image: joserah:dev
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    container_name: ${JOSERAH_CONTAINER:-joserah}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${JOSERAH_HOST_PORT:-4747}:4747"
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN
+      - ANTHROPIC_API_KEY
+    volumes:
+      - workspace:/workspace
+      - claude:/home/joserah/.claude
+      - state:/home/joserah/state
+volumes:
+  workspace:
+    name: ${JOSERAH_VOLUME_PREFIX:-joserah}-workspace
+  claude:
+    name: ${JOSERAH_VOLUME_PREFIX:-joserah}-claude
+  state:
+    name: ${JOSERAH_VOLUME_PREFIX:-joserah}-state
