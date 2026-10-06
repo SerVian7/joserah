@@ -7,7 +7,7 @@ C="docker compose -p joserah-smoke -f compose.yaml"
 trap '$C down -v >/dev/null 2>&1 || true' EXIT
 $C build
 $C up -d
-curl -fsS --retry 30 --retry-connrefused --retry-delay 2 http://127.0.0.1:14747/healthz >/dev/null
+curl -fsS --retry 30 --retry-all-errors --retry-connrefused --retry-delay 2 http://127.0.0.1:14747/healthz >/dev/null
 # signedIn is null until the first engine probe returns; wait for the settled answer (up to ~30 s).
 H=""
 for _ in $(seq 1 15); do
