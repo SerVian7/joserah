@@ -18,7 +18,7 @@ test('usage and a folder outside any workspace are refused plainly', (t) => {
 
 test('serve finds the workspace from a subfolder and prints its URL', async (t) => {
   const ws = tmpWorkspace(t); const port = await free();
-  const child = spawn(process.execPath, [BIN, 'serve', '--port', String(port)], { cwd: path.join(ws, '.joserah'), env: { ...process.env, JOSERAH_STATE_DIR: path.join(tmpdir(t), 's') } });
+  const child = spawn(process.execPath, [BIN, 'serve', '--port', String(port)], { cwd: path.join(ws, '.joserah'), env: { ...process.env, JOSERAH_STATE_DIR: path.join(tmpdir(t), 's'), JOSERAH_CLAUDE_BIN: process.execPath, JOSERAH_CLAUDE_PREFIX: path.join(SERVER_ROOT, 'test', 'fixtures', 'fake-claude.mjs') } });
   // Stopped inside the test and awaited: a process still running in the workspace folder would keep it from being removed (Windows).
   const stopped = new Promise<void>((r) => child.once('exit', () => r()));
   let line: string;
@@ -28,7 +28,7 @@ test('serve finds the workspace from a subfolder and prints its URL', async (t) 
       setTimeout(() => reject(new Error(`no URL: ${out}`)), 15000).unref();
     });
   } finally { child.kill(); await stopped; }
-  assert.match(line, new RegExp(`Joserah server: http://127\.0\.0\.1:${port}/`));
+  assert.match(line, new RegExp(`Joserah server: http://127\\.0\\.0\\.1:${port}/`));
 });
 
 test('setup-link prints the link from the state dir, never creating a password', (t) => {
