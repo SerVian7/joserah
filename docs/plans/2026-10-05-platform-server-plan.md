@@ -6559,3 +6559,4 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - 03:03 (Manager): Task 17 (Docker files, static only — build and smoke not run, daemon off; 58afc62, e245f79) merged (bf42c3b); server suite 192/192, existing 922/922.
 - 03:15 (Manager): Task 18 (browser test; 58f630d, 70b91c3; e2e 3/3) merged (815de6f); server suite 192/192, existing 922/922.
 - 03:32 (Manager): Task 19 steps 1-7 (joserah serve, docs, 0.19.0; 2f438d9, c1391bf) merged (8c15674); server suite 195/195, existing 922/922.
+- 03:33 (Manager): Task 19 step 8 — server started on this PC against the workspace, port 4747; `/healthz` → `{"alive":true,"signedIn":true,"lastJobOk":null}`; workspace .gitignore gained the job-log lines. Not done by agents: Task 17 Docker smoke (engine was off), Task 20.
