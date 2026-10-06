@@ -1,0 +1,226 @@
+/* Joserah platform interface. Built from the brand (burgundy #8B0D32, the dark-theme rose #d9587e, the greys mixed off
+   the burgundy in the report and mail templates) and the Theme's console rules: no cards, no rounded corners, no
+   shadows, hairlines. One thing is loud: the J, which lives. Everything around it stays quiet. */
+
+@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-ext-wght-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@property --sw{syntax:"<angle>";inherits:false;initial-value:0deg}
+@property --lx{syntax:"<percentage>";inherits:false;initial-value:0%}
+
+:root{--brand:#8B0D32;--rose:#d9587e;--bg:#f5f3f2;--card:#faf8f8;--ink:#2a2326;--muted:#5f5458;--faint:#7a6f73;--line:#e3dbdd;--link:#8B0D32;
+  --sans:"Sora",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--glow:217,88,126;--top:56px;--ease:cubic-bezier(.2,.7,.2,1)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1c1819;--card:#221d1f;--ink:#ddd5d7;--muted:#b3a8ab;--faint:#9a8d91;--line:#372e31;--link:#e07a98}}
+:root[data-theme="dark"]{--bg:#1c1819;--card:#221d1f;--ink:#ddd5d7;--muted:#b3a8ab;--faint:#9a8d91;--line:#372e31;--link:#e07a98}
+
+html{background:var(--bg)}
+body{font:400 15.5px/1.6 var(--sans);letter-spacing:-.003em;font-feature-settings:"ss01";-webkit-font-smoothing:antialiased;min-height:100svh}
+*,*::before,*::after{border-radius:0}
+a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+::selection{background:rgba(var(--glow),.28)}
+h1{font-size:1.95rem;line-height:1.2;font-weight:300;letter-spacing:-.02em;margin:1.6rem 0 1rem}
+h2{font-size:1rem;line-height:1.3;font-weight:600;margin:2.2rem 0 .7rem;padding-bottom:.55rem;border-bottom:1px solid var(--line)}
+h3{font-size:1rem;font-weight:600}
+main{max-width:980px;padding:0 20px 96px}
+p{max-width:72ch}
+.muted{color:var(--faint)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Controls: square, hairline, the brand as the only solid fill. */
+input,textarea,select{background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 11px;font:inherit;line-height:1.45}
+input:focus,textarea:focus,select:focus{border-color:var(--rose);outline:none}
+select{appearance:none;-webkit-appearance:none;padding-right:28px;background:linear-gradient(45deg,transparent 50%,var(--faint) 50%) right 14px center/5px 5px no-repeat,linear-gradient(-45deg,transparent 50%,var(--faint) 50%) right 9px center/5px 5px no-repeat}
+select option{background:var(--bg);color:var(--ink)}
+button{background:var(--brand);border:1px solid var(--brand);color:#fff;font:500 .94rem/1 var(--sans);padding:11px 18px;cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{background:#a3123d;border-color:#a3123d}
+button[data-act="cancel"],button[data-act="retry"],button[data-act="file"]{background:transparent;color:var(--ink);border-color:var(--line)}
+button[data-act="cancel"]:hover,button[data-act="retry"]:hover,button[data-act="file"]:hover{border-color:var(--rose);background:transparent}
+fieldset[disabled]{opacity:.55}
+.err{color:var(--you)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+table{font-size:.9rem}td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-weight:600;color:var(--muted)}
+
+/* The J. Before the mark is lifted it is the recorded faded J as it is; once lifted (html.jm) it is that shape, solid. */
+.jmark{display:inline-block;width:1em;height:1em;flex:none;background:url(/_/s/j.png) center/contain no-repeat}
+html.jm .jmark{background:var(--jfill,var(--brand));-webkit-mask:var(--jm) center/contain no-repeat;mask:var(--jm) center/contain no-repeat}
+html.jm .jmark.ghost{background:url(/_/s/j.png) center/contain no-repeat;-webkit-mask:none;mask:none}
+
+/* Header: the small living J, four places, and a pulse that says what waits. */
+header.top{position:sticky;top:0;z-index:20;max-width:none;height:var(--top);padding:0 20px;display:flex;align-items:center;gap:22px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+header.top .mark{display:flex;align-items:center;font-size:27px;padding:4px 2px}
+header.top .mark:hover{text-decoration:none}
+header.top nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+header.top nav a{color:var(--muted);font-weight:500;font-size:.94rem;padding:8px 10px;white-space:nowrap;box-shadow:inset 0 -2px 0 transparent}
+header.top nav a:hover{color:var(--ink);text-decoration:none}
+header.top nav a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--brand)}
+.pulse{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.84rem;color:var(--muted);white-space:nowrap}
+.pulse[hidden],body.is-home .pulse{display:none}
+.pulse:hover{text-decoration:none;color:var(--ink)}
+.pulse i{width:8px;height:8px;background:var(--faint);flex:none}
+html[data-state="working"] .pulse i{background:var(--run)}
+html[data-state="waiting"] .pulse i{background:var(--rose)}
+html[data-net="off"] .pulse i{background:transparent;outline:1px solid var(--faint)}
+
+/* The J breathes by state: calm when idle, quicker while a job runs, a rose halo when something waits on the owner. */
+@media (prefers-reduced-motion: no-preference){
+  header.top .mark .jmark{animation:jz-breathe 6s ease-in-out infinite}
+  html[data-state="working"] header.top .mark .jmark{animation:jz-work 1.4s ease-in-out infinite}
+  html[data-state="waiting"] header.top .mark .jmark{animation:jz-beckon 3.2s ease-in-out infinite}
+  html[data-state="working"] .pulse i{animation:jz-blink 1.4s ease-in-out infinite}
+  html[data-state="waiting"] .pulse i{animation:jz-blink 3.2s ease-in-out infinite}
+}
+@keyframes jz-breathe{0%,100%{opacity:.86;transform:scale(.97)}50%{opacity:1;transform:scale(1)}}
+@keyframes jz-work{0%,100%{transform:scale(.96);filter:drop-shadow(0 0 0 rgba(var(--glow),0))}50%{transform:scale(1.03);filter:drop-shadow(0 0 6px rgba(var(--glow),.7))}}
+@keyframes jz-beckon{0%,70%,100%{filter:drop-shadow(0 0 0 rgba(var(--glow),0))}20%{filter:drop-shadow(0 0 7px rgba(var(--glow),.9))}}
+@keyframes jz-blink{0%,100%{opacity:.35}50%{opacity:1}}
+html[data-net="off"] .jmark{opacity:.4;filter:grayscale(1)}
+
+/* The load sequence: the J alone, centre stage. Hidden unless the boot script asked for it (first page of a visit). */
+#boot{display:none}
+html.boot #boot,#boot.on{display:grid;place-items:center;position:fixed;inset:0;z-index:60;background:var(--bg)}
+html.boot #boot:not(.on){animation:jz-failsafe 0s 5s forwards}
+#boot.on{pointer-events:none}
+html.boot body>header.top,html.boot main{opacity:0;animation:jz-reveal .01s 6s forwards}
+#boot .jmark.big{font-size:min(36vmin,280px)}
+#boot .jbox{position:relative;width:min(36vmin,280px);height:min(36vmin,280px);font-size:min(36vmin,280px)}
+#boot .jbox>.jmark{position:absolute;inset:0}
+#boot .jbox>.jmark.ghost{opacity:0}
+#boot .jbox.go>.jmark.ghost{animation:jz-ghost 1.6s ease forwards}
+#boot .piece{opacity:0}
+#boot .piece.leaf{clip-path:inset(0 0 52% 0)}
+html.jm #boot .piece.bowl{-webkit-mask-image:var(--jm),conic-gradient(from 90deg at 50% 50%,#000 calc(var(--sw) - 14deg),transparent var(--sw));mask-image:var(--jm),conic-gradient(from 90deg at 50% 50%,#000 calc(var(--sw) - 14deg),transparent var(--sw));-webkit-mask-size:contain,100% 100%;mask-size:contain,100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-composite:source-in;mask-composite:intersect}
+#boot .jbox.go .piece.bowl{opacity:1;animation:jz-sweep 1s .38s cubic-bezier(.5,0,.2,1) both}
+#boot .jbox.lit{animation:jz-flare 1.1s ease-out both}
+#boot .jbox .jfill{--jfill:linear-gradient(115deg,var(--brand) 0%,var(--brand) calc(var(--lx) - 12%),var(--rose) var(--lx),var(--brand) calc(var(--lx) + 12%),var(--brand) 100%)}
+#boot .jbox.lit .jfill{animation:jz-light 1.1s ease-in-out both}
+@keyframes jz-sweep{from{--sw:0deg}to{--sw:194deg}}
+@keyframes jz-light{from{--lx:-20%}to{--lx:120%}}
+@keyframes jz-ghost{0%{opacity:0}30%{opacity:1}100%{opacity:.0}}
+@keyframes jz-flare{0%{filter:drop-shadow(0 0 0 rgba(var(--glow),0))}35%{filter:drop-shadow(0 0 28px rgba(var(--glow),.75))}100%{filter:drop-shadow(0 0 8px rgba(var(--glow),.25))}}
+@keyframes jz-failsafe{to{visibility:hidden;opacity:0}}
+@keyframes jz-reveal{to{opacity:1}}
+
+.skip{position:absolute;left:12px;top:-60px;z-index:70;background:var(--brand);color:#fff;padding:10px 14px}.skip:focus{top:10px}
+html{-webkit-tap-highlight-color:transparent}a,button,select,textarea,input{touch-action:manipulation}
+button[aria-busy="true"]{position:relative;color:transparent}button[aria-busy="true"]::after{content:"";position:absolute;inset:0;margin:auto;width:14px;height:14px;border:2px solid #fff;border-right-color:transparent;animation:jz-spin .7s linear infinite}
+@keyframes jz-spin{to{transform:rotate(1turn)}}
+#calm{background:none;border:0;padding:0;color:inherit;cursor:pointer;line-height:0}
+#calm:hover{background:none}
+html.calm .jmark,html.calm .pulse i,html.calm ul.jobs li .state::before{animation-play-state:paused!important}
+
+/* Home: the presence on the left (on a phone, on top), the work beside it. */
+body.is-home main{max-width:none;padding:0}
+.home{display:grid;grid-template-columns:minmax(380px,5fr) minmax(0,7fr);min-height:calc(100svh - var(--top))}
+#presence{position:sticky;top:var(--top);height:calc(100svh - var(--top));overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:28px 36px;border-right:1px solid var(--line);isolation:isolate}
+#field{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+#presence .stage{font-size:min(30svh,250px);height:1em;display:grid;place-items:center;margin-bottom:5svh}
+.jmark.hero{--jfill:linear-gradient(115deg,var(--brand) 0%,var(--brand) calc(var(--lx) - 14%),var(--rose) var(--lx),var(--brand) calc(var(--lx) + 14%),var(--brand) 100%)}
+@media (prefers-reduced-motion: no-preference){
+  .jmark.hero{animation:jz-light 9s ease-in-out infinite,jz-breathe 6s ease-in-out infinite}
+  html[data-state="working"] .jmark.hero{animation:jz-light 2.2s linear infinite,jz-work 1.4s ease-in-out infinite}
+  html[data-state="waiting"] .jmark.hero{animation:jz-light 6s ease-in-out infinite,jz-beckon 3.2s ease-in-out infinite}
+}
+.say{width:100%;max-width:440px}
+#say-now{font-size:clamp(1.35rem,2.1vw,2rem);line-height:1.25;font-weight:300;letter-spacing:-.02em;margin:0 0 .4em;color:var(--ink)}
+#say-now span{display:block}
+#say-live{min-height:1.6em;margin:0 0 1.1rem;font-size:.9rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#say-live:empty{display:none}
+#say-live::before{content:"";display:inline-block;width:6px;height:6px;margin-right:9px;vertical-align:2px;background:var(--run)}
+#waiting{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+#waiting li{padding:10px 0 10px 14px;border-bottom:1px solid var(--line);box-shadow:inset 2px 0 0 var(--rose)}
+#waiting li a{color:var(--ink);font-weight:500;display:block;line-height:1.35}
+#waiting li span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.84rem;color:var(--faint);margin-top:2px;line-height:1.45}
+#waiting li.more-n{box-shadow:none;padding-left:14px}
+#waiting li.more-n a{color:var(--link);font-weight:400;font-size:.88rem}
+.work{padding:28px clamp(20px,4vw,56px) 64px;max-width:860px;min-width:0}
+.work>h2:first-of-type{margin-top:1.6rem}
+
+/* The command bar: how the owner talks to it. A phone keeps it under the thumb. */
+form.bar{margin:0}
+form.bar fieldset{border:0;padding:0;margin:0;min-width:0}
+form.bar textarea{display:block;width:100%;min-height:58px;max-height:40svh;resize:none;font-size:1.06rem;line-height:1.5;padding:16px 16px;background:var(--card);border:1px solid var(--line);border-left:2px solid var(--brand);transition:border-color .2s}
+form.bar textarea:focus{border-color:var(--rose);border-left-color:var(--rose)}
+form.bar textarea::placeholder{color:var(--faint)}
+form.bar .row{margin-top:10px}
+form.bar select{font-size:.88rem;padding:9px 28px 9px 10px;color:var(--muted)}
+form.bar button{margin-left:auto}
+form.bar .row .err{flex-basis:100%;order:3;font-size:.88rem}
+form.bar .row .err:empty{display:none}
+#cost{font-size:.8rem;color:var(--faint);margin:14px 0 0;font-variant-numeric:tabular-nums}
+
+/* Lists: rows separated by hairlines; the state of a job is a colour and a word. */
+ul.jobs,ul.pages,ol.stream{list-style:none;padding:0;margin:0}
+ul.jobs li{display:grid;grid-template-columns:1fr auto;gap:2px 14px;padding:11px 0;border-bottom:1px solid var(--line)}
+ul.jobs li.empty{display:block;color:var(--faint)}
+ul.jobs li a{color:var(--ink);font-weight:500;min-width:0}
+ul.jobs li .state{font-size:.8rem;color:var(--faint);align-self:center}
+ul.jobs li .last{grid-column:1/-1;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ul.jobs li .last:empty{display:none}
+[data-state="running"] .state,[data-state="running"]>.state{color:var(--run)}
+[data-state="queued"] .state{color:var(--wait)}
+[data-state="done"] .state{color:var(--ok)}
+[data-state="failed"] .state,[data-state="refused"] .state{color:var(--you)}
+[data-state="needs-approval"] .state{color:var(--rose)}
+@media (prefers-reduced-motion: no-preference){ul.jobs li[data-state="running"] .state::before{content:"";display:inline-block;width:6px;height:6px;margin-right:7px;vertical-align:1px;background:var(--run);animation:jz-blink 1.4s ease-in-out infinite}}
+ul.pages li{padding:10px 0;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+ul.pages li>a{color:var(--ink);font-weight:500}
+ul.pages .d{font-size:.8rem;color:var(--faint);font-variant-numeric:tabular-nums}
+ul.pages .rp{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.84rem;flex-basis:100%}
+iframe.trk{display:block;width:100%;height:72svh;border:1px solid var(--line);background:var(--bg)}
+
+/* A job: the question, its state, and the stream as the assistant thinks out loud. */
+p.meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.84rem;color:var(--faint);margin:0 0 1rem}
+p.meta .state{font-weight:600}
+p.ask{font-size:1.1rem;line-height:1.55;border-left:2px solid var(--brand);padding:2px 0 2px 16px;margin:0 0 1.2rem}
+ol.stream{margin:1.6rem 0;border-top:1px solid var(--line)}
+ol.stream li{padding:10px 0;border-bottom:1px solid var(--line);white-space:pre-wrap;line-height:1.55}
+ol.stream li.tool{font-size:.84rem;color:var(--faint);padding:6px 0}
+ol.stream li:last-child{box-shadow:inset 2px 0 0 var(--run);padding-left:14px}
+@media (prefers-reduced-motion: no-preference){ol.stream li.fresh{animation:jz-arrive .45s var(--ease) both}}
+@keyframes jz-arrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+#reply-text{min-height:5em;background:var(--card)}
+
+/* Sign in: the J centre stage, the form under it. */
+body.is-signin main{min-height:100svh;display:flex;flex-direction:column;justify-content:center;align-items:center;max-width:420px;padding:24px 24px 12svh}
+body.is-signin .stage{font-size:min(22svh,170px);height:1em;margin-bottom:4svh}
+body.is-signin h1{font-size:1.2rem;font-weight:500;margin:0 0 1rem;align-self:stretch}
+body.is-signin form{align-self:stretch}
+body.is-signin label{display:block;font-size:.88rem;color:var(--muted)}
+body.is-signin input[type="password"]{width:100%;margin-top:6px;font-size:1.05rem;padding:13px 14px;background:var(--card)}
+body.is-signin button{width:100%;padding:14px}
+
+/* Phone. */
+@media (max-width: 900px){
+  .home{grid-template-columns:1fr}
+  #presence{position:relative;top:0;height:auto;min-height:min(62svh,560px);border-right:0;border-bottom:1px solid var(--line);padding:26px 20px 22px;justify-content:flex-end}
+  #presence .stage{font-size:min(24svh,190px);margin:auto 0 3.5svh}
+  #say-now{font-size:1.45rem}
+  .say{max-width:none}
+  .work{padding:18px 20px calc(150px + env(safe-area-inset-bottom))}
+  form.bar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+  form.bar textarea{min-height:48px;padding:12px 13px;font-size:1rem}
+  form.bar .row{margin-top:8px}
+  form.bar .row select{padding:7px 26px 7px 9px;font-size:16px}
+  form.bar button{padding:10px 18px}
+  #cost{margin-top:0}
+  header.top{gap:10px;padding:0 12px}
+  header.top nav a{padding:8px 7px;font-size:.9rem}
+  .pulse span{display:none}
+  main{padding:0 16px 96px}
+  h1{font-size:1.6rem}
+}
+/* A large screen, far away. */
+@media (min-width: 1900px){html{font-size:20px}body{font-size:19px}header.top{--top:72px;height:72px}header.top .mark{font-size:34px}}
+html[data-tv] form.bar{display:none!important}
+
+/* Moving between places: the page crossfades and rises a little; the J stays where it is. */
+@view-transition{navigation:auto}
+header.top .mark .jmark{view-transition-name:jz-mark}
+.jmark.hero{view-transition-name:jz-hero}
+main{view-transition-name:jz-main}
+::view-transition-old(jz-main){animation:jz-out .16s ease both}
+::view-transition-new(jz-main){animation:jz-in .34s var(--ease) both}
+::view-transition-group(jz-hero){animation-duration:.55s;animation-timing-function:var(--ease)}
+@keyframes jz-out{to{opacity:0}}
+@keyframes jz-in{from{opacity:0;transform:translateY(10px)}}
+@media (prefers-reduced-motion: reduce){@view-transition{navigation:none}*{animation:none!important;transition:none!important}}

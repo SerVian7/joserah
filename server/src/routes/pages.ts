@@ -24,7 +24,7 @@ export function register(app: App, deps: AppDeps): void {
   app.get('/p/tracker', (c) => {
     const t = todayTrackerPage(deps.workspace);
     if (t && pageDir(deps.workspace, t.day, t.folder)) return c.redirect(`/p/${t.day}/${t.folder}/`, 302);
-    return c.html(shell({ title: LABELS[lang()].tracker, lang: lang(), body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
+    return c.html(shell({ title: LABELS[lang()].tracker, lang: lang(), here: '/p/tracker', body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
   });
   app.get('/tv', (c) => {
     const t = todayTrackerPage(deps.workspace);

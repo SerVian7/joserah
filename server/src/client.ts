@@ -12,14 +12,14 @@ post('/api/query',{question:$('textarea',ask).value}).then(function(j){location.
 var up=$('#upload');if(up)up.addEventListener('submit',function(e){e.preventDefault();var err=$('.err',up),fd=new FormData(up);err.textContent='';
 fetch('/api/ingest',{method:'POST',credentials:'same-origin',body:fd}).then(function(r){if(r.status===401)location.href='/login?next='+encodeURIComponent(location.pathname);return r.json().then(function(j){if(!r.ok)throw j;return j})})
 .then(function(j){location.href=j.id?'/jobs/'+j.id:'/'},function(x){err.textContent=(x&&(x.message||x.error))||'error'})});
-if(typeof EventSource==='undefined')return;var es=new EventSource('/events');
+if(typeof EventSource==='undefined')return;var es=window.jzES=new EventSource('/events');
 es.onmessage=function(m){var e;try{e=JSON.parse(m.data)}catch(x){return}
 function typing(){var r=$('#reply-text'),t=$('#job textarea'),a=$('#ask textarea');return (r&&r.value)||(t&&t.value)||(a&&a.value)}
 if(e.type==='reset'&&!typing()){location.reload();return}
 if(e.type==='job'){Array.prototype.forEach.call(all('[data-job="'+e.id+'"]'),function(el){var ev=e.event||{};
 if(el.tagName==='OL'&&(ev.kind==='text'||ev.kind==='tool')){var li=D.createElement('li');li.className=ev.kind;li.textContent=ev.kind==='tool'?'· '+ev.name:ev.text;el.appendChild(li)}
 if(ev.kind==='result'&&el.tagName==='OL'&&!typing())setTimeout(function(){location.reload()},500);
-var st=$('.state',el);if(st&&ev.kind==='state')st.textContent=ev.state;if(st&&ev.kind==='result')st.textContent=ev.ok?'done':'ended';
+var st=$('.state',el);if(ev.kind==='state')el.setAttribute('data-state',ev.state);if(st&&ev.kind==='state')st.textContent=ev.state;if(st&&ev.kind==='result')st.textContent=ev.ok?'done':'ended';
 var last=$('.last',el);if(last&&(ev.kind==='text'||ev.kind==='tool'))last.textContent=ev.kind==='tool'?'· '+ev.name:String(ev.text).slice(0,160)})}
-if(e.type==='jobs'&&$('#running')&&!($('#job textarea')&&$('#job textarea').value))location.reload()};
+if(e.type==='jobs'&&$('#running')&&!window.jzLive&&!($('#job textarea')&&$('#job textarea').value))location.reload()};
 })();`;

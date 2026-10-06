@@ -51,7 +51,7 @@ export function register(app: App, deps: AppDeps): void {
 <form method="get" action="/w/search"><input name="q" type="search" aria-label="${esc(L.search)}"> <button>${esc(L.search)}</button></form>
 <form id="ask"><textarea name="question" required maxlength="4000" aria-label="${esc(L.ask)}"></textarea><button>${esc(L.ask)}</button><span class="err"></span></form>
 <form id="upload"><input type="file" name="file" required aria-label="${esc(L.upload)}"> <button>${esc(L.upload)}</button><span class="err"></span></form>${list}<script src="/_/app.js"></script>`;
-    return c.html(shell({ title: L.wiki, lang: lang(), head: CSS, body }));
+    return c.html(shell({ title: L.wiki, lang: lang(), head: CSS, here: '/w/', body }));
   });
   app.get('/w/page/*', (c) => {
     const rel = pageRel(new URL(c.req.url).pathname.slice('/w/page/'.length));
@@ -67,7 +67,7 @@ export function register(app: App, deps: AppDeps): void {
     const back = (wikiLib.backlinks(pages).get(rel) ?? []).map((b) => pages.find((p) => p.rel === b)!).filter(Boolean);
     const L = LABELS[lang()];
     const body = `${wikiHtml(page, pages)}${back.length ? `<h2>←</h2><ul>${back.map((p) => `<li><a href="${esc(pageUrl(p.rel))}">${esc(p.title)}</a></li>`).join('')}</ul>` : ''}${nav(L)}`;
-    return c.html(shell({ title: page.title, lang: lang(), head: CSS, body }));
+    return c.html(shell({ title: page.title, lang: lang(), head: CSS, here: '/w/', body }));
   });
   app.get('/w/claims', (c) => {
     const L = LABELS[lang()];

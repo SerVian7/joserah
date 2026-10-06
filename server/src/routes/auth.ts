@@ -3,13 +3,13 @@ import type { App } from '../app.ts';
 import type { AppDeps } from '../deps.ts';
 import { COOKIE, signSession, verifyPassword } from '../auth.ts';
 import { clientAddr, safeNext } from '../security.ts';
-import { shell, esc, LABELS } from '../layout.ts';
+import { shell, esc, jmark, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
 
 export function register(app: App, deps: AppDeps): void {
   const page = (lang: 'tr' | 'en', next: string, msg = '') => {
     const L = LABELS[lang];
-    return shell({ title: L.signin, lang, nav: false, body: `<h1>${esc(L.signin)}</h1>${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<form method="post" action="/login"><input type="hidden" name="next" value="${esc(next)}"><label>${esc(L.password)}<br><input type="password" name="password" autocomplete="current-password" required autofocus></label><p><button>${esc(L.signinBtn)}</button></p></form>` });
+    return shell({ title: L.signin, lang, nav: false, bodyClass: 'is-signin', body: `<div class="stage">${jmark('big hero')}</div><h1>${esc(L.signin)}</h1>${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<form method="post" action="/login"><input type="hidden" name="next" value="${esc(next)}"><label>${esc(L.password)}<br><input type="password" name="password" autocomplete="current-password" required autofocus></label><p><button>${esc(L.signinBtn)}</button></p></form>` });
   };
   app.get('/login', (c) => (deps.auth.state.kind === 'ready' ? c.html(page(workspaceLang(deps.workspace), safeNext(c.req.query('next')))) : c.redirect('/setup', 302)));
   app.post('/login', async (c) => {

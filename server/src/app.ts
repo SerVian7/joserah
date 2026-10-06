@@ -14,6 +14,7 @@ import { register as homeRoutes } from './routes/home.ts';
 import { register as wikiRoutes } from './routes/wiki.ts';
 import { register as ingestRoutes } from './routes/ingest.ts';
 import { register as lintRoutes } from './routes/lint.ts';
+import { register as staticRoutes } from './static.ts';
 
 export type Env = { Bindings: HttpBindings; Variables: { signedIn: boolean } };
 export type App = Hono<Env>;
@@ -31,6 +32,7 @@ export function createApp(deps: AppDeps): App {
   app.all('/api/devices/*', (c) => jsonError(c, 501, 'reserved'));
   app.use('*', guard(deps));
   app.use('*', originCheck(deps));
+  staticRoutes(app);
   authRoutes(app, deps);
   setupRoutes(app, deps);
   pagesRoutes(app, deps);

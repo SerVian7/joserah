@@ -35,7 +35,8 @@ export function safeNext(next: string | undefined): string {
 }
 
 // Public: no session needed. /logout only clears the cookie, so a signed-out page can still use it without a redirect chain.
-const PUBLIC = [/^\/healthz$/, /^\/login$/, /^\/logout$/, /^\/_\/login\.css$/];
+// The interface files under /_/s/ (style, script, font, the J) hold nothing private: the sign-in page needs them.
+const PUBLIC = [/^\/healthz$/, /^\/login$/, /^\/logout$/, /^\/_\/login\.css$/, /^\/_\/s\//];
 const SETUP_ONLY = [/^\/setup$/, /^\/api\/setup\//, /^\/_\/setup\.js$/];
 
 export function guard(deps: AppDeps): MiddlewareHandler<Env> {
