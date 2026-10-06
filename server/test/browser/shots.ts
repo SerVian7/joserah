@@ -65,6 +65,8 @@ try {
     const c = await ctx(size, scheme); const p = await c.newPage();
     await signIn(p); await p.waitForTimeout(1200);
     await shot(p, `home-${size}-waiting-${scheme}`);
+    await p.goto(`${base}/p/tracker`); await p.waitForTimeout(900);
+    await shot(p, `tracker-${size}-framed-${scheme}`);
     await c.close();
   }
   {

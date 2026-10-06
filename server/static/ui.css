@@ -2,10 +2,6 @@
    the burgundy in the report and mail templates) and the Theme's console rules: no cards, no rounded corners, no
    shadows, hairlines. One thing is loud: the J, which lives. Everything around it stays quiet. */
 
-@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-ext-wght-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
-@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-@property --sw{syntax:"<angle>";inherits:false;initial-value:0deg}
-@property --lx{syntax:"<percentage>";inherits:false;initial-value:0%}
 
 :root{--brand:#8B0D32;--rose:#d9587e;--bg:#f5f3f2;--card:#faf8f8;--ink:#2a2326;--muted:#5f5458;--faint:#7a6f73;--line:#e3dbdd;--link:#8B0D32;
   --sans:"Sora",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--glow:217,88,126;--top:56px;--ease:cubic-bezier(.2,.7,.2,1)}
@@ -40,47 +36,13 @@ fieldset[disabled]{opacity:.55}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 table{font-size:.9rem}td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-weight:600;color:var(--muted)}
 
-/* The J. Before the mark is lifted it is the recorded faded J as it is; once lifted (html.jm) it is that shape, solid. */
-.jmark{display:inline-block;width:1em;height:1em;flex:none;background:url(/_/s/j.png) center/contain no-repeat}
-html.jm .jmark{background:var(--jfill,var(--brand));-webkit-mask:var(--jm) center/contain no-repeat;mask:var(--jm) center/contain no-repeat}
-html.jm .jmark.ghost{background:url(/_/s/j.png) center/contain no-repeat;-webkit-mask:none;mask:none}
-
-/* Header: the small living J, four places, and a pulse that says what waits. */
-header.top{position:sticky;top:0;z-index:20;max-width:none;height:var(--top);padding:0 20px;display:flex;align-items:center;gap:22px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
-header.top .mark{display:flex;align-items:center;font-size:27px;padding:4px 2px}
-header.top .mark:hover{text-decoration:none}
-header.top nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
-header.top nav a{color:var(--muted);font-weight:500;font-size:.94rem;padding:8px 10px;white-space:nowrap;box-shadow:inset 0 -2px 0 transparent}
-header.top nav a:hover{color:var(--ink);text-decoration:none}
-header.top nav a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--brand)}
-.pulse{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.84rem;color:var(--muted);white-space:nowrap}
-.pulse[hidden],body.is-home .pulse{display:none}
-.pulse:hover{text-decoration:none;color:var(--ink)}
-.pulse i{width:8px;height:8px;background:var(--faint);flex:none}
-html[data-state="working"] .pulse i{background:var(--run)}
-html[data-state="waiting"] .pulse i{background:var(--rose)}
-html[data-net="off"] .pulse i{background:transparent;outline:1px solid var(--faint)}
-
-/* The J breathes by state: calm when idle, quicker while a job runs, a rose halo when something waits on the owner. */
-@media (prefers-reduced-motion: no-preference){
-  header.top .mark .jmark{animation:jz-breathe 6s ease-in-out infinite}
-  html[data-state="working"] header.top .mark .jmark{animation:jz-work 1.4s ease-in-out infinite}
-  html[data-state="waiting"] header.top .mark .jmark{animation:jz-beckon 3.2s ease-in-out infinite}
-  html[data-state="working"] .pulse i{animation:jz-blink 1.4s ease-in-out infinite}
-  html[data-state="waiting"] .pulse i{animation:jz-blink 3.2s ease-in-out infinite}
-}
-@keyframes jz-breathe{0%,100%{opacity:.86;transform:scale(.97)}50%{opacity:1;transform:scale(1)}}
-@keyframes jz-work{0%,100%{transform:scale(.96);filter:drop-shadow(0 0 0 rgba(var(--glow),0))}50%{transform:scale(1.03);filter:drop-shadow(0 0 6px rgba(var(--glow),.7))}}
-@keyframes jz-beckon{0%,70%,100%{filter:drop-shadow(0 0 0 rgba(var(--glow),0))}20%{filter:drop-shadow(0 0 7px rgba(var(--glow),.9))}}
-@keyframes jz-blink{0%,100%{opacity:.35}50%{opacity:1}}
-html[data-net="off"] .jmark{opacity:.4;filter:grayscale(1)}
 
 /* The load sequence: the J alone, centre stage. Hidden unless the boot script asked for it (first page of a visit). */
 #boot{display:none}
 html.boot #boot,#boot.on{display:grid;place-items:center;position:fixed;inset:0;z-index:60;background:var(--bg)}
 html.boot #boot:not(.on){animation:jz-failsafe 0s 5s forwards}
 #boot.on{pointer-events:none}
-html.boot body>header.top,html.boot main{opacity:0;animation:jz-reveal .01s 6s forwards}
+html.boot body>header.jz-top,html.boot main{opacity:0;animation:jz-reveal .01s 6s forwards}
 #boot .jmark.big{font-size:min(36vmin,280px)}
 #boot .jbox{position:relative;width:min(36vmin,280px);height:min(36vmin,280px);font-size:min(36vmin,280px)}
 #boot .jbox>.jmark{position:absolute;inset:0}
@@ -106,7 +68,7 @@ button[aria-busy="true"]{position:relative;color:transparent}button[aria-busy="t
 @keyframes jz-spin{to{transform:rotate(1turn)}}
 #calm{background:none;border:0;padding:0;color:inherit;cursor:pointer;line-height:0}
 #calm:hover{background:none}
-html.calm .jmark,html.calm .pulse i,html.calm ul.jobs li .state::before{animation-play-state:paused!important}
+html.calm .jmark,html.calm .jz-pulse i,html.calm ul.jobs li .state::before{animation-play-state:paused!important}
 
 /* Home: the presence on the left (on a phone, on top), the work beside it. */
 body.is-home main{max-width:none;padding:0}
@@ -203,19 +165,16 @@ body.is-signin button{width:100%;padding:14px}
   form.bar .row select{padding:7px 26px 7px 9px;font-size:16px}
   form.bar button{padding:10px 18px}
   #cost{margin-top:0}
-  header.top{gap:10px;padding:0 12px}
-  header.top nav a{padding:8px 7px;font-size:.9rem}
-  .pulse span{display:none}
   main{padding:0 16px 96px}
   h1{font-size:1.6rem}
 }
 /* A large screen, far away. */
-@media (min-width: 1900px){html{font-size:20px}body{font-size:19px}header.top{--top:72px;height:72px}header.top .mark{font-size:34px}}
+@media (min-width: 1900px){html{font-size:20px}body{font-size:19px}header.jz-top{--top:72px;height:72px}header.jz-top .jz-mark{font-size:34px}}
 html[data-tv] form.bar{display:none!important}
 
 /* Moving between places: the page crossfades and rises a little; the J stays where it is. */
 @view-transition{navigation:auto}
-header.top .mark .jmark{view-transition-name:jz-mark}
+header.jz-top .jz-mark .jmark{view-transition-name:jz-mark}
 .jmark.hero{view-transition-name:jz-hero}
 main{view-transition-name:jz-main}
 ::view-transition-old(jz-main){animation:jz-out .16s ease both}

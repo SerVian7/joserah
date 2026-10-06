@@ -3,9 +3,9 @@ import path from 'node:path';
 import type { Context } from 'hono';
 import type { App, Env } from '../app.ts';
 import type { AppDeps } from '../deps.ts';
-import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage } from '../pages.ts';
+import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage, kindOf } from '../pages.ts';
 import { renderMarkdown } from '../markdown.ts';
-import { shell, esc, LABELS } from '../layout.ts';
+import { shell, esc, frameParts, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
 
 const TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.pdf': 'application/pdf' };
@@ -13,10 +13,10 @@ const TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg
 const IN_PAGE = /^\/p\/([^/]+)\/([^/]+)\/(.*)$/;
 
 /** The page's index.html, re-rendered first when stale; null when it is no longer a regular file inside the page folder. */
-export function serveIndex(dir: string, page: string, mode: 'page' | 'tv'): string | null {
+export function serveIndex(dir: string, page: string, mode: 'page' | 'tv', frame?: { head: string; header: string }): string | null {
   ensureFresh(dir);
   const index = indexOf(dir);
-  return index ? preparePage(fs.readFileSync(index, 'utf8'), { page, mode }) : null;
+  return index ? preparePage(fs.readFileSync(index, 'utf8'), { page, mode, frame }) : null;
 }
 
 export function register(app: App, deps: AppDeps): void {
@@ -47,7 +47,12 @@ export function register(app: App, deps: AppDeps): void {
     const dir = pageDir(deps.workspace, day, folder);
     if (!dir) return c.notFound();
     const prefix = `/p/${day}/${folder}/`;
-    if (sub === '' || sub === 'index.html') { const html = serveIndex(dir, `${day}/${folder}`, 'page'); return html ? c.html(html) : c.notFound(); }
+    if (sub === '' || sub === 'index.html') {
+      // A page shown inside another page (the home page's Tracker) gets no second header.
+      const framed = c.req.header('sec-fetch-dest') === 'iframe';
+      const frame = framed ? undefined : frameParts(lang(), kindOf(dir) === 'tracker' ? '/p/tracker' : undefined);
+      const html = serveIndex(dir, `${day}/${folder}`, 'page', frame); return html ? c.html(html) : c.notFound();
+    }
     const file = resolveAsset(dir, sub);
     if (!file) return c.notFound();
     if (file.endsWith('.md')) {

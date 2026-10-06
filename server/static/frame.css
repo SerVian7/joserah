@@ -1,0 +1,54 @@
+/* The app frame: the font, the J and the header with its live pulse. Shared by the app's own pages and by the
+   pages it serves (Tracker, Trail, Case research, reports), which sit under this header without taking its styles. */
+
+@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-ext-wght-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Sora";font-style:normal;font-display:swap;font-weight:100 800;src:url(/_/s/fonts/sora-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@property --sw{syntax:"<angle>";inherits:false;initial-value:0deg}
+@property --lx{syntax:"<percentage>";inherits:false;initial-value:0%}
+
+:root{--brand:#8B0D32;--rose:#d9587e;--glow:217,88,126;--top:56px}
+header.jz-top,header.jz-top *{box-sizing:border-box}
+header.jz-top{font-family:"Sora",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.4;color:var(--ink)}
+header.jz-top a{text-decoration:none}
+/* Inside a served page: fixed on top, the page moved down under it; never inside a frame. */
+header.jz-top.jz-frame{position:fixed;left:0;right:0;top:0}
+html.jz-framed body{padding-top:var(--top)}
+html.jz-inframe header.jz-frame{display:none}html.jz-inframe body{padding-top:0}
+
+/* The J. Before the mark is lifted it is the recorded faded J as it is; once lifted (html.jm) it is that shape, solid. */
+.jmark{display:inline-block;width:1em;height:1em;flex:none;background:url(/_/s/j.png) center/contain no-repeat}
+html.jm .jmark{background:var(--jfill,var(--brand));-webkit-mask:var(--jm) center/contain no-repeat;mask:var(--jm) center/contain no-repeat}
+html.jm .jmark.ghost{background:url(/_/s/j.png) center/contain no-repeat;-webkit-mask:none;mask:none}
+
+/* Header: the small living J, four places, and a pulse that says what waits. */
+header.jz-top{position:sticky;top:0;z-index:20;max-width:none;height:var(--top);padding:0 20px;display:flex;align-items:center;gap:22px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+header.jz-top .jz-mark{display:flex;align-items:center;font-size:27px;padding:4px 2px}
+header.jz-top .jz-mark:hover{text-decoration:none}
+header.jz-top nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+header.jz-top nav a{color:var(--muted);font-weight:500;font-size:.94rem;padding:8px 10px;white-space:nowrap;box-shadow:inset 0 -2px 0 transparent}
+header.jz-top nav a:hover{color:var(--ink);text-decoration:none}
+header.jz-top nav a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--brand)}
+.jz-pulse{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.84rem;color:var(--muted);white-space:nowrap}
+.jz-pulse[hidden],body.is-home .jz-pulse{display:none}
+.jz-pulse:hover{text-decoration:none;color:var(--ink)}
+.jz-pulse i{width:8px;height:8px;background:var(--faint);flex:none}
+html[data-state="working"] .jz-pulse i{background:var(--run)}
+html[data-state="waiting"] .jz-pulse i{background:var(--rose)}
+html[data-net="off"] .jz-pulse i{background:transparent;outline:1px solid var(--faint)}
+
+/* The J breathes by state: calm when idle, quicker while a job runs, a rose halo when something waits on the owner. */
+@media (prefers-reduced-motion: no-preference){
+  header.jz-top .jz-mark .jmark{animation:jz-breathe 6s ease-in-out infinite}
+  html[data-state="working"] header.jz-top .jz-mark .jmark{animation:jz-work 1.4s ease-in-out infinite}
+  html[data-state="waiting"] header.jz-top .jz-mark .jmark{animation:jz-beckon 3.2s ease-in-out infinite}
+  html[data-state="working"] .jz-pulse i{animation:jz-blink 1.4s ease-in-out infinite}
+  html[data-state="waiting"] .jz-pulse i{animation:jz-blink 3.2s ease-in-out infinite}
+}
+@keyframes jz-breathe{0%,100%{opacity:.86;transform:scale(.97)}50%{opacity:1;transform:scale(1)}}
+@keyframes jz-work{0%,100%{transform:scale(.96);filter:drop-shadow(0 0 0 rgba(var(--glow),0))}50%{transform:scale(1.03);filter:drop-shadow(0 0 6px rgba(var(--glow),.7))}}
+@keyframes jz-beckon{0%,70%,100%{filter:drop-shadow(0 0 0 rgba(var(--glow),0))}20%{filter:drop-shadow(0 0 7px rgba(var(--glow),.9))}}
+@keyframes jz-blink{0%,100%{opacity:.35}50%{opacity:1}}
+html[data-net="off"] .jmark{opacity:.4;filter:grayscale(1)}
+@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}header.jz-top .jz-mark .jmark{view-transition-name:jz-mark}}
+@media (prefers-reduced-motion: reduce){header.jz-top .jmark,.jz-pulse i{animation:none!important}}
+@media (max-width: 900px){header.jz-top{gap:10px;padding:0 12px}header.jz-top nav a{padding:8px 7px;font-size:.9rem}.jz-pulse span{display:none}}

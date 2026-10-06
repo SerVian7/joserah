@@ -96,11 +96,14 @@ export function todayTrackerPage(ws: string): { day: string; folder: string } | 
   return d ? { day, folder: path.basename(d) } : null;
 }
 
-/** Marks a served page (page id, mode) and loads the artifact shim before any page script; adds a viewport when the page has none, and the TV styles in `tv` mode. */
-export function preparePage(html: string, o: { page: string; mode: 'page' | 'tv' }): string {
+/** Marks a served page (page id, mode) and loads the artifact shim before any page script; adds a viewport when the page has none, the TV styles in `tv` mode, and the app frame when given (page mode only). */
+export function preparePage(html: string, o: { page: string; mode: 'page' | 'tv'; frame?: { head: string; header: string } }): string {
   let head = `<meta name="joserah-page" content="${esc(o.page)}"><meta name="joserah-mode" content="${o.mode}"><script src="/_/shim.js"></script>`;
   if (!/<meta[^>]+name=["']?viewport["'\s>]/i.test(html)) head = '<meta name="viewport" content="width=device-width, initial-scale=1">' + head;
   if (o.mode === 'tv') head += `<style id="tv">${TV_CSS}</style>`;
+  // Inside the app: its header on top, after the shim so the interface shares the shim's event stream. Never on a TV.
+  const frame = o.mode === 'page' ? o.frame : undefined;
+  if (frame) { head += frame.head; const BODY = /<body(?:\s[^>]*)?>/i; html = BODY.test(html) ? html.replace(BODY, (m) => m + frame.header) : html + frame.header; }
   const HEAD = /<head(?:\s[^>]*)?>/i;   // not <header>
   return HEAD.test(html) ? html.replace(HEAD, (m) => m + head) : head + html;
 }

@@ -6,7 +6,7 @@
   var V = ((D.currentScript && D.currentScript.src) || '').split('v=')[1] || '0';
   var REDUCED = W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var $ = function (s, r) { return (r || D).querySelector(s); };
-  var top = $('header.top');
+  var top = $('header.jz-top');
   var WORDS = {}; try { WORDS = JSON.parse((top && top.getAttribute('data-words')) || '{}'); } catch (e) { /* none */ }
   var say = function (k, n) { var s = WORDS[k] || ''; return n === undefined ? s : s.replace('{n}', String(n)); };
   var calm = false; try { calm = localStorage.getItem('jz-calm') === '1'; } catch (e) { /* private mode */ }
@@ -81,7 +81,7 @@
   function render(p) {
     H.setAttribute('data-state', p.mode);
     var nw = p.waiting.length, nr = p.running.length;
-    var pulse = $('.pulse');
+    var pulse = $('.jz-pulse');
     if (pulse) {
       var t = nw ? say(nw === 1 ? 'waiting1' : 'waitingN', nw) : nr ? say(nr === 1 ? 'working1' : 'workingN', nr) : '';
       pulse.hidden = !t; $('span', pulse).textContent = t;
@@ -233,7 +233,7 @@
       jb.classList.add('lit');
       return Promise.all([connected, wait(Math.max(0, 1900 - (performance.now() - t0)))]);
     }).then(function () {
-      var target = $('main .jmark.hero') || $('header.top .mark .jmark');
+      var target = $('main .jmark.hero') || $('header.jz-top .jz-mark .jmark');
       var from = jb.getBoundingClientRect();
       H.classList.remove('boot');
       var to = target && target.getBoundingClientRect();

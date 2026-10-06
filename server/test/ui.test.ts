@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from '../src/app.ts';
+import { SHIM_JS } from '../src/shim.ts';
 import { baseDeps, readyAuth, signedIn, trackerPage, REPO_ROOT } from './helpers.ts';
 
 const DAY = '2026-10-06';
@@ -96,4 +97,27 @@ test('home opens on the presence, with its state already in the page', async (t)
   assert.match(html, /<canvas id="field"/);
   assert.match(html, /Which cable\?/);
   assert.match(html, /<form id="job"/);
+});
+
+test('a page opens inside the app frame: the header, the J and the live pulse around it', async (t) => {
+  const { app, deps, cookie } = await signedIn(t);
+  trackerPage(deps.workspace, DAY, [{ title: 'Which cable?', state: 'you' }]);
+  const html = await (await app.request(`/p/${DAY}/daily-tracker/`, { headers: { cookie } })).text();
+  assert.match(html, /<link rel="stylesheet" href="\/_\/s\/frame\.css\?v=[0-9a-f]{8}">/);
+  assert.match(html, /<script src="\/_\/s\/ui\.js\?v=[0-9a-f]{8}" defer><\/script>/);
+  assert.match(html, /<body[^>]*>\s*<header class="jz-top jz-frame"[^>]*>.*<a href="\/p\/tracker" aria-current="page">/s);
+  assert.ok(html.indexOf('/_/shim.js') < html.indexOf('/_/s/ui.js'), 'the shim comes first, so the page shares its event stream');
+});
+
+test('the frame stays out of the TV view and out of a page shown inside another page', async (t) => {
+  const { app, deps, cookie } = await signedIn(t);
+  trackerPage(deps.workspace, DAY, []);
+  const tv = await (await app.request('/tv', { headers: { cookie } })).text();
+  assert.doesNotMatch(tv, /jz-frame|frame\.css/);
+  const framed = await (await app.request(`/p/${DAY}/daily-tracker/`, { headers: { cookie, 'sec-fetch-dest': 'iframe' } })).text();
+  assert.doesNotMatch(framed, /jz-frame|frame\.css/);
+});
+
+test('the shim shares its event stream with the interface', () => {
+  assert.match(SHIM_JS, /es=W\.jzES=new W\.EventSource\('\/events'\)/);
 });

@@ -34,6 +34,6 @@ if(!page)return;var folder='.joserah/desk/artifacts/'+page+'/';
 function onEvent(e){if(!e)return;if(e.type==='answers'&&e.page===page)refresh();else if(e.type==='changed'&&String(e.path).indexOf(folder)===0)soon();else if(e.type==='reset')soon()}
 var polling=false,stamp=null;function poll(){if(polling)return;polling=true;setInterval(function(){if(listeners.length)refresh();api('GET','/api/stamp/'+page).then(function(j){if(stamp!==null&&j.stamp!==stamp)reload();stamp=j.stamp},function(){})},10000)}
 if(typeof W.EventSource==='undefined'){poll();return}
-var fails=0,es=new W.EventSource('/events');es.onopen=function(){fails=0};es.onmessage=function(m){fails=0;try{onEvent(JSON.parse(m.data))}catch(x){}};
+var fails=0,es=W.jzES=new W.EventSource('/events');es.onopen=function(){fails=0};es.onmessage=function(m){fails=0;try{onEvent(JSON.parse(m.data))}catch(x){}};
 es.onerror=function(){fails++;if(es.readyState===2){api('GET','/api/me').then(function(){poll()},function(){})}else if(fails>=3){es.close();poll()}};
 })();`;
