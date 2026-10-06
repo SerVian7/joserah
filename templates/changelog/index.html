@@ -3,21 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f3f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1819" media="(prefers-color-scheme: dark)">
 <title><!--changelog:title--></title>
+<style id="theme">
+<!--changelog:theme-->
+</style>
 <style>
-:root{color-scheme:light dark;--bg:#f6f6f5;--card:#ffffff;--line:#dcdcd9;--ink:#222222;--muted:#5c5c59;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac}}
-:root[data-theme="dark"]{--bg:#1b1b1a;--card:#242423;--line:#3a3a38;--ink:#e4e4e1;--muted:#b0b0ac}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
-main{max-width:640px;margin:0 auto;padding:24px 16px 40px}
-header img{display:block;height:32px;width:auto;max-width:160px;margin-bottom:12px}
-h1{margin:0;font-size:22px;line-height:1.25}
-header p{margin:6px 0 0;color:var(--muted)}
-details{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:10px 0}
-summary{cursor:pointer;padding:12px 14px;font-weight:600}
-ul{margin:0;padding:0 14px 12px 32px}
-li{margin:4px 0}
+main{max-width:680px;margin:0 auto;padding:32px 20px 64px}
+header{margin-bottom:22px}
+header img{display:block;height:28px;width:auto;max-width:160px;margin-bottom:18px}html.jz-framed header img{display:none}
+h1{margin:0;font:600 24px/1.25 var(--sans);letter-spacing:-.015em;text-wrap:balance}
+header p{margin:6px 0 0;max-width:60ch;color:var(--muted)}
+details{border-bottom:1px solid var(--line)}header+details{border-top:1px solid var(--line)}
+summary{display:flex;align-items:center;gap:10px;min-height:44px;padding:10px 0;cursor:pointer;list-style:none;font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"\25B8";width:12px;color:var(--faint)}details[open]>summary::before{content:"\25BE"}
+@media (hover: hover){summary:hover{color:var(--link)}}
+ul{margin:0;padding:0 0 14px 22px;list-style:none}
+li{position:relative;max-width:68ch;margin:0;padding:3px 0;font-size:14.5px}
+li::before{content:"";position:absolute;left:-14px;top:.8em;width:5px;height:5px;background:var(--faint)}
+@media (max-width:560px){main{padding:20px 16px 48px}h1{font-size:21px}}
 </style>
 </head>
 <body>

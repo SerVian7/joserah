@@ -38,6 +38,8 @@ const LABELS = {
 const die = (msg) => { console.error(`case: ${msg}`); process.exit(1); };
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const TPL = path.join(__dirname, '..', 'templates', 'case');
+// The Theme (tools/lib/theme.js): the brand's tokens, light and dark, and the console base, as on every page.
+const theme = require('./lib/theme');
 
 function parseArgs(argv) {
   const pos = []; const opt = {};
@@ -79,7 +81,8 @@ function render(dir) {
   const html = fs.readFileSync(path.join(TPL, 'index.html'), 'utf8')
     .replace('<html lang="en">', () => `<html lang="${lang}">`)
     .replace('<!--case:title-->', () => esc(title))
-    .replace('<!--case:accent-->', () => brand.accent || '#6b8afd')
+    .replace('<!--case:theme-->', () => theme.css())
+    .replace('<!--case:accent-->', () => brand.accent || '#8B0D32')
     .replace('<!--case:band-->', () => band)
     .replace('<!--case:eyebrow-->', () => esc(D.eyebrow || ''))
     .replace('<!--case:heading-->', () => esc(title))

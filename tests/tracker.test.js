@@ -501,7 +501,7 @@ test('a page\'s own colour tokens win over the Theme\'s', (t) => {
   const last = (tok) => { const all = [...h.matchAll(new RegExp(`${tok}:([^;}]+)`, 'g'))]; return all[all.length - 1][1]; };
   assert.deepStrictEqual([last('--link'), last('--bg'), last('--ink')], ['#8B0D32', '#f5f3f2', '#2a2326'], 'in document order, the page has the last word');
   assert.ok(h.includes(theme.TOKENS_CSS), 'the Theme is still there, for what the page does not define');
-  assert.match(last('--run'), /^#(2563a8|6ea8e6)$/, 'a token the page lacks comes from the Theme (its light or dark value)');
+  assert.match(last('--run'), /^#(33608c|86a9d4)$/, 'a token the page lacks comes from the Theme (its light or dark value)');
 });
 test('a main job with sub-jobs: a category line in each group; only a finished one folds; no running word', (t) => {
   const dir = tmpdir(t); init(dir);
@@ -599,7 +599,7 @@ test('style: each section is its own area; the section title outweighs a group n
   assert.match(grp, /color:var\(--muted\)/, 'a group name is calm, not bright');
   assert.ok(weight(grp) > weight(line), 'a group name is still told apart from its lines');
   assert.ok(size(line) > size(grp), 'a line reads larger than its group name');
-  assert.match(rule('section.crew,main .blk'), /background:var\(--card\);border:1px solid var\(--line\);border-top:3px solid/, 'a section is an area of its own');
+  assert.match(rule('section.crew,main .blk'), /background:var\(--card\);border:1px solid var\(--line\);border-top:2px solid/, 'a section is an area of its own');
   assert.match(rule('li.cat>ol,li.cat>details>ol'), /padding-left:14px;border-left:2px solid var\(--line\)/, 'a group\'s lines indent under it');
   assert.doesNotMatch(CONSOLE_CSS, /li\.cat \.jh em|li\.cat summary em/, 'no running word on a group');
 });

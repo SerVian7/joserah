@@ -177,20 +177,20 @@ const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
 const LN = ':is(.crew,main) li.crew-line';
 const STRIP_CSS = [
   // each section is its own area (owner, 2026-10-05: "Aktif çalışma gibi alanların ayrı gözükmesi lazım
-  // stilde … çocuklar için de geçerli"): a quiet surface, a hairline frame, a top band in its state's colour
-  'section.crew,main .blk{padding:14px 16px 4px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--faint)}',
+  // stilde … çocuklar için de geçerli"): a quiet surface, a hairline frame, a top rule in its state's colour
+  'section.crew,main .blk{padding:16px 20px 6px;background:var(--card);border:1px solid var(--line);border-top:2px solid var(--faint)}',
   'section.crew{border-top-color:var(--run)}main .blk[data-k="you"]{border-top-color:var(--you)}main .blk[data-k="wait"]{border-top-color:var(--wait)}main .blk[data-k="ok"]{border-top-color:var(--ok)}',
-  'main .blk>details>summary.hd{border-bottom:0;padding-bottom:10px}main .blk>details[open]>summary.hd{border-bottom:1px solid var(--muted)}',
+  'main .blk>details>summary.hd{border-bottom:0;padding-bottom:10px}main .blk>details[open]>summary.hd{border-bottom:1px solid var(--line)}',
   '.crew .hd{flex-wrap:wrap}',
   '.crew .hd .crew-sum{display:flex;flex-wrap:wrap;margin-left:auto;gap:14px;padding:0;border:0;letter-spacing:0}',
   '.crew-sum span{font:500 11px var(--mono);font-variant-numeric:tabular-nums;gap:4px}',
   `.crew svg,${LN} svg{width:16px;height:16px}`,
   // the columns carry no gap of their own: each part brings its margin, so a part that is not there (no link,
   // a reply icon still hidden) leaves no hole
-  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto minmax(46px,auto);grid-template-areas:"m x r l t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
+  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto minmax(46px,auto);grid-template-areas:"m x r l t";gap:0;align-items:center;margin:0;padding:10px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
   `${LN}>.ic{grid-area:m;margin-right:12px}${LN}>.tx{grid-area:x}${LN}>.rp{grid-area:r}${LN}>.lk{grid-area:l;margin-left:12px}${LN}>time{grid-area:t;margin-left:12px}`,
   `${LN} .ic,${LN} .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}`,
-  `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
+  `${LN} .ic>.sq{display:inline-block;width:6px;height:6px;background:currentColor;color:var(--faint)}`,
   `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
   `${LN} .tx{display:block;width:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;color:var(--ink)}`,
   `${LN} .ct{font:500 11px var(--mono);color:var(--faint)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
@@ -198,55 +198,59 @@ const STRIP_CSS = [
   `${LN} .tx[aria-expanded="true"]::before{content:"\\25BE"}`,
   `${LN} .tx::after{content:"";position:absolute;inset:0}`,
   `${LN}:hover .tx,${LN} .tx[aria-expanded="true"]{color:var(--link)}`,
-  `${LN} .tx:focus-visible,${LN} .lk:focus-visible{outline:1px solid var(--link);outline-offset:2px}`,
-  `${LN}>.lk{position:relative;z-index:1;font:500 11px var(--mono);color:var(--link);text-decoration:none;white-space:nowrap}`,
-  `${LN}>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}`,
+  `${LN} .tx:focus-visible,${LN} .lk:focus-visible{outline:2px solid var(--link);outline-offset:2px}`,
+  `${LN}>.lk{position:relative;z-index:1;font:500 11px var(--mono);color:var(--link);text-decoration:none;white-space:nowrap}${LN}>.lk:hover{text-decoration:underline}${LN}>.lk::after{content:"";position:absolute;inset:-10px -6px}`,
+  `${LN}>time{align-self:center;text-align:right;font:400 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}`,
   ':is(.crew,main) li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;background:none;border:0;border-left:1px solid var(--line)}',
-  '.cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
-  '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.js-cd .cd>b{display:none}',
+  '.cd{padding:10px 0 14px 24px;border-bottom:1px solid var(--line);font:400 13px/1.55 var(--sans);color:var(--muted)}',
+  '.cd>b{display:block;font:500 13.5px/1.45 var(--sans);color:var(--ink)}.js-cd .cd>b{display:none}',
   // a row with nothing more to show has no panel; with the database its panel is the note alone
   '.cd.bare{display:none}html.js-ans .cd.bare.fm:not([hidden]){display:block}html.js-ans .cd.bare.fm{padding-top:4px}',
   `${LN}:has(+li.crew-dl>.cd.bare) .tx::before{visibility:hidden}html.js-ans ${LN}:has(+li.crew-dl>.cd.fm) .tx::before{visibility:visible}`,
-  '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}.cd .dl em{font-style:normal;color:var(--you)}',
-  '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
-  '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
+  '.cd p{margin:3px 0 0;max-width:72ch;overflow-wrap:anywhere}.cd a{color:var(--link)}.cd .dl em{font-style:normal;color:var(--you)}',
+  '.cd .nx span{margin-right:6px;font:600 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
+  '.cd .cm{font:400 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
   '.cd[hidden]{display:none}',
-  '@keyframes mv-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}@keyframes mv-flash{0%,25%{background:color-mix(in srgb,var(--link) 14%,transparent)}100%{background:transparent}}',
+  '@keyframes mv-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}@keyframes mv-flash{0%,25%{background:color-mix(in srgb,var(--link) 12%,transparent)}100%{background:transparent}}',
   '@media (prefers-reduced-motion: no-preference){li.crew-line.mv-new{animation:mv-in .45s ease-out both}li.crew-line.mv-changed,li.crew-line.mv-done,summary.mv-changed{animation:mv-flash 2.2s ease-out}}',
-  '.cd ul.opt{list-style:none;margin:6px 0 2px;padding:0}',
-  '.cd ul.opt>li{display:block;margin:0;padding:5px 0 5px 30px;position:relative;background:none;border:0;border-top:1px solid var(--line);overflow-wrap:anywhere}',
-  '.cd ul.opt .k{position:absolute;left:0;top:6px;min-width:18px;padding:0 4px;font:600 10.5px/1.5 var(--mono);text-align:center;color:var(--muted);border:1px solid var(--line)}',
+  '.cd ul.opt{list-style:none;margin:8px 0 2px;padding:0}',
+  '.cd ul.opt>li{display:block;margin:0;padding:8px 0 8px 32px;position:relative;background:none;border:0;border-top:1px solid var(--line);overflow-wrap:anywhere}',
+  '.cd ul.opt .k{position:absolute;left:0;top:9px;min-width:20px;padding:0 4px;font:600 10.5px/1.6 var(--mono);text-align:center;color:var(--muted);border:1px solid var(--line)}',
   '.cd ul.opt .ol{color:var(--ink);font-weight:500}.cd ul.opt .ot{display:block}.cd ul.opt .ol+.ot{margin-top:1px}',
-  '.cd ul.opt em{margin-left:8px;padding:0 5px;font:600 10px/1.6 var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--you);border:1px solid currentColor}',
-  '.cd ul.opt li.pk{cursor:pointer}.cd ul.opt li.pk:hover .ol{color:var(--link)}.cd ul.opt li.pk[aria-pressed="true"] .k{background:var(--you);color:var(--bg);border-color:var(--you)}.cd ul.opt li.pk[aria-pressed="true"] .ol{color:var(--you)}.cd ul.opt li.pk:focus-visible{outline:1px solid var(--link);outline-offset:3px}',
-  // the reply icon: above the line's own click area, quiet until pointed at; a sent note marks it
-  `${LN}>.rp{position:relative;z-index:1;display:inline-flex;align-items:center;margin-left:10px;padding:3px;color:var(--faint);background:none;border:0;cursor:pointer}${LN}>.rp svg{width:14px;height:14px}${LN}>.rp:hover,${LN}>.rp:focus-visible{color:var(--link)}${LN}>.rp:focus-visible{outline:1px solid var(--link);outline-offset:1px}${LN}>.rp[data-done]{color:var(--ok)}${LN}>.rp[data-reply]{color:var(--link)}${LN}>.rp[hidden]{display:none}`,
+  '.cd ul.opt em{margin-left:8px;padding:0 5px;font:600 10px/1.6 var(--mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--you);border:1px solid currentColor}',
+  '.cd ul.opt li.pk{cursor:pointer}.cd ul.opt li.pk:hover .ol{color:var(--link)}.cd ul.opt li.pk[aria-pressed="true"] .k{background:var(--you);color:var(--bg);border-color:var(--you)}.cd ul.opt li.pk[aria-pressed="true"] .ol{color:var(--you)}.cd ul.opt li.pk:focus-visible{outline:2px solid var(--link);outline-offset:3px}',
+  // the reply icon: above the line's own click area, quiet until pointed at, a finger-sized target; a sent note marks it
+  `${LN}>.rp{position:relative;z-index:1;display:inline-flex;align-items:center;margin-left:10px;padding:3px;color:var(--faint);background:none;border:0;cursor:pointer}${LN}>.rp::after{content:"";position:absolute;inset:-12px -8px}${LN}>.rp svg{width:14px;height:14px}${LN}>.rp:hover,${LN}>.rp:focus-visible{color:var(--link)}${LN}>.rp:focus-visible{outline:2px solid var(--link);outline-offset:1px}${LN}>.rp[data-done]{color:var(--ok)}${LN}>.rp[data-reply]{color:var(--link)}${LN}>.rp[hidden]{display:none}`,
   // a row's conversation, oldest first, above its note box: who and when, then the words
-  '.cd ol.th{list-style:none;margin:10px 0 0;padding:0 0 0 10px;border-left:2px solid var(--line)}.cd ol.th[hidden]{display:none}',
-  '.cd ol.th>li{display:block;margin:0;padding:3px 0 5px;background:none;border:0;text-align:left}.cd ol.th .who{font:600 11.5px var(--sans);color:var(--ink)}.cd ol.th .as .who{color:var(--link)}',
-  '.cd ol.th time{display:inline;margin-left:8px;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}.cd ol.th p{display:block;margin:1px 0 0;text-align:left;color:var(--ink);overflow-wrap:anywhere}.cd ol.th p.ch{font-weight:500}',
-  'form.ans{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 2px}form.ans[hidden]{display:none}',
-  'form.ans input{flex:1 1 160px;min-width:0;min-height:34px;padding:0 8px;font:400 13px var(--sans);color:var(--ink);background:none;border:1px solid var(--line)}',
-  'form.ans .send{min-height:34px;padding:0 14px;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--bg);background:var(--ink);border:0;cursor:pointer}form.ans .send[disabled]{opacity:.4;cursor:default}',
-  'form.ans button:focus-visible,form.ans input:focus-visible{outline:1px solid var(--link);outline-offset:2px}form.ans .err{flex-basis:100%;color:var(--you)}form.ans .err[hidden]{display:none}',
-  ':is(.crew,main) li.crew-line .tx .an{margin-left:8px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ok)}:is(.crew,main) li.crew-line .tx .an[hidden]{display:none}',
+  '.cd ol.th{list-style:none;margin:10px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line)}.cd ol.th[hidden]{display:none}',
+  '.cd ol.th>li{display:block;margin:0;padding:3px 0 6px;background:none;border:0;text-align:left}.cd ol.th .who{font:600 12px var(--sans);color:var(--ink)}.cd ol.th .as .who{color:var(--link)}',
+  '.cd ol.th time{display:inline;margin-left:8px;font:400 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}.cd ol.th p{display:block;margin:1px 0 0;text-align:left;color:var(--ink);overflow-wrap:anywhere}.cd ol.th p.ch{font-weight:500}',
+  // the note box: a hairline field and the brand's one solid button, as on the platform's own pages
+  'form.ans{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 2px}form.ans[hidden]{display:none}',
+  'form.ans input{flex:1 1 160px;min-width:0;min-height:38px;padding:0 10px;font:400 13.5px var(--sans);color:var(--ink);background:var(--bg);border:1px solid var(--line)}form.ans input:focus{border-color:var(--link)}',
+  'form.ans .send{min-height:38px;padding:0 18px;font:600 12.5px var(--sans);color:#fff;background:var(--brand);border:1px solid var(--brand);cursor:pointer}form.ans .send[disabled]{opacity:.4;cursor:default}',
+  'form.ans button:focus-visible,form.ans input:focus-visible{outline:2px solid var(--link);outline-offset:2px}form.ans .err{flex-basis:100%;color:var(--you)}form.ans .err[hidden]{display:none}',
+  ':is(.crew,main) li.crew-line .tx .an{margin-left:8px;font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ok)}:is(.crew,main) li.crew-line .tx .an[hidden]{display:none}',
   '.cd ul.opt>li.rec .k{color:var(--you);border-color:currentColor}.cd ul.opt .why{display:block;margin-top:2px;color:var(--you)}',
-  ':is(.crew,main) li.crew-none{display:block;padding:9px 0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans);color:var(--muted)}',
+  ':is(.crew,main) li.crew-none{display:block;padding:10px 0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans);color:var(--muted)}',
   // a category line (a project group): its name and the member count, a label over its indented lines,
   // quieter than the section title above it and than the lines under it; a done or plan one folds
   'li.cat{display:block}li.cat>ul.ch,li.cat>ol{list-style:none;margin:0;padding:0}',
-  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:14px 0 6px;font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}',
+  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:14px 0 6px;font:500 13px/1.35 var(--sans);letter-spacing:0;color:var(--muted)}',
   'li.cat>details>summary{padding:10px 0 9px;border-bottom:1px solid var(--line)}li.cat>details[open]>summary{border-bottom:0;padding-bottom:6px}',
-  '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
+  '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{font:400 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
   'li.cat>details>summary{cursor:pointer;list-style:none}li.cat>details>summary::-webkit-details-marker{display:none}',
   'li.cat>details>summary .jt::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}li.cat>details[open]>summary .jt::before{content:"\\25BE"}',
-  'li.cat>details>summary:hover .jt{color:var(--link)}li.cat>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
+  'li.cat>details>summary:hover .jt{color:var(--link)}li.cat>details>summary:focus-visible{outline:2px solid var(--link);outline-offset:2px}',
   // a row heading its own category reads as the category's name, still a line that opens
-  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{padding:14px 0 6px;border-bottom:0}li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')} .tx{font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}`,
+  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{padding:14px 0 6px;border-bottom:0}li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')} .tx{font:500 13px/1.35 var(--sans);letter-spacing:0;color:var(--muted)}`,
   // the lines of a group: an evident indented block under its name
   'li.cat>ol,li.cat>details>ol{margin:0 0 8px 3px;padding-left:14px;border-left:2px solid var(--line)}',
+  // a touch screen: every line, fold, option and the note box a finger-sized target (44px); 16px in the field so
+  // a phone does not zoom into it
+  `@media (pointer: coarse){${LN}{min-height:44px}li.cat>details>summary{min-height:44px;align-items:center}.cd ul.opt>li{padding-top:12px;padding-bottom:12px}.cd ul.opt .k{top:13px}form.ans input,form.ans .send{min-height:44px}form.ans input{font-size:16px}}`,
   // phone width: mark, text and time on the first row, the link label under the text
-  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
+  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:14px 14px 4px}}`,
 ];
 // The panel: with script, every detail starts closed; a line's button opens its own and closes every
 // other on the page; a second click closes it. aria-expanded follows; no scrolling, focus stays on the
@@ -356,15 +360,15 @@ const MOTION_JS = '(function(){var K="trk-sig:"+location.pathname,prev=null,cur=
 
 const CONSOLE_CSS = [
   theme.BASE_CSS,
-  'main{display:grid;gap:28px;max-width:820px;margin:0 auto;padding:22px 16px 56px}',
+  'main{display:grid;gap:24px;max-width:860px;margin:0 auto;padding:24px 20px 64px}',
   'main ol,main ul{list-style:none;margin:0;padding:0}',
   'main li{margin:0;padding:0;background:none;border:0}',
-  'main>ol{display:grid;gap:28px}',
+  'main>ol{display:grid;gap:24px}',
   // the section title is the top of the order: section > project group > line > time and link
-  'main .blk>.hd,main .blk>details>summary.hd,main .crew>.hd{padding:0 0 9px;font:700 12px/1.2 var(--mono);letter-spacing:.14em;color:var(--ink);border-bottom:1px solid var(--muted)}',
+  'main .blk>.hd,main .blk>details>summary.hd,main .crew>.hd{padding:0 0 10px;font:600 11.5px/1.3 var(--mono);letter-spacing:.1em;color:var(--ink);border-bottom:1px solid var(--line)}',
   'li.sec{display:block}li.sec.pl{padding-top:12px}',
   ...STRIP_CSS,
-  '@media (max-width:560px){main{gap:24px}main>ol{gap:24px}}',
+  '@media (max-width:560px){main{gap:20px;padding:16px 12px 48px}main>ol{gap:20px}}',
 ].join('\n');
 // The clamp's script is the Theme's (tools/lib/theme.js).
 const { CLIP_JS } = theme;

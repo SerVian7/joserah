@@ -29,6 +29,8 @@ const LANGS = ['en', 'tr'];
 const die = (msg) => { console.error(`changelog: ${msg}`); process.exit(1); };
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const TPL = path.join(__dirname, '..', 'templates', 'changelog');
+// The Theme (tools/lib/theme.js): the brand's tokens, light and dark, and the console base, as on every page.
+const theme = require('./lib/theme');
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseArgs(argv) {
@@ -73,6 +75,7 @@ function render(dir) {
     .map((s) => `<details><summary>${esc(shown(s.date))}</summary><ul>\n${s.lines.map((l) => `<li>${esc(l)}</li>\n`).join('')}</ul></details>`).join('\n');
   const html = fs.readFileSync(path.join(TPL, 'index.html'), 'utf8')
     .replace('<html lang="en">', () => `<html lang="${D.lang}">`)
+    .replace('<!--changelog:theme-->', () => theme.css())
     .replace('<!--changelog:title-->', () => esc(D.title))
     .replace('<!--changelog:logo-->', () => (brand.logo ? `<img src="${esc(brand.logo)}" alt="">` : ''))
     .replace('<!--changelog:heading-->', () => esc(D.title))
