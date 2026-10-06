@@ -48,6 +48,12 @@ the session briefing, the capture hook, the vault guard and the `/joserah:*` com
 opens your tasks and today's journal itself, writes captures by hand, and runs any step you ask for
 by name from the clone's `skills/` folder.
 
+## The web server (0.19.0)
+
+Joserah can also run as a small web server on your machine: the Tracker and other pages live in the
+browser, you answer rows there, and give jobs that your own signed-in Claude Code carries out. It runs
+natively (`joserah serve`) or self-contained in Docker. See [server/README.md](server/README.md).
+
 ## What you get
 
 **A briefing that is never cut.** Each session opens knowing the date, your open tasks, today's
