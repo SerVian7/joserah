@@ -6556,3 +6556,4 @@ The five lines above each have their test in the owning task (Tasks 4, 5, 6, 8, 
 - 02:34 (Manager): Task 13 (ingest and query; 88b616e, 11f7c8e) merged (7bfdcfe); server suite 160/160, existing 922/922.
 - 02:44 (Manager): Task 14 (lint; 62afa78, 60df5fe) merged (7ddb18e); server suite 172/172, existing 922/922.
 - 02:56 (Manager): Task 16 (setup wizard; 82c6dc2, 8e74731) merged (496bb8b); server suite 186/186, existing 922/922.
+- 03:03 (Manager): Task 17 (Docker files, static only — build and smoke not run, daemon off; 58afc62, e245f79) merged (bf42c3b); server suite 192/192, existing 922/922.
