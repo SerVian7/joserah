@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 8c15674 · 2026-10-06 03:33 +0300 · merge task/t19-serve (T19; server running on 4747)
+Last change: 8088300 · 2026-10-07 16:16 +0300 · docs: case 2026-10-07 finance session, held aside for review
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
