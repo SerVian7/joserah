@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 906acd3 · 2026-10-13 00:42 +0300 · docs: JSON-driven pages design (tracker first, then every page template)
+Last change: bf11352 · 2026-10-13 00:44 +0300 · docs: JSON pages spec carries the stopped tracker job's open requirements
 
 - Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
