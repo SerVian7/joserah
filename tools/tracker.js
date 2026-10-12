@@ -60,12 +60,14 @@
  *       storage, every access guarded.
  *       Active work is only what runs now: run rows, the rows crew entries are
  *       working on, and working entries with no row; never what waits on the
- *       owner, never idle. Its head has the line count and on the right Voice's
- *       icon and each working role's; nothing running: count 0 and one line
- *       "Nothing running right now" / "Şu an çalışan iş yok". Every role icon
- *       carries title and aria-label saying what the role is doing (L.doing:
- *       developer mode "Builder · kod yazıyor", off "Kod yazıyor"; a summary icon
- *       leads with its count, "2 · kod yazıyor").
+ *       owner, never idle. Its head has the title and the line count and no icons;
+ *       nothing running: count 0 and one line "Nothing running right now" / "Şu an
+ *       çalışan iş yok". Each line carries its own working roles' icons just left of
+ *       its time (a corner badge when one job has two of a role); the marker column
+ *       and the head carry none, and a job with no live crew entry shows none. An icon
+ *       is titled (title and aria-label) with the job text, in developer mode led by the
+ *       role: "Builder — Folio 1.0.3 sürümü"; with no job text, what the role does
+ *       (L.doing): "Builder · kod yazıyor" / "Kod yazıyor".
  *       Owner: you rows (with the owner entries naming them) and owner entries
  *       with no such row, as their own lines. A you row waiting on a decision
  *       (it has options/recommend/why, or an owner entry with reason decision
@@ -156,10 +158,6 @@ const ROLE_NAME = { voice: 'Voice', lead: 'Lead', architect: 'Architect', builde
 const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
   + '.crew-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:2px 0 6px}'
   + '.crew-sum span{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}'
-  // a role's count sits as a small badge on the icon's corner (owner, 2026-10-12)
-  + '.crew-sum span{position:relative}.crew-sum .badge{position:absolute;top:-6px;right:-8px;min-width:14px;height:14px;padding:0 3px;background:var(--muted);color:var(--bg);font-size:10px;font-weight:600;line-height:14px;text-align:center}'
-  // keyboard focus shows the same text the title shows on hover
-  + '.crew-sum span:focus-visible{outline:1px solid var(--muted);outline-offset:3px}.crew-sum span[title]:focus-visible::after{content:attr(title);position:absolute;top:100%;left:0;z-index:5;margin-top:4px;padding:2px 6px;white-space:nowrap;background:var(--ink);color:var(--bg);font:11px var(--sans)}'
   + '.crew svg{width:18px;height:18px;flex:none;color:var(--muted)}'
   + '.crew ul{list-style:none;margin:0;padding:0}'
   + '.crew li.crew-line{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;background:none;border:0;border-radius:0;font-size:13px}'
@@ -191,8 +189,11 @@ const STRIP_CSS = [
   `.crew svg,${LN} svg{width:16px;height:16px}`,
   // the columns carry no gap of their own: each part brings its margin, so a part that is not there (no link,
   // a reply icon still hidden) leaves no hole
-  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto minmax(46px,auto);grid-template-areas:"m x r l t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
-  `${LN}>.ic{grid-area:m;margin-right:12px}${LN}>.tx{grid-area:x}${LN}>.rp{grid-area:r}${LN}>.lk{grid-area:l;margin-left:12px}${LN}>time{grid-area:t;margin-left:12px}`,
+  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto auto minmax(46px,auto);grid-template-areas:"m x r l a t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
+  `${LN}>.ic{grid-area:m;margin-right:12px}${LN}>.tx{grid-area:x}${LN}>.rp{grid-area:r}${LN}>.lk{grid-area:l;margin-left:12px}${LN}>time{grid-area:t;margin-left:12px}${LN}>.ag{grid-area:a;margin-left:12px}`,
+  // the crew icons of a job: just left of its time (owner, 2026-10-12)
+  `${LN}>.ag{display:inline-flex;align-items:center;gap:12px}${LN}>.ag>span{position:relative;display:inline-flex;align-items:center}${LN}>.ag .badge{position:absolute;top:-6px;right:-8px;min-width:14px;height:14px;padding:0 3px;background:var(--muted);color:var(--bg);font:600 10px/14px var(--mono);text-align:center}`,
+  `${LN}>.ag>span:focus-visible{outline:1px solid var(--muted);outline-offset:3px}${LN}>.ag>span[title]:focus-visible::after{content:attr(title);position:absolute;top:100%;right:0;z-index:5;margin-top:4px;padding:2px 6px;width:max-content;max-width:60vw;background:var(--ink);color:var(--bg);font:11px var(--sans)}`,
   `${LN} .ic,${LN} .ic>span{display:inline-flex;flex:none;align-items:center;gap:4px;min-width:0}`,
   `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
   `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
@@ -259,7 +260,7 @@ const STRIP_CSS = [
   'section.crew>ul>li.crew-line,section.crew>ul>li.cat,.blk>.clip>ol>li.crew-line,.blk>.clip>ol>li.cat{margin-top:18px}',
   'section.crew>ul>li:first-child,.blk>.clip>ol>li:first-child{margin-top:0}',
   // phone width: mark, text and time on the first row, the link label under the text
-  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
+  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto auto;grid-template-areas:"m x r a t" ". l . . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
 ];
 // The panel: with script, every detail starts closed; a line's button opens its own and closes every
 // other on the page; a second click closes it. aria-expanded follows; no scrolling, focus stays on the
@@ -660,12 +661,12 @@ function board(rows, crew, L, dev) {
   const act = (role) => (L.doing || LABELS.en.doing)[role];
   const cap = (s) => s.charAt(0).toLocaleUpperCase(L.locale || 'en') + s.slice(1);
   // the tooltip is the job text (owner, 2026-10-12), with the role name in developer mode; an icon with no
-  // job (Voice, idle) falls back to what the role does
-  const tip = (role, n, jobs = []) => {
+  // job falls back to what the role does
+  const tip = (role, jobs = []) => {
     const j = jobs.filter(Boolean).join('; ');
     const t = j ? (dev ? `${ROLE_NAME[role]} — ${j}` : j)
-      : dev ? `${ROLE_NAME[role]} · ${act(role)}` : (n ? act(role) : cap(act(role)));
-    const s = esc(j || !n ? t : `${n} · ${t}`);
+      : dev ? `${ROLE_NAME[role]} · ${act(role)}` : cap(act(role));
+    const s = esc(t);
     return ` role="img" title="${s}" aria-label="${s}"`;
   };
   const G = { run: [], you: [], wait: [], ok: [], plan: [] };
@@ -695,7 +696,12 @@ function board(rows, crew, L, dev) {
     const title = r ? r.title : es[0].job;
     const id = r ? slugId(`d-${g}`, title) : slugId(`d-${g}`, es[0].job, `crew ${es[0].role} ${es[0].job}`);
     const strip = g === 'run';
-    const mark = strip && es.length ? es.map((e) => `<span${tip(e.role, 0, [e.job])}>${ICONS[e.role]}</span>`).join('') : '<span class="sq"></span>';
+    const mark = '<span class="sq"></span>';
+    // one icon per working role of this job, a corner badge for two or more, the job text as its tooltip
+    const ag = strip ? CREW_ROLES.filter((ro) => es.some((e) => e.role === ro)).map((ro) => {
+      const of = es.filter((e) => e.role === ro);
+      return `<span class="work"${dev ? ` data-role="${ro}"` : ''}${of.length >= 2 ? ` data-count="${of.length}"` : ''}${tip(ro, of.map((e) => e.job))} tabindex="0">${ICONS[ro]}${of.length >= 2 ? '<b class="badge">' + of.length + '</b>' : ''}</span>`;
+    }).join('') : '';
     let time = `<time>${esc(it.t)}</time>`;
     if (strip && es.length) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
@@ -714,7 +720,7 @@ function board(rows, crew, L, dev) {
     const mk = ` data-key="${slugId('k', title)}" data-sig="${sig}"`;
     const attrs = strip ? `class="crew-line ${es.length ? 'work' : 'run'}"${dev && es.length ? ` data-role="${es[0].role}"` : ''}${mk}`
       : `data-st="${g}" class="crew-line ${g}"${mk}`;
-    return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${time}${nt}</li>\n`
+    return `  <li ${attrs}><span class="ic">${mark}</span><button type="button" class="tx" aria-expanded="false" aria-controls="${id}">${text}</button>${link}${ag ? `<span class="ag">${ag}</span>` : ''}${time}${nt}</li>\n`
       + `  <li class="crew-dl"><div class="cd${d ? '' : ' bare'}${!d && form ? ' fm' : ''}" id="${id}">${d ? `<b>${cat ? `${esc(cat)} · ` : ''}${esc(title)}</b>${d}` : ''}${form}</div></li>\n`;
   };
   const NEWEST = new Set(['wait', 'ok', 'plan']);
@@ -755,14 +761,10 @@ function board(rows, crew, L, dev) {
     return out;
   };
 
-  // Active work: its head (and on the right Voice's icon and each working role's, with its count), its
-  // lines; nothing running says so
-  const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || working.some((e) => e.role === r)).map((r) => {
-    const n = working.filter((e) => e.role === r).length;
-    return `<span${n ? ' class="work"' : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${tip(r, n, working.filter((e) => e.role === r).map((e) => e.job))} tabindex="0">${ICONS[r]}${n >= 2 ? '<b class="badge">' + n + '</b>' : ''}</span>`;
-  }).join('')}</div>` : '';
+  // Active work: its head carries the title and the count and no icons (owner, 2026-10-12: "ikonlar aktif çalışma
+  // başlığında değil işin başlığında"); each line carries its own crew icons just left of the time
   const stripLines = units('run', G.run).join('') || `  <li class="crew-none">${esc(L.none || LABELS.en.none)}</li>\n`;
-  const strip = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${G.run.length}</span>${sum}</div><ul>\n${stripLines}</ul>`;
+  const strip = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${G.run.length}</span></div><ul>\n${stripLines}</ul>`;
 
   // the groups below: Owner and Waiting open (Waiting clamps after five), Done today one closed fold,
   // Plans one closed fold per group; an empty group is left out

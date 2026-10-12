@@ -275,8 +275,10 @@ per other audience. With `"artifacts": false` in config.json nothing is publishe
 
 ### Crew strip
 
-With the crew on, the Daily Tracker shows under its header who is working right now: one icon per role
-with a count badge when two or more of it are working or waiting, then one line per job. States: working
+With the crew on, the Daily Tracker shows who is working right now as one line per job; each line carries its
+own icons just left of its time, one per working role with a count badge when two or more of it work on that job
+(owner, 2026-10-12: not in the section header, not in the marker column; a job with no live entry has none; the
+icon's hover text is the job, led by the role name in developer mode). States: working
 (the icon pulses), owner (the page's owner colour and the reason: decision, sign-in, connection or
 approval), idle (dimmed). A line opens the job's report.
 

@@ -351,7 +351,10 @@ test('strip: icon, line, state class; counts only working entries (owner, 2026-1
   assert.match(html, /class="crew"/);
   assert.doesNotMatch(html, /data-count=/, 'one working scout, one working lead: no badge');
   assert.doesNotMatch(stripOf(html), /class="crew-line (owner|idle)"|approval|>B</, 'waiting and idle entries are not strip lines');
-  assert.match(html, /<span class="ic"><span role="img" title="Scout — A" aria-label="Scout — A">/, 'the role and its job are the icon\'s title');
+  assert.ok(html.includes('<span class="ag"><span class="work" data-role="scout" role="img" title="Scout — A" aria-label="Scout — A" tabindex="0"><svg'), 'the role and its job are the icon\'s title; the icon sits on the job\'s line, left of the time');
+  assert.match(html, /<span class="ag">[\s\S]*?<\/span><time/, 'the icons come right before the time');
+  assert.doesNotMatch(html, /<span class="ic"><span role="img"/, 'the marker column carries no icon');
+  assert.doesNotMatch(html, /<div class="hd">[^\n]*<svg/, 'the section header carries no icons');
   assert.doesNotMatch(html, />Scout — A</, 'never in the line text');
   assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
   // template tokens: icons in the muted text token, `owner` in the page's owner colour (no --accent exists)
@@ -359,8 +362,7 @@ test('strip: icon, line, state class; counts only working entries (owner, 2026-1
   assert.match(html, /\.crew-line\.owner svg\{[^}]*color:var\(--you\)/);
   // the strip sits under the header, above the row groups
   assert.ok(html.indexOf('class="crew"') > html.indexOf('</header>') && html.indexOf('class="crew"') < html.indexOf('<ol>'));
-  // Voice leads the summary
-  assert.match(html, /<div class="crew-sum"><span[^>]*data-role="voice"/);
+  assert.doesNotMatch(html, /<div class="crew-sum"/, 'no icon strip in the header (owner, 2026-10-12)');
 });
 // Task 3.7 (owner, 2026-10-05): "normal davranışta, ajan dememeli ve ajan isimleri olmamalı.
 // ikonları kalabilir." With devMode off the strip shows — icons, states, count badge — but no
@@ -377,7 +379,7 @@ test('devMode off: the strip shows icons and states, with no role name and no ag
     crew(dir, ['--role', 'lead', '--job', 'Konuşma', '--state', 'work']);
     const html = page(dir);
     assert.match(html, /<section class="crew">/, `${lang}: the strip is shown`);
-    for (const r of ['voice', 'lead', 'scout']) assert.ok(html.includes(ICONS[r]), `${lang}: ${r} icon`);
+    for (const r of ['lead', 'scout']) assert.ok(html.includes(ICONS[r]), `${lang}: ${r} icon`);
     assert.ok(!html.includes(ICONS.builder), `${lang}: an idle role shows no icon`);
     assert.match(html, /class="crew-line work"/);
     assert.doesNotMatch(html, /class="crew-line (owner|idle)"/, 'only running lines');
@@ -396,7 +398,7 @@ test('devMode on: the role shows only as the icon\'s title', (t) => {
   const dir = devWs(t);
   crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
   const html = page(dir);
-  assert.match(html, /<span class="ic"><span role="img" title="Scout — A" aria-label="Scout — A"><svg/);
+  assert.ok(html.includes('<span class="ag"><span class="work" data-role="scout" role="img" title="Scout — A" aria-label="Scout — A" tabindex="0"><svg'));
   assert.match(html, /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">A<\/button>/);
   assert.doesNotMatch(html, />[^<>]*Scout — /, 'never in the line text');
   assert.match(html, /data-role="scout"[^>]*title="Scout — A"/, 'the summary icon says it too');
@@ -836,7 +838,7 @@ test('crew --row: category and summary from the row, one detail panel, one line 
   assert.strictEqual(ls.length, 4, 'Sinan (two entries, one line), Kendi işi, Zenger, Loose');
   assert.strictEqual(ls.filter((l) => l.includes('Sinan')).length, 1, 'one row, one line');
   const sinan = ls.find((l) => l.includes('Sinan'));
-  assert.match(sinan, /^<li class="crew-line work" data-role="lead" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span role="img" title="Lead — Zenger işleri" aria-label="Lead — Zenger işleri"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder — Mail taslağı" aria-label="Builder — Mail taslağı"><svg/);
+  assert.match(sinan, /^<li class="crew-line work" data-role="lead" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span class="sq"><\/span><\/span>[\s\S]*?<span class="ag"><span class="work" data-role="lead" role="img" title="Lead — Zenger işleri" aria-label="Lead — Zenger işleri" tabindex="0"><svg[\s\S]*?<\/svg><\/span><span class="work" data-role="builder" role="img" title="Builder — Mail taslağı" aria-label="Builder — Mail taslağı" tabindex="0"><svg/);
   // Zenger runs too: it is the category line, Sinan under it without a prefix, the row's link on the line
   const sid = sinan.match(/aria-controls="(d-run-[^"]+)">Sinan Bey'e cevap<\/button><a class="lk" href="https:\/\/example\.com\/d" target="_blank" rel="noopener">taslak<\/a>/)[1];
   assert.match(stripOf(html), /<li class="cat"><ul class="ch">\n  <li class="crew-line run" data-key="[^"]+" data-sig="[^"]+">[^\n]*>Zenger <span class="n">1<\/span><\/button>/);
@@ -872,7 +874,7 @@ test('devMode off: no role name in a mapped strip line or its detail', (t) => {
   crew(dir, ['--role', 'scout', '--job', 'Fiyat taraması', '--state', 'work', '--row', 'Fiyat', '--model', 'opus', '--effort', 'high']);
   const html = page(dir);
   assert.match(stripOf(html), /class="jt">Dell[\s\S]*?>Fiyat/);
-  assert.match(stripOf(html), /<span class="ic"><span role="img" title="Fiyat taraması" aria-label="Fiyat taraması"><svg/, 'the icon stays, titled with the job only');
+  assert.ok(stripOf(html).includes('<span class="ag"><span class="work" role="img" title="Fiyat taraması" aria-label="Fiyat taraması" tabindex="0"><svg'), 'the icon stays, titled with the job only');
   assert.doesNotMatch(html, ROLE_WORDS);
   assert.doesNotMatch(html, /ajan|agent/i);
   assert.doesNotMatch(stripOf(html), /class="cm"|opus/, 'no model tail');
@@ -924,7 +926,7 @@ test('every strip line is clickable', (t) => {
   const cdOf = (l) => (stripOf(html).match(new RegExp('<div class="cd[^"]*" id="' + id(l) + '">([\\s\\S]*?)</div>')) || [])[1];
   // a row: the row's link on the line; in the detail its text, next step and the entry's link
   const pepLine = ls.find((l) => l.includes('Peplink planı'));
-  assert.match(pepLine, /<\/button><a class="lk" href="https:\/\/example\.com\/row" target="_blank" rel="noopener">plan<\/a><time/);
+  assert.match(pepLine, /<\/button><a class="lk" href="https:\/\/example\.com\/row" target="_blank" rel="noopener">plan<\/a><span class="ag">[\s\S]*?<\/span><time/);
   assert.match(cdOf(pepLine), /^<b>Zenger · Peplink planı<\/b><p>plan hazır<\/p><p class="nx"><span>sonraki<\/span> tek evet<\/p><p class="ln"><a href="https:\/\/example\.com\/entry"[^>]*>sayfa<\/a><\/p><form class="ans"[^>]*>[\s\S]*<\/form>$/);
   assert.doesNotMatch(stripOf(html), /class="dl"|karar sayfası/, 'no decision link');
   // no row, a url: the url is in its detail (the build note: an entry's url shows in the detail, not on the line)
@@ -1038,48 +1040,54 @@ test('strip: nothing running says so, in both languages', (t) => {
 
 // Owner, 2026-10-05: "ikonların üstüne gelince planning gibi anlaşılır şeyler yazsın". Every role icon
 // says, on hover and to a screen reader, what that role is doing; the summary icons add the count.
-test('strip icons say what each role is doing (title and aria-label)', (t) => {
-  const tip = (s) => `role="img" title="${s}" aria-label="${s}"`;
-  // developer mode on, Turkish: the role, then the job
-  const on = trWs(t);
-  crew(on, ['--role', 'builder', '--job', 'A', '--state', 'work']);
-  crew(on, ['--role', 'builder', '--job', 'B', '--state', 'work']);
-  crew(on, ['--role', 'scout', '--job', 'C', '--state', 'work']);
-  let html = page(on);
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('Builder — A')}><svg`), 'a line icon');
-  assert.ok(stripOf(html).includes(`<span ${tip('Scout — C')}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="work" data-role="builder" data-count="2" ${tip('Builder — A; B')} tabindex="0"><svg`), 'the summary icon lists its jobs');
-  assert.ok(stripOf(html).includes(`<span class="work" data-role="scout" ${tip('Scout — C')} tabindex="0"><svg`));
-  // Voice has no job of its own: it keeps saying what it does
-  assert.ok(stripOf(html).includes(`data-role="voice" ${tip('Voice · sizinle konuşuyor')} tabindex="0"`));
-  // developer mode off: the job only, no role name
-  const off = tmpdir(t); init(off, ['--lang', 'tr']);
-  crew(off, ['--role', 'builder', '--job', 'A', '--state', 'work']);
-  crew(off, ['--role', 'builder', '--job', 'B', '--state', 'work']);
-  crew(off, ['--role', 'sentry', '--job', 'C', '--state', 'work']);
-  html = page(off);
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('A')}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('C')}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="work" data-count="2" ${tip('A; B')} tabindex="0"><svg`));
-  assert.ok(stripOf(html).includes(`<span ${tip('Sizinle konuşuyor')} tabindex="0"><svg`), 'Voice: the activity, capitalised');
-  assert.doesNotMatch(html, ROLE_WORDS);
-});
-
-// Owner, 2026-10-12: hovering (and focusing) a crew icon says what it is: the role (developer mode) and the job text.
-test('crew icons carry the job text as their tooltip (title and aria-label)', (t) => {
+// Owner, 2026-10-12: "ikonlar aktif çalışma başlığında değil işin başlığında, saatin soluna"; hovering (and
+// focusing) a crew icon says what it is: the role (developer mode) and the job text. A job's icons stand
+// on its own line just left of the time; the section header and the marker column carry none.
+test('crew icons: on the job\'s own line, left of the time; role (developer mode) and job text as the tooltip', (t) => {
   const tip = (s) => `role="img" title="${s}" aria-label="${s}"`;
   const on = trWs(t);
-  crew(on, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work']);
-  crew(on, ['--role', 'builder', '--job', 'Takip testi', '--state', 'work']);
+  setRows(on, [{ state: 'run', title: 'Folio', time: '09:00' }, { state: 'run', title: 'Takip', time: '09:10' }]);
+  crew(on, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work', '--row', 'Folio']);
+  crew(on, ['--role', 'builder', '--job', 'Takip testi', '--state', 'work', '--row', 'Folio']);
+  crew(on, ['--role', 'scout', '--job', 'Fiyat taraması', '--state', 'work', '--row', 'Takip']);
+  crew(on, ['--role', 'lead', '--job', 'Konuşma', '--state', 'work']);
   const html = stripOf(page(on));
-  assert.ok(html.includes(`<span class="ic"><span ${tip('Builder — Folio 1.0.3 sürümü')}><svg`), 'a line icon: role and its job');
-  assert.ok(html.includes(`data-count="2" ${tip('Builder — Folio 1.0.3 sürümü; Takip testi')} tabindex="0"><svg`), 'the summary icon lists its jobs');
-  assert.match(html, /<span class="work" data-role="builder" data-count="2" role="img"[^>]*aria-label="[^"]*" tabindex="0">/, 'summary icons take keyboard focus');
+  const ls = linesOf(page(on));
+  const folio = ls.find((l) => l.includes('>Folio<'));
+  const takip = ls.find((l) => l.includes('>Takip<'));
+  const own = ls.find((l) => l.includes('>Konuşma<'));
+  assert.ok(folio.includes(`<span class="ag"><span class="work" data-role="builder" data-count="2" ${tip('Builder — Folio 1.0.3 sürümü; Takip testi')} tabindex="0"><svg`), 'two builders on one job: one icon, a count badge, both jobs in the tooltip');
+  assert.match(folio, /<b class="badge">2<\/b><\/span><\/span><time/, 'the badge sits on the icon; the icons come right before the time');
+  assert.ok(takip.includes(`<span class="ag"><span class="work" data-role="scout" ${tip('Scout — Fiyat taraması')} tabindex="0"><svg`), 'one icon, no badge');
+  assert.doesNotMatch(takip, /badge/);
+  assert.ok(own.includes(`data-role="lead" ${tip('Lead — Konuşma')} tabindex="0"`), 'an entry with no row is its own line with its icon');
+  assert.doesNotMatch(html, /<div class="hd">[^\n]*<svg|class="crew-sum"/, 'the section header carries no icons');
+  for (const l of ls) assert.match(l, /<span class="ic"><span class="sq"><\/span><\/span>/, 'the marker column carries no icon');
+  assert.match(folio, /<span class="ic"><span class="sq"><\/span><\/span>/);
+  // a job with no live crew entry (an unattended run, an ended agent) shows no icon
+  setRows(on, [{ state: 'run', title: 'Toplu çalışma', unattended: true, time: '09:00' }]);
+  crew(on, ['--role', 'scout', '--job', 'Bitti', '--state', 'idle', '--row', 'Toplu çalışma']);
+  const quiet = linesOf(page(on)).find((l) => l.includes('Toplu çalışma'));
+  assert.doesNotMatch(quiet, /class="ag"/);
+  // developer mode off: the job text only, no role name
   const off = tmpdir(t); init(off, ['--lang', 'tr']);
-  crew(off, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work']);
-  const h2 = stripOf(page(off));
-  assert.ok(h2.includes(`<span class="ic"><span ${tip('Folio 1.0.3 sürümü')}><svg`), 'developer mode off: the job only');
+  setRows(off, [{ state: 'run', title: 'Folio', time: '09:00' }]);
+  crew(off, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work', '--row', 'Folio']);
+  const h2 = page(off);
+  assert.ok(h2.includes(`<span class="ag"><span class="work" ${tip('Folio 1.0.3 sürümü')} tabindex="0"><svg`), 'developer mode off: the job only');
   assert.doesNotMatch(h2, ROLE_WORDS);
+  // English, every role
+  const en = devWs(t);
+  for (const r of ['lead', 'architect', 'builder', 'scout', 'sentry']) crew(en, ['--role', r, '--job', r + ' work', '--state', 'work']);
+  const e = stripOf(page(en));
+  for (const r of ['lead', 'architect', 'builder', 'scout', 'sentry']) assert.ok(e.includes(`<span class="work" data-role="${r}" ${tip(r.charAt(0).toUpperCase() + r.slice(1) + ' — ' + r + ' work')} tabindex="0"><svg`), r);
+});
+test('crew icons: the tooltip names what the role does when its entry has no job text', () => {
+  const { board, LABELS } = require('../tools/tracker.js');
+  const rows = [{ state: 'run', title: 'X', time: '09:00' }];
+  const crewE = [{ role: 'builder', job: '', state: 'work', row: 'X', time: '09:00' }];
+  assert.match(board(rows, crewE, LABELS.en, true).strip, /title="Builder · writing code"/);
+  assert.match(board(rows, crewE, LABELS.en, false).strip, /title="Writing code"/);
 });
 
 // Owner, 2026-10-12: "listeye bak hangisi hangisinin çocuğu belli değil. kapalıyken bile gösteriyorsun"; "işlerin
@@ -1224,7 +1232,7 @@ test('board: in developer mode the model tail is in the detail, never on the lin
 });
 test('board: phone width puts the link under the text; only the time and the link label never wrap', () => {
   const { CONSOLE_CSS } = require('../tools/tracker.js');
-  assert.match(CONSOLE_CSS, /@media \(max-width:560px\)\{[^\n]*li\.crew-line\{[^}]*grid-template-areas:"m x r t" "\. l \. \."/);
+  assert.match(CONSOLE_CSS, /@media \(max-width:560px\)\{[^\n]*li\.crew-line\{[^}]*grid-template-areas:"m x r a t" "\. l \. \. \."/);
   for (const rule of CONSOLE_CSS.split(/(?<=\})/)) {
     if (!rule.includes('white-space:nowrap')) continue;
     assert.match(rule.replace(/^@media[^{]*\{/, ''), /^[^{]*(time|\.lk)[^{]*\{/, `nowrap only on the time and the link: ${rule.slice(0, 90)}`);
