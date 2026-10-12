@@ -55,3 +55,13 @@ Today's open Tracker rows are converted once into job files. `tracker.js` stays 
 ## Out of scope
 
 Shared viewing beyond the Tailscale-served page; artifact publishing (the Tracker is served locally, learned 2026-10-12).
+
+## Carried requirements (from the stopped tracker-headers job, 2026-10-13; the plan must cover each with a test)
+Source: `.joserah/desk/crew/2026-10-13/builder/0050-tracker-headers.md` "Left undone".
+1. Every line has the same height and rhythm, verified by a real browser render at desktop and 390 px phone width.
+2. The page header never repeats the date (the old `init --date` doubled it).
+3. One entry per agent: an agent id match always wins over a description match; a hook never creates a second entry for an id that already has one.
+4. A group header shows each role icon once with a corner count of that role working under it; hover gives role, count and job names.
+5. An agent is paired with its description through the launch call's own result (tool_use_id -> agentId), never by order or time; no entry is ever created for an agent that already finished; a created entry attaches to its row or named project, never loose.
+6. A child line never repeats its parent's name (a leading "<parent>" / "<parent>:" is stripped).
+7. No entry stays "running" after its agent finished: state comes from agent events plus a sweep on every hook event (transcript end, or the job's report written with its done line).
