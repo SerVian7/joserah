@@ -5,7 +5,7 @@ type: status
 
 # Joserah — status
 
-Last change: 7df96af · 2026-10-13 01:25 +0300 · JSON-driven Tracker (job files, jobs hook, static page); old generator retired
+Last change: 1de8b97 · 2026-10-13 · server Tracker bridge on job files; crew.js keeps role definitions when the crew is off
 
 - Released: 0.20.0 on main, 818 tests (`node --test tests/*.test.js`), prompt v30.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
