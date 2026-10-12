@@ -105,10 +105,10 @@ if (!WORKER) who.push(cfg.assistantName
 // and opt-out. Main session only (a worker does not keep it); on unless
 // config.json says `"dailyTracker": false`.
 // `"artifacts": false` (owner, 2026-10-05): no page is published; the files are kept and the reply ends
-// with the path of tracker.md.
+// with the path of tracker.md, or with `trackerUrl` when the workspace serves the page itself.
 if (!WORKER && cfg.dailyTracker !== false) {
   const ending = cfg.artifacts === false
-    ? 'keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with the path of tracker.md'
+    ? 'keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with ' + (cfg.trackerUrl || 'the path of tracker.md')
     : 'end every reply with its link';
   who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); ' + ending + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
 }

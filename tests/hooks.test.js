@@ -798,6 +798,18 @@ test('artifacts: false changes the Daily Tracker line: keep the files current an
   assert.doesNotMatch(ctx(), /Daily Tracker/, 'dailyTracker false still removes the line');
 });
 
+test('artifacts: false with trackerUrl: every reply ends with that URL, not the file path', (t) => {
+  const dir = hookWs(t);
+  const cfgPath = path.join(dir, '.joserah', 'config.json');
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  cfg.artifacts = false; cfg.trackerUrl = 'http://100.98.118.101:8787/';
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const c = ctx();
+  assert.ok(c.includes('do not publish it as an artifact, and end every reply with http://100.98.118.101:8787/. How:'), c);
+  assert.doesNotMatch(c, /path of tracker\.md/);
+});
+
 test('sharedMemoryAutoPush: true adds the auto-push line to the main session; off by default (owner, 2026-10-01)', (t) => {
   const dir = hookWs(t);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
