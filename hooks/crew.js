@@ -6,8 +6,9 @@
  *
  * The event comes from argv (a closed set); the payload from stdin, read with
  * the idle-timer read of tool-count.js, because stdin is not always closed on
- * Windows. Silent outside a Joserah workspace, with the crew off, or with a
- * `crew` block the generator would refuse (doctor reports that one). An empty,
+ * Windows. Silent outside a Joserah workspace. The Ledger paths need `crew` on (and a `crew` block the
+ * generator accepts; doctor reports that one); the Crew strip paths need only `dailyTracker` (on unless
+ * false), the strip being the owner's Daily Tracker (owner, 2026-10-12). An empty,
  * broken or non-object payload writes nothing and prints nothing.
  *
  *   subagent-start  agent type `lead` (or `<plugin>:lead`): creates
@@ -27,7 +28,8 @@
  *                   with no entry on today's Daily Tracker gets one (work), and
  *                   at the stop the hook's own entry, or one tagged with that
  *                   agent's id (`--agent`), is dimmed (idle).
- *   post-tool-use   a worker's tool call (payload with agent_id): its entry's
+ *   post-tool-use   a worker's Write of its own report log (desk/crew/<day>/<role>/HHMM-<slug>.md) closes its
+ *                   working entry at once (queued jobs: the agent keeps running between them); a worker's tool call (payload with agent_id): its entry's
  *                   context size (`ctx`, `ctxTime`) from its own transcript, at
  *                   most once a minute; SubagentStop writes the final figure.
  *
@@ -319,6 +321,28 @@ function agentStopped(root, input) {
   });
 }
 
+/**
+ * One worker, queued jobs (owner, 2026-10-12): the agent does not end between jobs, so SubagentStop never
+ * fires. The smallest signal that exists is the worker's own report: its Write of a `HHMM-<slug>.md` log in
+ * its role's folder under desk/crew/<day>/ (the role brief: the result goes to that log before the reply;
+ * progress files are .progress, the Ledger is ledger-*). The Ledger's `end` line is Lead's and comes only
+ * after Lead sees the notice, which is the delay itself. It closes that agent's working entry; the next
+ * job's entry is Lead's to open (it knows the job text), a hook cannot invent it.
+ */
+const REPORT_LOG = /\.joserah\/desk\/crew\/\d{4}-\d{2}-\d{2}\/([a-z]+)\/\d{4}-[^/]+\.md$/;
+function jobLogged(root, input) {
+  const file = input.tool_input && input.tool_input.file_path;
+  const m = typeof file === 'string' ? REPORT_LOG.exec(file.split(path.sep).join('/').replace(/\\/g, '/')) : null;
+  const role = roleOf(input.agent_type);
+  const agent = id(input.agent_id);
+  if (!m || m[1] !== role || !CREW_ROLES.includes(role) || !agent || !dailyTracker(root)) return;
+  withCrew(root, (crew) => {
+    const mine = crew.filter((e) => e && e.role === role && e.state === 'work' && (e.agent === agent || k(e.job) === k(agent)));
+    for (const e of mine) stampNow(e, 'idle');
+    return mine.length > 0;
+  });
+}
+
 // ---- context size (Task 4.6; owner, 2026-10-05: "never an estimate") --------
 // Measured 2026-10-05 (spec "Measured payloads"): a worker's own transcript is
 // <dir of transcript_path>/<session_id>/subagents/agent-<agent_id>.jsonl — the same
@@ -406,18 +430,25 @@ function recordContext(root, input, force) {
   fs.writeFileSync(rowsPath, JSON.stringify(j, null, 1) + '\n');
 }
 
-function handle(event, root, input) {
-  if (event === 'session-start') return reinject(root, input);
+// `on` says what is switched on: `ledger` (config `crew`: Lead's Ledger, its stamps and re-injection) and
+// `strip` (config `dailyTracker`, on unless false: the Crew strip entries, kept by agent id). The strip is
+// the owner's Daily Tracker, not the crew's bookkeeping, so it does not wait for `crew: true` (owner,
+// 2026-10-12: the entries stayed "work" on a workspace with `crew: false`).
+function handle(event, root, input, on = { ledger: true, strip: true }) {
+  if (event === 'session-start') return on.ledger ? reinject(root, input) : null;
   const agentTool = input.tool_name === 'Agent' || input.tool_name === 'Task';
-  if (event === 'pre-tool-use') { if (agentTool) agentToolStart(input); return null; }
-  if (event === 'subagent-start') { try { agentStarted(root, input); } catch { /* the strip is a convenience */ } }
-  if (event === 'subagent-stop') { try { agentStopped(root, input); } catch { /* idem */ } recordContext(root, input, true); }
+  if (event === 'pre-tool-use') { if (agentTool && on.strip) agentToolStart(input); return null; }
+  if (event === 'subagent-start' && on.strip) { try { agentStarted(root, input); } catch { /* the strip is a convenience */ } }
+  if (event === 'subagent-stop' && on.strip) { try { agentStopped(root, input); } catch { /* idem */ } recordContext(root, input, true); }
   // a worker's tool call (its payload carries agent_id, measured); the main thread's has none
   if (event === 'post-tool-use') {
+    if (!on.strip) return null;
     if (agentTool) { try { agentToolDone(root, input); } catch { /* idem */ } }
+    if (input.tool_name === 'Write' && input.agent_id) { try { jobLogged(root, input); } catch { /* idem */ } }
     if (input.agent_id) recordContext(root, input, false);
     return null;
   }
+  if (!on.ledger) return null;
   if (event === 'subagent-start' && roleOf(input.agent_type) === 'lead') return leadStarted(root, input);
   // PreCompact carries `trigger`, SessionEnd `reason` (measured 2026-10-05). SessionEnd
   // may not fire at all when a background shell is still running: best effort only.
@@ -432,13 +463,15 @@ function handle(event, root, input) {
     if (!EVENTS.includes(event)) return;
     const root = findWorkspace(process.cwd());
     if (!root) return;
-    let crew;
-    try { crew = resolveCrew(readConfig(root) || {}); } catch { return; }
-    if (!crew.enabled) return;
+    const cfg = readConfig(root) || {};
+    let ledger = false;
+    try { ledger = resolveCrew(cfg).enabled; } catch { /* a crew block the generator would refuse: no Ledger */ }
+    const strip = cfg.dailyTracker !== false;
+    if (!ledger && !strip) return;
     let input;
     try { input = JSON.parse(await readStdin()); } catch { return; }
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
-    const out = handle(event, root, input);
+    const out = handle(event, root, input, { ledger, strip });
     if (out) process.stdout.write(JSON.stringify(out));
   } catch { /* never break a spawn, a compaction or a session end */ }
 })().finally(() => process.exit(0));

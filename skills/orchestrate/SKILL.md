@@ -238,8 +238,10 @@ per other audience. With `"artifacts": false` in config.json nothing is publishe
 - **One job per row.** On a Tracker or Daily Tracker there is never a summary row that repeats other
   rows; separate jobs are never merged into one row; an update changes the existing row instead of
   adding a repeating one (the updater refuses two rows with the same title).
-- **Explicit states.** A row is one of: agent working (only while a background agent is on
-  it; it moves when the agent ends), owner (the owner's decision or action, linked to the page where
+- **Explicit states.** A row is one of: active work (`run`: a background agent is on it, or it is a run marked `--unattended` — a batch or
+  an unattended chain, shown in Active work with no icon; when the agent ends the hook only dims its crew entry
+  and never moves the row, and a running row whose agents have all ended and that is not unattended is flagged
+  "no one on it" so staleness shows, owner (2026-10-12)), owner (the owner's decision or action, linked to the page where
   it is decided), waiting (on someone outside, no AI working), done, plan (`run`, `you`, `wait`, `ok`,
   `plan` in rows.json). With `devMode` off the page says "In progress" for agent working.
 - **The agent-working row is added in the same turn the agent is started** — never later — and moved
@@ -251,7 +253,7 @@ per other audience. With `"artifacts": false` in config.json nothing is publishe
   what lets a new chat continue without loss.
 - **A new day opens a new Daily Tracker.** At the first message of a new day the assistant opens that
   day's Daily Tracker unasked — open rows carried over, marked with the day they came from — freezes
-  the previous day's page (a `.frozen` file in its folder; the briefing flags a previous day's open,
+  the previous day's page (`tracker.js freeze <dir>`: a `.frozen` file in its folder, a forward to today's page and a "Bugünün sayfası" link, so an open tab follows; the briefing flags a previous day's open,
   unfrozen Daily Tracker as `[new day]`) and makes the previous day's Wrap then.
 - **Running work is visible.** Every background job gets a running row when it is launched, saying
   what is awaited — which job, which result, what comes next — and moves to done with its finish
@@ -287,7 +289,7 @@ approval), idle (dimmed). A line opens the job's report.
   Lead's `owner ·` line, at the end when the completion notice arrives:
   `node "${CLAUDE_PLUGIN_ROOT}/tools/tracker.js" crew <dir> --role <role> --job "<job>" --state work|owner|idle [--agent <id> --model <m> --effort <e>] [--reason <reason>] [--url <report>]`.
   A worker that opens sub-workers writes theirs, never its own entry; Lead writes none.
-  The hooks only backstop it. A local file write; Voice republishes once per reply.
+  The hooks backstop it by agent id and re-render the page with no model turn; they are gated on `dailyTracker`, not on `crew`. A local file write; Voice republishes once per reply.
 - **Developer mode** (`devMode`, off by default) decides only whether the roles are named. Off: icons,
   states and counts, with no role name and no agent wording anywhere on the page; a line is the work only.
   On: `<Role> · <job>`, and a faint `model · effort · ctx @time` (a context size only as reported, never

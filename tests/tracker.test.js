@@ -234,7 +234,7 @@ test('0.17.4: explicit states, next step on open rows, new-day opening and evalu
   const read = (...f) => fs.readFileSync(path.join(PLUGIN_ROOT, ...f), 'utf8').replace(/\s+/g, ' ');
   for (const f of [['skills', 'orchestrate', 'SKILL.md']]) {
     const text = read(...f);
-    for (const w of ['agent working (only while a background agent is on it', 'waiting (on someone outside, no AI working)', 'ends with the next step and where it happens']) {
+    for (const w of ['active work (`run`: a background agent is on it, or it is a run marked `--unattended`', 'waiting (on someone outside, no AI working)', 'ends with the next step and where it happens']) {
       assert.ok(text.includes(w), `${f.join('/')}: ${w}`);
     }
   }
@@ -1850,4 +1850,67 @@ test('tracker.md is deterministic and follows the page language', (t) => {
   assert.doesNotMatch(a, /## Owner/, 'an empty section is left out');
   render(dir, T2);
   assert.match(fs.readFileSync(path.join(dir, 'tracker.md'), 'utf8'), /^updated: 17:40$/m);
+});
+
+// Owner, 2026-10-12: "Bunun neresi beklemede? çalışıyor? aktif işlerde olmalı. AI ikonu olmicak hiç işte."
+// Work running with no agent on it (a batch run, an unattended chain) is Active work, no icon. A running row
+// whose agents have all ended and that is not marked unattended is flagged, so staleness shows.
+test('unattended run: --unattended marks the row, kept while it runs, dropped when it leaves the run state; it sits in Active work with no icon', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  const row = (...a) => runTool('tracker.js', ['row', dir, '--title', 'Toplu koşu', ...a], { env: { JOSERAH_NOW: T1 } });
+  assert.strictEqual(row('--state', 'run', '--unattended').status, 0);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].unattended, true);
+  row('--state', 'run', '--small', 'devam ediyor');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].unattended, true, 'kept while it runs');
+  const html = page(dir);
+  assert.match(html, /Aktif çalışma <span>1<\/span>/);
+  assert.ok(html.includes('Toplu koşu') && html.indexOf('Toplu koşu') < html.indexOf('Aktif çalışma') + 4000);
+  assert.doesNotMatch(html, /class="ag"/, 'no crew icon');
+  row('--state', 'wait');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].unattended, undefined, 'dropped when it leaves the run state');
+});
+test('stale run row: running, its agents all ended, not unattended — flagged; with a live agent or unattended — not', (t) => {
+  const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
+  setRows(dir, [{ state: 'run', title: 'Eski iş', time: '09:00' }, { state: 'run', title: 'Canlı iş', time: '09:01' }, { state: 'run', title: 'Toplu', unattended: true, time: '09:02' }, { state: 'run', title: 'Hiç başlamamış', time: '09:03' }]);
+  crew(dir, ['--role', 'builder', '--job', 'Bitti', '--state', 'idle', '--row', 'Eski iş']);
+  crew(dir, ['--role', 'builder', '--job', 'Bitti 2', '--state', 'idle', '--row', 'Canlı iş']);
+  crew(dir, ['--role', 'scout', '--job', 'Sürüyor', '--state', 'work', '--row', 'Canlı iş']);
+  crew(dir, ['--role', 'scout', '--job', 'Bitti 3', '--state', 'idle', '--row', 'Toplu']);
+  const ls = linesOf(page(dir));
+  const of = (n) => ls.find((l) => l.includes(`>${n}`));
+  assert.match(of('Eski iş'), /class="stale"/, 'ended agents, not unattended: flagged');
+  assert.doesNotMatch(of('Canlı iş'), /class="stale"/, 'a live agent');
+  assert.doesNotMatch(of('Toplu'), /class="stale"/, 'unattended');
+  assert.doesNotMatch(of('Hiç başlamamış'), /class="stale"/, 'never had an agent: nothing to say');
+  assert.doesNotMatch(page(dir), ROLE_WORDS);
+  assert.doesNotMatch(page(dir), /ajan|agent/i, 'plain words, no agent wording');
+});
+
+// Owner, 2026-10-12 ("hala adı değişmedi"): a tab left on yesterday's frozen page must follow to today's. The
+// freeze step is the tool's: it writes `.frozen`, a forward in the head and a visible link, and renders keep both.
+test('freeze: .frozen, a meta refresh forward and a visible "today" link; re-rendering and re-freezing keep exactly one of each', (t) => {
+  for (const [lang, label] of [['tr', 'Bugünün sayfası'], ['en', 'Today\'s page']]) {
+    const dir = tmpdir(t); init(dir, ['--lang', lang]);
+    setRows(dir, [{ state: 'ok', title: 'A', time: '09:00' }]);
+    const run = (...a) => runTool('tracker.js', ['freeze', dir, ...a], { env: { JOSERAH_NOW: T2 } });
+    assert.strictEqual(run('--to', '/2026-10-02/daily-tracker/').status, 0);
+    assert.ok(fs.existsSync(path.join(dir, '.frozen')));
+    let html = page(dir);
+    assert.match(html, /<head><meta http-equiv="refresh" content="0;url=\/2026-10-02\/daily-tracker\/">/);
+    assert.match(html, new RegExp(`<a class="fwd" href="/2026-10-02/daily-tracker/"[^>]*>${label}`));
+    render(dir, T2);
+    run('--to', '/2026-10-03/daily-tracker/');
+    render(dir, T2);
+    html = page(dir);
+    assert.strictEqual(html.split('http-equiv="refresh"').length, 2, `${lang}: one forward`);
+    assert.strictEqual(html.split('class="fwd"').length, 2, `${lang}: one link`);
+    assert.match(html, /url=\/2026-10-03\/daily-tracker\//, 'the later forward wins');
+    assert.match(html, /<main/, 'the board is still there');
+  }
+  // the default forward is today's page of the same name, by the clock; an unsafe target is refused
+  const dir = tmpdir(t); init(dir);
+  assert.strictEqual(runTool('tracker.js', ['freeze', dir], { env: { JOSERAH_NOW: '2026-10-13T08:00:00' } }).status, 0);
+  assert.match(page(dir), new RegExp(`url=/2026-10-13/${path.basename(dir)}/`));
+  const bad = runTool('tracker.js', ['freeze', dir, '--to', 'javascript:alert(1)'], { env: { JOSERAH_NOW: T2 } });
+  assert.strictEqual(bad.status, 1);
 });

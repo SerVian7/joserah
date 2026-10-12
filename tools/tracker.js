@@ -18,6 +18,10 @@
  *       Upserts ONE row by title (case and outer spaces ignored) into rows.json
  *       and re-renders; nothing has to be read first. A changed row loses its
  *       `time` and is re-stamped now; small/url/label not given are cleared.
+ *       [--unattended]: a run with no agent on it (a batch, an unattended chain) is Active
+ *       work with no icon; the flag is kept while the row runs and dropped when it leaves
+ *       the run state. A run row whose crew entries (--row) have all ended, and that is not
+ *       unattended, shows "no one on it" / "başında kimse yok" (stale).
  *       [--parent "<title>"]: the row's main job (a row title, case and outer
  *       spaces ignored); its sub-jobs form a container under it. One level only: a
  *       row with a parent cannot be a parent, nor its own. A row re-run without
@@ -102,6 +106,11 @@
  *       on the next render; an entry with no `since` starts at its own `time`,
  *       never later than now.
  *
+ *   node tools/tracker.js freeze <dir> [--to <path or http(s) url>]
+ *       Freezes a day's page: writes .frozen, a meta refresh to --to (default: today's page of the
+ *       same folder name, /<today>/<name>/) and a visible "Bugünün sayfası" / "Today's page" link
+ *       under the header, so a tab left open on it follows to the new day. Renders keep both.
+ *
  *   node tools/tracker.js <dir>
  *       Renders. rows.json is the FULL inventory: an array of
  *       {match?, state, title, small?, url?, label?, group?, parent?, time?}, state one of
@@ -139,8 +148,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', write: 'write a note', send: 'Send', none: 'Nothing running right now', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', write: 'not yazın', send: 'Gönder', none: 'Şu an çalışan iş yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', write: 'write a note', send: 'Send', none: 'Nothing running right now', today: "Today's page", stale: 'no one on it', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', write: 'not yazın', send: 'Gönder', none: 'Şu an çalışan iş yok', today: 'Bugünün sayfası', stale: 'başında kimse yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -198,6 +207,7 @@ const STRIP_CSS = [
   `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
   `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
   `${LN} .tx{display:block;width:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;color:var(--ink)}`,
+  `${LN} .stale{margin-left:8px;font:500 11px var(--mono);color:var(--wait)}`,
   `${LN} .ct{font:500 11px var(--mono);color:var(--faint)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx[aria-expanded="true"]::before{content:"\\25BE"}`,
@@ -420,8 +430,9 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--force') opt.force = true;
+    else if (a === '--unattended') opt.unattended = true;
     else if (a === '--option') (opt.option = opt.option || []).push(argv[++i]);
-    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent|row|recommend|why)$/.test(a)) opt[a.slice(2)] = argv[++i];
+    else if (/^--(title|date|lang|logo|state|small|url|label|group|role|job|reason|parent|model|effort|ctx|agent|row|recommend|why|to)$/.test(a)) opt[a.slice(2)] = argv[++i];
     else if (a.startsWith('--')) die(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -707,8 +718,10 @@ function board(rows, crew, L, dev) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
       time = elapsedTime({ state: 'work', since, time: es.map((e) => String(e.time)).sort().pop() });
     }
+    // a running row whose crew entries have all ended (and that is no unattended run) says so: it may be stale
+    const stale = strip && r && r.state === 'run' && !r.unattended && !es.length && crew.some((e) => e.state === 'idle' && key(e.row) === key(r.title));
     const answerable = isChoice(r);
-    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
+    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${stale ? ` <span class="stale">${esc(L.stale || LABELS.en.stale)}</span>` : ''}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
     const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const d = detailOf(r, es, L, { dev, decide: g === 'you' });
     const form = r ? formOf(r, L) : '';
@@ -944,6 +957,8 @@ function upsert(dir, opt) {
   // the parent stays unless given: re-running a sub-job's row must not ungroup it
   const parent = opt.parent !== undefined ? opt.parent : (i >= 0 ? rows[i].parent : undefined);
   if (parent) row.parent = parent;
+  // a run with no agent on it (a batch, an unattended chain), marked once, kept while the row runs
+  if (opt.state === 'run' && (opt.unattended || (i >= 0 && rows[i].unattended))) row.unattended = true;
   if (i >= 0) rows[i] = row; else rows.push(row);
   checkParents(rows); // before writing: a refused row leaves rows.json alone
   checkDecisions(rows, store.crew);
@@ -1001,11 +1016,35 @@ function readCrew(dir) {
   return readStore(path.join(dir, 'rows.json')).crew;
 }
 
+/**
+ * Freezes a day's page (owner, 2026-10-12: "hala adı değişmedi"): a tab left open on it must follow to the
+ * next day's. Writes <dir>/.frozen, a meta refresh in the head and a visible link under the header (for a
+ * browser that blocks the refresh); every later render keeps both, since only <main> and the shared blocks
+ * are rebuilt. --to is where it points: a path from the server's root or an http(s) url; default today's page
+ * of the same name, /<today>/<folder name>/. Freezing again replaces the forward.
+ */
+function freeze(dir, opt) {
+  if (!dir) die('usage: tracker.js freeze <dir> [--to <path or http(s) url>]');
+  const file = path.join(dir, 'index.html');
+  if (!fs.existsSync(file)) die(`${file} not found`);
+  const n = now();
+  const to = opt.to || `/${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}/${path.basename(path.resolve(dir))}/`;
+  if (!/^(\/[^\s"'<>]*|https?:\/\/[^\s"'<>]+)$/.test(to)) die('--to must be a path starting with / or an http(s) url');
+  let html = fs.readFileSync(file, 'utf8');
+  const L = LABELS[(html.match(/<html[^>]*\blang="(\w+)"/) || [])[1]] || LABELS.en;
+  html = html.replace(/<meta http-equiv="refresh"[^>]*>/g, '').replace(/<p class="fwd-b"[^>]*>[\s\S]*?<\/p>\n?/g, '')
+    .replace('<head>', () => `<head><meta http-equiv="refresh" content="0;url=${esc(to)}">`)
+    .replace('</header>', () => `</header>\n<p class="fwd-b" style="margin:0;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px"><a class="fwd" href="${esc(to)}" style="color:var(--link)">${esc(L.today)} →</a></p>`);
+  fs.writeFileSync(file, html);
+  fs.writeFileSync(path.join(dir, '.frozen'), `${n.toISOString()}\n`);
+}
+
 function main() {
   const { pos, opt } = parseArgs(process.argv.slice(2));
   if (pos[0] === 'init') init(pos[1], opt);
   else if (pos[0] === 'row') upsert(pos[1], opt);
   else if (pos[0] === 'crew') upsertCrew(pos[1], opt, { quiet: false });
+  else if (pos[0] === 'freeze') freeze(pos[1], opt);
   else if (pos.length === 1) render(pos[0]);
   else die('usage: tracker.js init <dir> --title "<text>" [...]  |  tracker.js row <dir> --title t --state s  |  tracker.js crew <dir> --role r --job t --state s  |  tracker.js <dir>');
 }

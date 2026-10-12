@@ -482,3 +482,70 @@ test('A1: pending descriptions live under JOSERAH_STATE_DIR — a list left else
   assert.strictEqual(r.status, 0);
   assert.deepStrictEqual(store().crew.map((e) => e.job), ['a2c4c87ea93f66eaa'], 'no description of its own: its agent id, not another run\'s');
 });
+
+// Owner, 2026-10-12: "bu tracker'ı hep güncel tutman lazım … en ucuz yolunu bul". The Crew strip's hooks
+// serve the Daily Tracker, so they are gated on `dailyTracker`, not on `crew`: a workspace whose crew is
+// off but whose Tracker is on (the crew still runs by hand) keeps its entries current without a model turn.
+const setCfg = (ws, patch) => {
+  const p = path.join(ws, '.joserah', 'config.json');
+  fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), ...patch }));
+};
+test('hooks: crew off but dailyTracker on — start and stop still move the strip entry by agent id', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  setCfg(ws, { crew: false });
+  runTool('tracker.js', ['row', tr, '--title', 'Folio', '--state', 'run'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'Folio 1.0.3', '--state', 'work', '--agent', 'B1', '--row', 'Folio'], { env: { JOSERAH_NOW: '2026-10-05T08:31:00' } });
+  const r = sub(ws, 'subagent-start', 'scout', 'S9');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.deepStrictEqual(store().crew.map((e) => [e.role, e.state, e.agent]), [['builder', 'work', 'B1'], ['scout', 'work', 'S9']]);
+  sub(ws, 'subagent-stop', 'builder', 'B1', '2026-10-05T09:20:00');
+  const e = store().crew.find((x) => x.agent === 'B1');
+  assert.deepStrictEqual([e.state, e.time], ['idle', '09:20']);
+  assert.strictEqual(store().rows.find((x) => x.title === 'Folio').state, 'run', 'the hook never moves a row: running work without an agent is still active work');
+  assert.match(fs.readFileSync(path.join(tr, 'index.html'), 'utf8'), /Folio/, 'the page was re-rendered');
+});
+test('hooks: crew off — no Ledger for Lead, no compaction stamps; the strip entry is still written', (t) => {
+  const { ws, store } = trackerFixture(t);
+  setCfg(ws, { crew: false });
+  const r = sub(ws, 'subagent-start', 'lead', 'L1');
+  assert.strictEqual(r.stdout, '', 'no Ledger path printed');
+  assert.ok(!fs.existsSync(path.join(ws, '.joserah', 'desk', 'crew')), 'no Ledger');
+  assert.deepStrictEqual(store().crew.map((e) => [e.role, e.state]), [['lead', 'work']]);
+});
+test('hooks: dailyTracker false — the strip is left alone', (t) => {
+  const { ws, tr } = trackerFixture(t);
+  setCfg(ws, { crew: false, dailyTracker: false });
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  sub(ws, 'subagent-start', 'scout', 'S9');
+  sub(ws, 'subagent-stop', 'scout', 'S9');
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+});
+
+// Owner, 2026-10-12 ("Kafayı yicem bir iş 33 dk ne yapıyor olabilir?"): one worker doing queued jobs never ends
+// between them, so SubagentStop does not fire. Its own report is the signal: the worker's Write of a
+// `HHMM-<slug>.md` log in its role's folder under desk/crew/<day>/ is the end of that job (the role brief says the
+// result goes to that log before the reply), and it closes that agent's strip entry at once. The next job's
+// entry is Lead's, who knows its text (`tracker.js crew`); a hook cannot invent it.
+const logWrite = (ws, file, agent = 'B1', type = 'builder', now = '2026-10-05T09:30:00') => hook(ws, 'post-tool-use', JSON.stringify({
+  session_id: 'S1', agent_id: agent, agent_type: type, tool_name: 'Write', tool_input: { file_path: file }, tool_response: { type: 'create' },
+}), now);
+test('queued jobs: the worker\'s own report log closes its entry while the agent keeps running', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'Job one', '--state', 'work', '--agent', 'B1'], { env: { JOSERAH_NOW: '2026-10-05T08:31:00' } });
+  runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'Other', '--state', 'work', '--agent', 'S2'], { env: { JOSERAH_NOW: '2026-10-05T08:32:00' } });
+  const dir = path.join(ws, '.joserah', 'desk', 'crew', '2026-10-05', 'builder');
+  // not a report: another role's folder, a progress file, a ledger, a file outside the crew folder
+  for (const f of [path.join(ws, '.joserah', 'desk', 'crew', '2026-10-05', 'scout', '0930-x.md'), path.join(dir, '0930-x.progress'), path.join(dir, 'ledger-0930.md'), path.join(ws, 'notes', '0930-x.md')]) logWrite(ws, f);
+  assert.deepStrictEqual(store().crew.map((e) => e.state), ['work', 'work'], 'nothing closes it');
+  const r = logWrite(ws, path.join(dir, '0930-job-one.md'));
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(r.stdout, '');
+  const [a, b] = store().crew;
+  assert.deepStrictEqual([a.state, a.time, b.state], ['idle', '09:30', 'work'], 'only that agent\'s entry, closed by its report');
+  assert.match(fs.readFileSync(path.join(tr, 'index.html'), 'utf8'), /Other/, 'the page was re-rendered');
+  // a Windows-style path counts too, and a second report with the entry already idle changes nothing
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  const bs = String.fromCharCode(92);
+  logWrite(ws, dir.split(path.sep).join(bs) + bs + '0940-job-two.md');
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+});
