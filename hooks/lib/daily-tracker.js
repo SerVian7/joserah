@@ -7,6 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// the page's title says what it is in the owner's language ("Günlük Takip" on a Turkish workspace)
+const IS_TRACKER = /Daily Tracker|Günlük Takip/;
+
 function dailyTracker(root, day) {
   const base = path.join(root, '.joserah', 'desk', 'artifacts', day);
   let subs;
@@ -16,10 +19,10 @@ function dailyTracker(root, day) {
     const d = path.join(base, n);
     try {
       if (!fs.existsSync(path.join(d, 'rows.json'))) continue;
-      if (/Daily Tracker/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) return d;
+      if (IS_TRACKER.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) return d;
     } catch { /* not a page */ }
   }
   return null;
 }
 
-module.exports = { dailyTracker };
+module.exports = { dailyTracker, IS_TRACKER };

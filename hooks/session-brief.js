@@ -433,7 +433,7 @@ function newDayLine(root, cfg, now) {
       const d = path.join(base, day, e.name);
       if (fs.existsSync(path.join(d, '.frozen'))) continue;
       try {
-        if (!/Daily Tracker/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) continue;
+        if (!/Daily Tracker|Günlük Takip/.test(fs.readFileSync(path.join(d, 'index.html'), 'utf8'))) continue;
         // rows.json is an array, or { rows, crew } once the Crew strip has an entry (0.18.0)
         const j = JSON.parse(fs.readFileSync(path.join(d, 'rows.json'), 'utf8'));
         const rows = Array.isArray(j) ? j : (j && j.rows);

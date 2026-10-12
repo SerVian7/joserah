@@ -549,3 +549,21 @@ test('queued jobs: the worker\'s own report log closes its entry while the agent
   logWrite(ws, dir.split(path.sep).join(bs) + bs + '0940-job-two.md');
   assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
 });
+
+// Second cause found on the live workspace (2026-10-13): the owner's page is titled "Günlük Takip", and the
+// Tracker lookup only knew "Daily Tracker" in its title, so no hook ever found it.
+test('hooks: a Daily Tracker titled in Turkish ("Günlük Takip") is found too, by its title', (t) => {
+  const ws = wsFor(t);
+  const tr = path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-05', 'daily-tracker');
+  runTool('tracker.js', ['init', tr, '--title', 'Günlük Takip', '--lang', 'tr'], { env: { JOSERAH_NOW: '2026-10-05T08:00:00' } });
+  sub(ws, 'subagent-start', 'scout', 'S9');
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8')).crew.map((e) => [e.role, e.state]), [['scout', 'work']]);
+  sub(ws, 'subagent-stop', 'scout', 'S9');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8')).crew[0].state, 'idle');
+  // a folder of another name needs the title
+  const other = wsFor(t);
+  const o = path.join(other, '.joserah', 'desk', 'artifacts', '2026-10-05', 'board');
+  runTool('tracker.js', ['init', o, '--title', 'Board'], { env: { JOSERAH_NOW: '2026-10-05T08:00:00' } });
+  sub(other, 'subagent-start', 'scout', 'S9');
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(o, 'rows.json'), 'utf8')), []);
+});
