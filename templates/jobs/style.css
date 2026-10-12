@@ -1,0 +1,116 @@
+/* Tracker page: joserah.com's tokens (cream ground, burgundy accent, Arial). Static; jobs.js only fills the DOM. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f5f3f2;
+  --tx: #2a2326;
+  --ft: #7a6f73;
+  --br: #8B0D32;
+  --band: #ebe5e6;
+  --kid: #f9f7f7;
+  --kid2: #ffffff;
+  --line: #ddd5d7;
+  --run: #2d6aa3;
+  --you: #8B0D32;
+  --wait: #a8650f;
+  --done: #2f7d55;
+  --plan: #7a6f73;
+  --bad: #b4232a;
+  --h: 44px; /* every job line */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1819;
+    --tx: #ddd5d7;
+    --ft: #9a8d91;
+    --br: #d9587e;
+    --band: #3a3033;
+    --kid: #2a2426;
+    --kid2: #211d1e;
+    --line: #443a3d;
+    --run: #6ea8e6;
+    --you: #ef7b80;
+    --wait: #e0a24f;
+    --done: #5fbf8f;
+    --plan: #9a8d91;
+    --bad: #ef7b80;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--tx); font: 15px/1.5 Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--br); }
+
+.top { display: flex; align-items: baseline; gap: 12px; max-width: 880px; margin: 0 auto; padding: 20px 16px 12px; }
+.top h1 { margin: 0; font-size: 18px; font-weight: 700; }
+.top time { color: var(--ft); font-size: 13px; }
+.top nav { margin-left: auto; display: flex; gap: 14px; font-size: 13px; }
+.top nav a { text-decoration: none; color: var(--ft); }
+.top nav a[aria-current] { color: var(--br); font-weight: 700; }
+
+main { max-width: 880px; margin: 0 auto; padding: 0 16px 56px; }
+.empty { color: var(--ft); padding: 24px 0; }
+
+/* A project band, its job lines nested under it (indent + own ground), finished work one level deeper. */
+.band { margin: 0 0 18px; }
+.band > header { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; background: var(--band); border-left: 4px solid var(--br); }
+.band > header h2 { margin: 0; flex: 1; min-width: 0; font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.band > header .n { color: var(--ft); font-size: 12px; white-space: nowrap; }
+.kids { margin-left: 18px; background: var(--kid); border-left: 2px solid var(--line); }
+.kids .kids { margin-left: 18px; background: var(--kid2); }
+
+.job { border-bottom: 1px solid var(--line); }
+.job > summary, .fold > summary { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 46px; align-items: center; gap: 10px; height: var(--h); padding: 0 12px; cursor: pointer; list-style: none; }
+.job > summary::-webkit-details-marker, .fold > summary::-webkit-details-marker { display: none; }
+.job > summary:hover, .fold > summary:hover { background: color-mix(in srgb, var(--br) 6%, transparent); }
+.job > summary:focus-visible, .fold > summary:focus-visible { outline: 2px solid var(--br); outline-offset: -2px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--plan); }
+.dot[data-s="run"] { background: var(--run); }
+.dot[data-s="you"] { background: var(--you); }
+.dot[data-s="wait"] { background: var(--wait); }
+.dot[data-s="done"] { background: var(--done); }
+.dot[data-s="plan"] { background: transparent; border: 2px solid var(--plan); }
+.tt { display: flex; gap: 10px; align-items: baseline; min-width: 0; white-space: nowrap; }
+.tt b { flex: 0 1 auto; min-width: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.tt i { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-style: normal; color: var(--ft); font-size: 13px; }
+.tm { color: var(--ft); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.ag { display: inline-flex; align-items: center; gap: 6px; color: var(--ft); font-size: 12px; }
+.nobody { color: var(--ft); font-size: 12px; opacity: .8; }
+
+.job[open] > summary { background: color-mix(in srgb, var(--br) 5%, transparent); }
+.body { padding: 4px 12px 14px 32px; font-size: 14px; }
+.body p { margin: 0 0 8px; white-space: pre-wrap; }
+.body .meta { color: var(--ft); font-size: 12px; }
+.body .opts { margin: 0 0 8px; padding: 0; list-style: none; }
+.body .opts li { padding: 2px 0; }
+.body .opts li[data-rec]::after { content: " \2605"; color: var(--br); }
+.body .why { color: var(--ft); font-size: 13px; margin: 0 0 8px; }
+.body .go { display: inline-block; margin: 0 10px 6px 0; padding: 2px 10px; border: 1px solid var(--br); border-radius: 12px; font-size: 13px; text-decoration: none; }
+
+.fold { border-bottom: 1px solid var(--line); }
+.fold > summary { grid-template-columns: 10px minmax(0, 1fr); color: var(--ft); font-size: 13px; }
+.fold > summary::before { content: "\25B8"; font-size: 11px; }
+.fold[open] > summary::before { content: "\25BE"; }
+.fold > summary { display: flex; gap: 10px; }
+
+.bad { padding: 8px 12px; color: var(--bad); border-left: 4px solid var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); margin: 0 0 6px; font-size: 13px; }
+
+/* role icons: pulsing while working; the hover tip names role, count and jobs */
+.ico { position: relative; display: inline-flex; width: 20px; height: 20px; color: var(--run); }
+.ico svg { width: 18px; height: 18px; animation: pulse 2.4s ease-in-out infinite; }
+.ico b { position: absolute; right: -6px; top: -5px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--br); color: #fff; font: 700 10px/14px Arial, sans-serif; text-align: center; }
+.ico::after { content: attr(data-tip); position: absolute; right: 0; top: 24px; z-index: 5; width: max-content; max-width: 260px; padding: 6px 9px; background: var(--tx); color: var(--bg); font-size: 12px; line-height: 1.35; border-radius: 6px; white-space: pre-line; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.ico:hover::after, .ico:focus::after { opacity: 1; }
+@keyframes pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .ico svg { animation: none; } }
+
+@media (max-width: 640px) {
+  .tt i, .nobody { display: none; }
+  .tt b { max-width: 100%; }
+  .band > header { padding: 0 10px; }
+  .kids, .kids .kids { margin-left: 10px; }
+  .body { padding-left: 22px; }
+  .job > summary { gap: 8px; padding: 0 8px; }
+}
