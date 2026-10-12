@@ -82,3 +82,12 @@ test('afterWrite: the journal stub lone dash placeholder is replaced', (t) => {
   J.afterWrite(root, put(root, 'a', { ...ok, state: 'done', finished: '2026-10-13T10:00:00+03:00' }), NOW);
   assert.doesNotMatch(journal(root), /\n-\n/);
 });
+
+test('jobs-install puts the page and the jobs folder in a workspace, twice over', (t) => {
+  const root = tmpdir(t); fs.mkdirSync(path.join(root, '.joserah'), { recursive: true }); fs.writeFileSync(path.join(root, '.joserah', 'config.json'), '{}');
+  const run = () => require('child_process').spawnSync(process.execPath, [path.join(__dirname, '..', 'tools', 'jobs-install.js'), root], { encoding: 'utf8' });
+  assert.strictEqual(run().status, 0); assert.strictEqual(run().status, 0);
+  for (const n of ['index.html', 'style.css', 'jobs.js']) assert.ok(fs.existsSync(path.join(root, '.joserah', 'desk', 'artifacts', 'tracker', n)), n);
+  assert.ok(fs.statSync(path.join(root, '.joserah', 'desk', 'jobs')).isDirectory());
+  assert.strictEqual(require('child_process').spawnSync(process.execPath, [path.join(__dirname, '..', 'tools', 'jobs-install.js'), tmpdir(t)], { encoding: 'utf8' }).status, 1);
+});
