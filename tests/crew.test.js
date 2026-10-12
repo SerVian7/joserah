@@ -153,27 +153,24 @@ test('--check: a missing definition is drift; an owner file and crew off are not
   assert.strictEqual(runTool('crew.js', [off, '--check']).status, 0);
 });
 
-// Lead decision, 2026-10-05 (plan Task 6.2 Step 6): switching the crew off
-// takes away what the generator wrote, and only that.
-test('crew off removes only stamped definitions, one line each; an unstamped file is kept', (t) => {
+// Owner, 2026-10-13 (via Lead): the crew switch off does not delete the role definitions: the owner keeps it off
+// and still uses the roles. Replaces the 2026-10-05 rule that took away stamped files.
+test('crew off never deletes a role definition, stamped or an owner file', (t) => {
   const dir = ws(t); // scaffold wrote all five, stamped
   fs.writeFileSync(agent(dir, 'scout'), 'mine');
+  const before = Object.fromEntries(ROLES.map((r) => [r, fs.readFileSync(agent(dir, r), 'utf8')]));
   const p = path.join(dir, '.joserah', 'config.json');
   for (const off of [false, { enabled: false }]) {
     const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-    cfg.crew = true; fs.writeFileSync(p, JSON.stringify(cfg));
-    runTool('crew.js', [dir]);
     cfg.crew = off;
     fs.writeFileSync(p, JSON.stringify(cfg));
     const r = runTool('crew.js', [dir]);
     assert.strictEqual(r.status, 0, r.stderr);
-    for (const role of ROLES.filter((x) => x !== 'scout')) {
-      assert.ok(!fs.existsSync(agent(dir, role)), `${role} removed`);
-      assert.match(r.stdout, new RegExp(`^removed ${role}$`, 'm'));
+    for (const role of ROLES) {
+      assert.strictEqual(fs.readFileSync(agent(dir, role), 'utf8'), before[role], `${role} left exactly as it was`);
+      assert.match(r.stdout, new RegExp(`^skipped-off ${role}$`, 'm'));
     }
-    assert.strictEqual(fs.readFileSync(agent(dir, 'scout'), 'utf8'), 'mine', 'owner file untouched');
-    assert.doesNotMatch(r.stdout, /removed scout/);
-    assert.strictEqual(runTool('crew.js', [dir]).stdout.match(/^removed /mg), null, 'a second run removes nothing');
+    assert.doesNotMatch(r.stdout, /removed/);
   }
 });
 

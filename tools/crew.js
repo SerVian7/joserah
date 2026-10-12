@@ -22,10 +22,9 @@
  * byte for byte with the file; a stamped file that differs, or a missing one,
  * is `drift`. An owner's file and a crew switched off are not drift.
  *
- * With the crew off, a stamped definition is removed (`removed <role>`); an
- * owner's same-named file is left, and --check removes nothing.
+ * With the crew off it writes and removes nothing (`skipped-off <role>`): existing definitions stay as they are.
  *
- * One line per role on stdout: `wrote|ok|kept-owner|skipped-off|removed|drift <role>`
+ * One line per role on stdout: `wrote|ok|kept-owner|skipped-off|drift <role>`
  * (`ok` only with --check). Exit 0 on success or a clean check; 1 on a
  * config error (its message, naming the key, on stderr), on drift with
  * --check, or when no workspace is found.
@@ -66,15 +65,8 @@ const isOwners = (file) => fs.existsSync(file) && !fs.readFileSync(file, 'utf8')
  */
 function generate(root, { check = false, cfg } = {}) {
   const crew = resolveCrew((cfg === undefined ? readConfig(root) : cfg) || {});
-  if (!crew.enabled) {
-    // Off: take away what this generator wrote (stamped), never an owner's file.
-    return ROLES.map((role) => {
-      const file = agentPath(root, role);
-      if (check || !fs.existsSync(file) || isOwners(file)) return { role, action: 'skipped-off' };
-      fs.rmSync(file);
-      return { role, action: 'removed' };
-    });
-  }
+  // Off: nothing is written and nothing is deleted: the owner may keep the switch off and still use the roles (2026-10-13).
+  if (!crew.enabled) return ROLES.map((role) => ({ role, action: 'skipped-off' }));
   return ROLES.map((role) => {
     const file = agentPath(root, role);
     if (isOwners(file)) return { role, action: 'kept-owner' };
