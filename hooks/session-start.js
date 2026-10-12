@@ -101,16 +101,11 @@ who.push('Match them: speak at the level they speak, and do not volunteer file p
 if (!WORKER) who.push(cfg.assistantName
   ? `Anything you send outside this workspace — a mail, a report, a document — you sign **${cfg.assistantName} Joserah**: your own name, never the owner's and never the host's, and then Joserah, a space later and a shade fainter. Nothing joins the two words but that space — never a middle dot. Where the tone cannot be carried, as in plain text, write it **${cfg.assistantName}, Joserah**.`
   : `Anything you send outside this workspace — a mail, a report, a document — you sign **Joserah**: you are Joserah and the sole author here, so the name is written once and once only, never the owner's and never the host's.`);
-// Owner decision 2026-10-01: the Daily Tracker is native and automatic, quiet,
-// and opt-out. Main session only (a worker does not keep it); on unless
-// config.json says `"dailyTracker": false`.
-// `"artifacts": false` (owner, 2026-10-05): no page is published; the files are kept and the reply ends
-// with the path of tracker.md, or with `trackerUrl` when the workspace serves the page itself.
+// Owner decisions 2026-10-01 and 2026-10-13: the Daily Tracker is native, automatic, quiet and opt-out; since
+// 2026-10-13 one living page drawn from job files (desk/jobs). Main session only (a worker does not keep it);
+// on unless config.json says `"dailyTracker": false`. `trackerUrl` is the link the workspace serves it at.
 if (!WORKER && cfg.dailyTracker !== false) {
-  const ending = cfg.artifacts === false
-    ? 'keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with ' + (cfg.trackerUrl || 'the path of tracker.md')
-    : 'end every reply with its link';
-  who.push('Daily Tracker: on — keep the owner\'s Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); ' + ending + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
+  who.push('Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; end every reply with ' + (cfg.trackerUrl || 'its link') + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
 }
 // Owner decision 2026-10-01: a per-workspace opt-in. Off (absent or anything but
 // true) keeps the standing rule: a shared-memory push waits for the owner's yes.
@@ -125,8 +120,7 @@ if (!WORKER && cfg.sharedMemoryAutoPush === true) {
 // the plugin's crew-config module: this file reads nothing outside the workspace.
 const CREW_ON = cfg.crew === true || (!!cfg.crew && typeof cfg.crew === 'object' && !Array.isArray(cfg.crew) && cfg.crew.enabled !== false);
 if (!WORKER && CREW_ON) {
-  // The strip is written by the session that sees the event (owner, 2026-10-05): Voice.
-  const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours. Crew strip: you write it (`tracker.js crew`): Lead\'s `started:` line -> work, `owner ·` -> owner, a completion notice -> idle.' : '';
+  const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours: job files, with job:<slug> in each Agent description.' : '';
   who.push('Crew: on — you only talk; a one-lookup question you answer, every other job goes to Lead (opened at the first job, resumed by message after).' + tracker + ' A worker\'s completion notice goes to Lead verbatim; it is done when Lead says so. How: the orchestrate skill.');
 }
 // Developer mode decides only whether the owner SEES the crew (owner, 2026-10-05:

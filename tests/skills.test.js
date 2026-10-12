@@ -104,7 +104,7 @@ test('orchestrate carries the crew', () => {
     const m = next.exec(text);
     return text.slice(i, m ? m.index : undefined).replace(/\s+/g, ' ');
   };
-  for (const h of ['## Crew\n', '## Delivery', '## Distill', '### Completion notices', '### The Ledger', '### Crew strip']) assert.ok(text.includes(h), `missing: ${h}`);
+  for (const h of ['## Crew\n', '## Delivery', '## Distill', '### Completion notices', '### The Ledger']) assert.ok(text.includes(h), `missing: ${h}`);
   assert.match(section('## Crew\n'), /Lead.*Architect.*Builder.*Scout.*Sentry/);
   assert.match(section('## Crew\n'), /heavy.*medium.*simple/);
   assert.ok(section('## Briefing').includes('Done when:'), 'Briefing: Done when');
@@ -115,14 +115,12 @@ test('orchestrate carries the crew', () => {
   assert.match(section('## Distill'), /written twice/);
   assert.match(section('## Distill'), /verbatim/);
   assert.match(section('### Completion notices'), /relayed to Lead verbatim/);
-  assert.match(section('### Crew strip'), /session that sees the event/);
-  assert.match(section('### Crew strip'), /never its own entry/);
   assert.match(flat, /devMode/);
   assert.match(flat, /first person/);
-  assert.match(section('## Trackers'), /console/);
-  assert.match(section('## Trackers'), /never folds/);
-  assert.match(section('## Trackers'), /never fully closed/);
-  assert.match(section('## Trackers'), /agent working → owner → waiting → plans → done/);
+  assert.match(section('## Trackers'), /one file per job/i);
+  assert.match(section('## Trackers'), /jobs-check/);
+  assert.match(section('## Trackers'), /job:<slug>/);
+  assert.match(section('## Trackers'), /options.*recommend.*why/);
   const mgr = section('### A manager for a wave');
   assert.match(mgr, /crew off/);
 });
@@ -297,7 +295,7 @@ test('orchestrate: the chat gives a warm full-sentence summary; rows and items n
   assert.doesNotMatch(text, /background progress is kept on the Tracker, not narrated/);
   assert.match(text, /names its topic and gives one sentence of background/);
   assert.match(text, /never a bare label/);
-  assert.match(text, /Row text is plain sentences, not a keyword chain/);
+  assert.match(text, /plain sentences, never a keyword chain/);
   assert.doesNotMatch(text, /Row text is a short, meaningful summary/);
   assert.doesNotMatch(text, /Chat carries one line and the link/);
   const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
@@ -311,8 +309,7 @@ test('orchestrate: the chat gives a warm full-sentence summary; rows and items n
 
 // Owner, 2026-10-05: "Jev denemsi joserah grubunun altına girecek. bunu önerebilirdin de.": a row sits under its
 // project's group, and a loose row that is a step of a known project plan is moved there unasked.
-test('orchestrate: every Tracker row sits under its project group; a loose plan step is moved there unasked', () => {
+test('orchestrate: every Tracker job names its project group and never repeats it in its title', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
-  assert.match(text, /Every row sits under its project's group \(`--parent`\)/);
-  assert.match(text, /a loose row that is a step of a known project plan is moved there unasked, named as a step of that plan, with one line to the owner saying so/);
+  assert.match(text, /`project` is the group; the title never repeats it/);
 });

@@ -759,7 +759,7 @@ test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   assert.ok(worker.includes('You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.'), 'the nesting sentence');
   assert.doesNotMatch(worker, /do not delegate/i, 'nested delegation is allowed (owner, 2026-10-01)');
   assert.doesNotMatch(worker, /Daily Tracker/, 'a worker does not keep the owner tracker');
-  assert.ok(lead.includes("Daily Tracker: on — keep the owner's Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); end every reply with its link. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
+  assert.ok(lead.includes("Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; end every reply with its link. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
   assert.match(lead, /Open by greeting/, 'the main session is unchanged');
   assert.match(lead, /you sign/);
   assert.doesNotMatch(lead, /You are a worker/);
@@ -780,34 +780,15 @@ test('dailyTracker: false removes the Daily Tracker line from the main session',
   assert.match(JSON.parse(on.stdout).hookSpecificOutput.additionalContext, /Daily Tracker: on/, 'only false turns it off');
 });
 
-test('artifacts: false changes the Daily Tracker line: keep the files current and end with the path of tracker.md', (t) => {
+test('trackerUrl: every reply ends with that URL instead of "its link"', (t) => {
   const dir = hookWs(t);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  cfg.artifacts = false;
+  cfg.trackerUrl = 'http://100.98.118.101:8787/';
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  const c = ctx();
-  assert.ok(c.includes("Daily Tracker: on — keep the owner's Daily Tracker for today without being asked and without nagging (never ask about it, never announce it); keep its files current (rows.json -> index.html + tracker.md), do not publish it as an artifact, and end every reply with the path of tracker.md. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), c);
-  assert.doesNotMatch(c, /end every reply with its link/);
-  cfg.artifacts = true;
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  assert.match(ctx(), /end every reply with its link/, 'only false switches it');
-  cfg.artifacts = false; cfg.dailyTracker = false;
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  assert.doesNotMatch(ctx(), /Daily Tracker/, 'dailyTracker false still removes the line');
-});
-
-test('artifacts: false with trackerUrl: every reply ends with that URL, not the file path', (t) => {
-  const dir = hookWs(t);
-  const cfgPath = path.join(dir, '.joserah', 'config.json');
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  cfg.artifacts = false; cfg.trackerUrl = 'http://100.98.118.101:8787/';
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  const c = ctx();
-  assert.ok(c.includes('do not publish it as an artifact, and end every reply with http://100.98.118.101:8787/. How:'), c);
-  assert.doesNotMatch(c, /path of tracker\.md/);
+  const c = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  assert.ok(c.includes('end every reply with http://100.98.118.101:8787/. How:'), c);
+  assert.doesNotMatch(c, /tracker.md/);
 });
 
 test('sharedMemoryAutoPush: true adds the auto-push line to the main session; off by default (owner, 2026-10-01)', (t) => {
@@ -841,9 +822,10 @@ test('SubagentStart is registered for every subagent, standing layers only', () 
   assert.ok(!('matcher' in entries[0]),
     'no matcher key — an omitted matcher is what means every subagent');
   const commands = entries[0].hooks;
-  // 0.18.0: the second command is hooks/crew.js (Ledger, strip safety net); it adds no standing layer
-  assert.strictEqual(commands.length, 2);
+  // the other commands are hooks/crew.js (Ledger) and hooks/jobs.js (the Tracker's agent state); they add no standing layer
+  assert.strictEqual(commands.length, 3);
   assert.match(commands[1].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/crew\.js" subagent-start$/);
+  assert.match(commands[2].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/jobs\.js" subagent-start$/);
   assert.strictEqual(commands[0].type, 'command');
   assert.strictEqual(commands[0].shell, 'bash');
   assert.match(commands[0].command, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/session-start\.js" subagent$/);
@@ -1177,63 +1159,11 @@ test('sweep: a week without one gives the line, in the owner\'s language', (t) =
   assert.match(brief(dir), /\[sweep\] Süpürme vakti: 9 gün, 0 günlük not birikti — istersen başlatayım\./);
 });
 
-// ---- 0.17.4: a new day opens a new Daily Tracker -----------------------------
-// Owner, 2026-10-02: the first message of a new day opens that day's Daily
-// Tracker unasked and freezes yesterday's. The briefing flags it cheaply: an
-// earlier day's Daily Tracker with an open row and no `.frozen` marker.
-function dailyTrackerOn(dir, day, rows, extra = []) {
-  const d = path.join(dir, '.joserah', 'desk', 'artifacts', day, 'daily-tracker');
-  fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(d, 'index.html'), '<html><body>Owner · Daily Tracker · x</body></html>');
-  fs.writeFileSync(path.join(d, 'rows.json'), JSON.stringify(rows));
-  for (const f of extra) fs.writeFileSync(path.join(d, f), '');
-  return d;
-}
-const yesterday = () => localIso(Date.now() - 864e5);
-
-test('new day: an earlier Daily Tracker with an open row gives one line, once a day', (t) => {
-  const dir = hookWs(t);
-  dailyTrackerOn(dir, yesterday(), [{ state: 'ok', title: 'a' }, { state: 'run', title: 'b' }]);
-  assert.match(brief(dir), /\[new day\] .*Daily Tracker.*freeze/s);
-  assert.doesNotMatch(brief(dir), /\[new day\]/, 'the second session of the day is not told again');
-});
-
-// 0.18.0: once a Crew strip entry exists (Lead's, or the hooks' safety net) rows.json is
-// { rows, crew } — the open row must still be seen.
-test('new day: a Daily Tracker whose rows.json carries a crew strip still counts', (t) => {
-  const dir = hookWs(t);
-  dailyTrackerOn(dir, yesterday(), { rows: [{ state: 'run', title: 'b' }], crew: [{ role: 'scout', job: 'x', state: 'idle', time: '09:00' }] });
-  assert.match(brief(dir), /\[new day\]/);
-});
-
-test('new day: no line when the earlier tracker is frozen, fully done, off, or today\'s', (t) => {
-  let dir = hookWs(t);
-  dailyTrackerOn(dir, yesterday(), [{ state: 'run', title: 'b' }], ['.frozen']);
-  assert.doesNotMatch(brief(dir), /\[new day\]/, 'frozen');
-  dir = hookWs(t);
-  dailyTrackerOn(dir, yesterday(), [{ state: 'ok', title: 'a' }]);
-  assert.doesNotMatch(brief(dir), /\[new day\]/, 'nothing open');
-  dir = hookWs(t);
-  dailyTrackerOn(dir, yesterday(), [{ state: 'run', title: 'b' }]);
-  setCfg(dir, (c) => { c.dailyTracker = false; });
-  assert.doesNotMatch(brief(dir), /\[new day\]/, 'dailyTracker false');
-  dir = hookWs(t);
-  dailyTrackerOn(dir, localIso(Date.now()), [{ state: 'run', title: 'b' }]);
-  assert.doesNotMatch(brief(dir), /\[new day\]/, 'today is not a new day');
-});
-
-test('new day: the line is in the owner\'s language', (t) => {
-  const dir = hookWs(t);
-  setCfg(dir, (c) => { c.dialogueLanguage = 'Turkish'; });
-  dailyTrackerOn(dir, yesterday(), [{ state: 'you', title: 'b' }]);
-  assert.match(brief(dir), /\[new day\] Yeni gün/);
-});
-
 // ---- 0.18.0: the crew hooks and the Voice, developer-mode and worker lines -----
-test('crew.js is registered for its five events, each one command string', () => {
+test('crew.js is registered for its four events, each one command string', () => {
   const h = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')).hooks;
   const cmd = (ev) => JSON.stringify(h[ev]);
-  for (const [ev, arg] of [['SubagentStart', 'subagent-start'], ['SubagentStop', 'subagent-stop'],
+  for (const [ev, arg] of [['SubagentStart', 'subagent-start'],
     ['PreCompact', 'pre-compact'], ['SessionEnd', 'session-end'], ['SessionStart', 'session-start']])
     assert.ok(cmd(ev).includes(`hooks/crew.js\\" ${arg}`), ev);
   assert.ok(JSON.stringify(h).match(/"shell":"bash"/g).length >= 11);
@@ -1251,18 +1181,16 @@ test('Voice line with crew on; developer-mode line off by default, on with devMo
   ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
   assert.doesNotMatch(ctx, /never name an agent, a role or a model/);
 });
-test('Voice line: Voice writes the Crew strip at start and end; not with the Daily Tracker off', (t) => {
+test('Voice line: the Tracker is job files with job:<slug> in each Agent description; not with the Daily Tracker off', (t) => {
   const dir = path.join(tmpdir(t), 'ws');
   runTool('scaffold.js', ['--target', dir, '--workspace', 'w', '--owner', 'A B']);
   crewOn(dir);
   let ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  assert.match(ctx, /Crew strip: you write it/);
-  assert.match(ctx, /Lead's `started:` line -> work/);
-  assert.match(ctx, /completion notice -> idle/);
+  assert.match(ctx, /The Daily Tracker is yours: job files, with job:<slug> in each Agent description/);
   const p = path.join(dir, '.joserah', 'config.json');
   fs.writeFileSync(p, JSON.stringify({ ...JSON.parse(fs.readFileSync(p, 'utf8')), dailyTracker: false }));
   ctx = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  assert.doesNotMatch(ctx, /Crew strip/);
+  assert.doesNotMatch(ctx, /The Daily Tracker is yours/);
 });
 test('worker line: result to the log first, then path and one line', (t) => {
   const dir = path.join(tmpdir(t), 'ws');

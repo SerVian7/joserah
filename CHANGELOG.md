@@ -3,6 +3,13 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.20.0
+
+0.20.0 — the Tracker is one living page drawn from job files. Owner, 2026-10-13.
+
+- **One small file per job, one page.** The assistant writes `.joserah/desk/jobs/<slug>.json`; hooks write who is working; a static page (`templates/jobs`, installed by `tools/jobs-install.js`) draws bands, nested lines, role icons and the archive itself. No day folders, no midnight freeze, no generated HTML. A checker refuses a bad file; a job set to done adds its journal line once.
+- **The old generator is gone** (`tools/tracker.js`, its template and tests). Old day pages stay as files. Prompt v30; the orchestrate skill's Tracker section shrinks to the job-file fields. Run `/joserah:update`, then `node tools/jobs-install.js` once per workspace.
+
 ## 0.19.0
 
 0.19.0 — the web server: the workspace in your browser, jobs behind it. Owner, 2026-10-05.

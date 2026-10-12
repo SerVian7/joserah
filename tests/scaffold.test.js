@@ -185,7 +185,7 @@ test('a fresh scaffold has no crew definitions and no crew or devMode key; switc
 // exactly one of these two lists, so a new folder cannot be added without
 // deciding which kind it is.
 const WORKSPACE_CONTENT = ['.gitattributes', '.joserah', 'AGENTS.md', 'imports', 'keys', 'projects'];
-const PLUGIN_SIDE = ['case', 'changelog', 'crew', 'memory', 'roles', 'tracker', 'trail'];
+const PLUGIN_SIDE = ['case', 'changelog', 'crew', 'memory', 'roles', 'jobs', 'trail'];
 
 function filesUnder(dir, base = dir, acc = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

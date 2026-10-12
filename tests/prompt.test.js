@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 29);
+  assert.strictEqual(cfg.promptVersion, 30);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 29);
+  assert.strictEqual(cfg.promptVersion, 30);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,18 +262,17 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 29);
+  assert.strictEqual(prompt.readPromptVersion(text), 30);
   assert.ok(text.includes('**with the crew on** (off by default; on when `crew` is true)'), '§5 (v29): the crew is off by default (owner, 2026-10-05)');
   assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
   assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
   assert.ok(text.includes("the verdict is \"none fits — we don't choose\" plus the one question that would change it"), '§5 (v24): no recommendation for its own sake (owner, 2026-10-02)');
-  assert.ok(text.includes("The first message of a new day opens that day's Daily Tracker unasked"), '§5 (v23): a new day opens a new Daily Tracker (owner, 2026-10-02)');
-  assert.ok(text.includes("freezes the previous day's page and makes that day's Wrap then"), '§5 (v23): the previous day is frozen and wrapped');
-  assert.ok(text.includes('only while a background agent is on it, and moved when it ends), owner, waiting (on someone outside, no AI working), done, plan'), '§5 (v23): explicit Daily Tracker states (owner, 2026-10-02)');
-  assert.ok(text.includes('the Daily Tracker is the handoff that lets a new chat continue without loss'), '§5 (v23): open rows end with the next step');
+  assert.ok(text.includes('a new day needs nothing'), '§5 (v30): a new day needs nothing, no copy and no freeze (owner, 2026-10-13)');
+  assert.ok(text.includes('state `run`/`you`/`wait`/`plan`/`done`'), '§5 (v30): explicit Daily Tracker states');
+  assert.ok(text.includes('its note plain sentences with the next step and where it happens'), '§5 (v30): open jobs end with the next step');
   assert.ok(text.includes('a missing price never blocks the evaluation'), '§5 (v23): evaluations go on pages, not chat (owner, 2026-10-02)');
-  assert.ok(text.includes('never a summary row that repeats other rows, never two jobs merged into one row, and an update changes the existing row instead of adding a repeating one'), '§5 (v22): one job per Tracker row (owner, 2026-10-01)');
-  assert.ok(text.includes('is already an owner-waiting row there, linked to the page where it is decided — never only in chat.'), '§2 (v20): what is left for the owner is a Daily Tracker row at once (owner, 2026-10-01)');
+  assert.ok(text.includes('one small JSON file per job in `.joserah/desk/jobs/`, written whole with no read first'), '§5 (v30): the Tracker is job files (owner, 2026-10-13)');
+  assert.ok(text.includes('is already a `you` job file there, linked to the page where it is decided — never only in chat.'), '§2 (v20): what is left for the owner is a Daily Tracker row at once (owner, 2026-10-01)');
   assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link, and'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
   assert.ok(text.includes('shows it on sale now'), '§2 (v19): a product is proposed only when on sale now (owner, 2026-10-01)');
   assert.ok(text.includes('only recorded brand assets, a missing brand decision left out and listed'), '§2 (v19): brand elements never improvised (owner, 2026-10-01)');
@@ -374,13 +373,13 @@ test('v27: crew clauses in §5', () => {
   const t = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
   assert.ok(Number(/^<!-- joserah:prompt-version (\d+) -->/.exec(t)[1]) >= 27, 'v27 or later');
   assert.match(t, /the main session only talks/);
-  assert.match(t, /report page, the Tracker row moved to done, and one journal line/);
+  assert.match(t, /report page, the Tracker job file set to done, and one journal line/);
   assert.match(t, /a bare link is not a report/);
   assert.match(t, /written twice/);
   assert.match(t, /completion notice .*relayed to Lead verbatim/);
   assert.match(t, /Ledger/);
   assert.match(t, /devMode/);
   assert.match(t, /first person/);
-  assert.match(t, /Crew strip/);
+  assert.match(t, /Daily Tracker page shows who is working, written by the hooks/);
   assert.ok(t.split('\n').length < 160);
 });

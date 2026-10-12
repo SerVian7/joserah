@@ -5,12 +5,12 @@ type: status
 
 # Joserah — status
 
-Last change: 4a75083 · 2026-10-13 00:51 +0300 · docs: JSON pages spec: built like joserah.com
+Last change: pending · 2026-10-13 · JSON-driven Tracker (job files, jobs hook, static page); old generator retired
 
-- Released: 0.18.1 on main, 889 tests (`node --test tests/*.test.js`), prompt v28.
+- Released: 0.20.0 on main, 818 tests (`node --test tests/*.test.js`), prompt v30.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
-- Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
+- Open: server/ (the 0.19.0 web server) still drives the retired tools/tracker.js through server/src/tracker-bridge.ts and pages.ts; it needs the job-file bridge before it ships. getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
 
 ## Changes since 0.17.0
 
@@ -64,3 +64,8 @@ Six runs, same model and prompts, crew off vs on; details and caveats: [measurem
   date: 2026-10-01
   by: owner
   source: CHANGELOG.md 0.17.3
+
+## R&D: the old Tracker generator (tools/tracker.js, retired 2026-10-13)
+- Tried: one 1,065-line tool rendering HTML (CSS and a 135-line template inside it) from rows.json, with the layout rules held in a 1,500-word prompt section; cost: every row change was a long CLI call, and rules contradicted as they piled up (stale running rows, id-titled lines, loose rows, doubled dates).
+- Learned: pair hook entries to jobs by the launch's own id, never by text or order; keep the model's data (job files) apart from the hooks' (agent state); layout belongs in a static page and a checker, not a prompt.
+- Kept in git history: the generator, its 1,900-line test file and the crew-strip hook code (before commit "jobs hook").

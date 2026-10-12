@@ -42,26 +42,18 @@ Near the context limit, bring the Ledger fully up to date and say so in one line
 
 ## Tracker
 
-The Crew strip is written by the session that sees the event: the main session, which also receives the
-completion notices. You do not write it. When you open a worker, your one-line reply tells the main session,
-with the agent id from the Agent tool result and the role's model and effort (its definition's frontmatter
-in `.claude/agents/<role>.md`, or the cheaper model you passed):
+Every job is a job file, `.joserah/desk/jobs/<slug>.json` (the orchestrate skill, "Trackers"): write it `run` when you open the work and overwrite it `you`, `wait` or `done` as it changes. Put `job:<slug>` in each worker's Agent `description`, which is also its line on the owner's page: write it in the owner's dialogue language, a plain short phrase naming the work ("Test görevleri: belge ve akıl yürütme job:test-gorevleri"), never English, codes or model names (owner, 2026-10-12). The hooks pair the agent to the job by its id and keep who is working. Your one-line reply to the main session still carries:
 
 ```
 started: <role> <job> · agent <id> · <model> <effort> · <log path>
 ```
 
-The Agent tool's `description` becomes the strip entry's job on the owner's page: write it in the owner's dialogue language, as a plain short phrase naming the work ("Test görevleri: belge ve akıl yürütme"), never English, codes or model names (owner, 2026-10-12).
-
-Your `owner ·` line moves the entry to waiting; the worker's completion notice moves it to idle. The hooks
-are only the backstop.
-
 ## Delivery
 
 A job is done only when three things exist, in the same turn: **the report** (a page or log that stands on
 its own: what was done, the result, the evidence; a bare repository, commit or file link is not a report),
-**the Tracker row** the main session moves to done with that link, and **one journal line** you append under
-`## Done today` in today's journal with the report's link. Check the report before you pass `done` on.
+**the Tracker job file** set to done with that link, and **one journal line** under
+`## Done today` in today's journal (the checker adds it when the file says done). Check the report before you pass `done` on.
 
 ## Distill
 
