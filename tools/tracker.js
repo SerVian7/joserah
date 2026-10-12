@@ -156,6 +156,10 @@ const ROLE_NAME = { voice: 'Voice', lead: 'Lead', architect: 'Architect', builde
 const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
   + '.crew-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:2px 0 6px}'
   + '.crew-sum span{display:inline-flex;align-items:center;gap:2px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}'
+  // a role's count sits as a small badge on the icon's corner (owner, 2026-10-12)
+  + '.crew-sum span{position:relative}.crew-sum .badge{position:absolute;top:-6px;right:-8px;min-width:14px;height:14px;padding:0 3px;background:var(--muted);color:var(--bg);font-size:10px;font-weight:600;line-height:14px;text-align:center}'
+  // keyboard focus shows the same text the title shows on hover
+  + '.crew-sum span:focus-visible{outline:1px solid var(--muted);outline-offset:3px}.crew-sum span[title]:focus-visible::after{content:attr(title);position:absolute;top:100%;left:0;z-index:5;margin-top:4px;padding:2px 6px;white-space:nowrap;background:var(--ink);color:var(--bg);font:11px var(--sans)}'
   + '.crew svg{width:18px;height:18px;flex:none;color:var(--muted)}'
   + '.crew ul{list-style:none;margin:0;padding:0}'
   + '.crew li.crew-line{display:flex;align-items:center;gap:8px;padding:3px 0;margin:0;background:none;border:0;border-radius:0;font-size:13px}'
@@ -201,12 +205,16 @@ const STRIP_CSS = [
   `${LN} .tx:focus-visible,${LN} .lk:focus-visible{outline:1px solid var(--link);outline-offset:2px}`,
   `${LN}>.lk{position:relative;z-index:1;font:500 11px var(--mono);color:var(--link);text-decoration:none;white-space:nowrap}`,
   `${LN}>time{align-self:center;text-align:right;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);white-space:nowrap}`,
-  ':is(.crew,main) li.crew-dl{display:block;margin:0 0 0 2px;padding:0 0 0 16px;background:none;border:0;border-left:1px solid var(--line)}',
-  '.cd{padding:10px 0 12px 24px;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
+  // a detail starts at the left edge of its own row, never pushed right of it (owner, 2026-10-12: "açıklama
+  // sağa kayık değil sola yaslı olmalı"); a child's detail sits in the children's indent
+  ':is(.crew,main) li.crew-dl{display:block;margin:0;padding:0;background:none;border:0}',
+  '.cd{padding:10px 0 12px 0;border-bottom:1px solid var(--faint);font:400 12.5px/1.5 var(--sans);color:var(--muted)}',
   '.cd>b{display:block;font:500 13px/1.45 var(--sans);color:var(--ink)}.js-cd .cd>b{display:none}',
   // a row with nothing more to show has no panel; with the database its panel is the note alone
   '.cd.bare{display:none}html.js-ans .cd.bare.fm:not([hidden]){display:block}html.js-ans .cd.bare.fm{padding-top:4px}',
   `${LN}:has(+li.crew-dl>.cd.bare) .tx::before{visibility:hidden}html.js-ans ${LN}:has(+li.crew-dl>.cd.fm) .tx::before{visibility:visible}`,
+  // a parent with children: its arrow always shows, it folds the children (PANEL_JS)
+  'li.cat>ul.ch>li.crew-line .tx::before{visibility:visible!important}li.cat>ol[hidden]{display:none}',
   '.cd p{margin:2px 0 0;overflow-wrap:anywhere}.cd a{color:var(--link)}.cd .dl em{font-style:normal;color:var(--you)}',
   '.cd .nx span{margin-right:6px;font:600 10.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}',
   '.cd .cm{font:500 11px var(--mono);letter-spacing:.02em;color:var(--faint)}',
@@ -244,18 +252,27 @@ const STRIP_CSS = [
   // a row heading its own category reads as the category's name, still a line that opens
   `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{padding:14px 0 6px;border-bottom:0}li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')} .tx{font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}`,
   // the lines of a group: an evident indented block under its name
-  'li.cat>ol,li.cat>details>ol{margin:0 0 8px 3px;padding-left:14px;border-left:2px solid var(--line)}',
+  'li.cat>ol,li.cat>details>ol{margin:0 0 8px 3px;padding-left:18px;border-left:2px solid var(--line)}',
+  // a child line carries a marker, so it reads as the child of the line above its block (owner, 2026-10-12)
+  'li.cat>ol>li.crew-line>.ic::before{content:"\\21B3";margin-right:6px;font:500 11px var(--mono);color:var(--faint)}',
+  // visible space between separate jobs (top-level lines and groups), tighter inside one parent (owner, 2026-10-12)
+  'section.crew>ul>li.crew-line,section.crew>ul>li.cat,.blk>.clip>ol>li.crew-line,.blk>.clip>ol>li.cat{margin-top:18px}',
+  'section.crew>ul>li:first-child,.blk>.clip>ol>li:first-child{margin-top:0}',
   // phone width: mark, text and time on the first row, the link label under the text
-  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}:is(.crew,main) li.crew-dl{padding-left:12px}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
+  `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto;grid-template-areas:"m x r t" ". l . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
 ];
 // The panel: with script, every detail starts closed; a line's button opens its own and closes every
 // other on the page; a second click closes it. aria-expanded follows; no scrolling, focus stays on the
 // button. It waits for the whole document, so it serves lines below the script too.
+// A parent line (li.cat>ul.ch, its children the <ol> after it) is different: its toggle folds the children
+// with its detail, it starts open, and opening another line neither closes it nor is closed by it
+// (owner, 2026-10-12: "kapalıyken bile gösteriyorsun"). The section itself never folds.
 const PANEL_JS = '(function(){function all(){return document.querySelectorAll("button.tx[aria-controls]")}'
-  + 'function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o}'
-  + 'function init(){var bs=all();if(!bs.length)return;document.documentElement.classList.add("js-cd");Array.prototype.forEach.call(bs,function(b){set(b,false)})}'
+  + 'function kids(b){var u=b.closest&&b.closest("ul.ch"),n=u&&u.nextElementSibling;return n&&n.tagName==="OL"?n:null}'
+  + 'function set(b,o){b.setAttribute("aria-expanded",String(o));var d=document.getElementById(b.getAttribute("aria-controls"));if(d)d.hidden=!o;var k=kids(b);if(k)k.hidden=!o}'
+  + 'function init(){var bs=all();if(!bs.length)return;document.documentElement.classList.add("js-cd");Array.prototype.forEach.call(bs,function(b){set(b,!!kids(b))})}'
   + 'document.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("button.tx[aria-controls]");if(!b)return;var o=b.getAttribute("aria-expanded")!=="true";'
-  + 'Array.prototype.forEach.call(all(),function(x){if(x!==b)set(x,false)});set(b,o)});'
+  + 'if(!kids(b))Array.prototype.forEach.call(all(),function(x){if(x!==b&&!kids(x))set(x,false)});set(b,o)});'
   + 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init()})();';
 // What is open survives a reload (owner, 2026-10-05: "sayfa güncellenince otomatik yenileniyor expandların
 // durumu da değişmesin"; a republish reloads the page). The open detail, the open folds (by id, a fold
@@ -267,14 +284,16 @@ const STATE_JS = '(function(){var K="trk:"+location.pathname,ready=false,t=0,W=t
   + 'function each(s,f){Array.prototype.forEach.call(document.querySelectorAll(s),f)}'
   + 'function dk(d){if(d.id)return d.id;var s=d.querySelector("summary");return"S:"+(s?s.textContent:"").trim().slice(0,80)}'
   + 'function get(){try{return JSON.parse(localStorage.getItem(K)||"null")}catch(e){return null}}'
-  + 'function snap(){var p=null,d=[],c=[];each("button.tx[aria-controls]",function(b){if(b.getAttribute("aria-expanded")==="true")p=b.getAttribute("aria-controls")});'
+  + 'function kids(b){var u=b.closest&&b.closest("ul.ch"),n=u&&u.nextElementSibling;return n&&n.tagName==="OL"?n:null}'
+  + 'function snap(){var p=null,d=[],c=[],k=[];each("button.tx[aria-controls]",function(b){if(kids(b)){if(b.getAttribute("aria-expanded")!=="true")k.push(b.getAttribute("aria-controls"))}else if(b.getAttribute("aria-expanded")==="true")p=b.getAttribute("aria-controls")});'
   + 'each("details",function(x){if(x.open)d.push(dk(x))});each("button.more[aria-controls]",function(b){if(b.getAttribute("aria-expanded")==="true")c.push(b.getAttribute("aria-controls"))});'
-  + 'return{p:p,d:d,c:c,y:Math.round(window.scrollY||0)}}'
+  + 'var r={p:p,d:d,c:c,y:Math.round(window.scrollY||0)};if(k.length)r.k=k;return r}'
   + 'function put(){if(!ready)return;try{localStorage.setItem(K,JSON.stringify(snap()))}catch(e){}}'
   + 'function later(){clearTimeout(t);t=setTimeout(put,150)}'
   + 'function restore(s){if(!s||typeof s!=="object")return;var d=s.d||[],c=s.c||[],y=+s.y||0;'
   + 'each("details",function(x){x.open=d.indexOf(dk(x))>=0});'
-  + 'each("button.tx[aria-controls]",function(b){if(s.p&&b.getAttribute("aria-controls")===s.p){b.setAttribute("aria-expanded","true");var e=document.getElementById(s.p);if(e)e.hidden=false}});'
+  + 'each("button.tx[aria-controls]",function(b){var id=b.getAttribute("aria-controls"),l=kids(b);if(l){if(s.k&&s.k.indexOf(id)>=0){b.setAttribute("aria-expanded","false");l.hidden=true;var h=document.getElementById(id);if(h)h.hidden=true}return}'
+  + 'if(s.p&&id===s.p){b.setAttribute("aria-expanded","true");var e=document.getElementById(s.p);if(e)e.hidden=false}});'
   + 'each("button.more[aria-controls]",function(b){if(c.indexOf(b.getAttribute("aria-controls"))>=0&&b.getAttribute("aria-expanded")!=="true")b.click()});'
   + 'if(y>0){window.scrollTo(0,y);window.addEventListener("load",function(){window.scrollTo(0,y)})}}'
   + 'function go(h){restore(h&&h.state&&typeof h.state==="object"?h.state:get());ready=true;document.addEventListener("click",later);document.addEventListener("toggle",later,true);window.addEventListener("scroll",later);window.addEventListener("pagehide",put)}'
@@ -640,9 +659,13 @@ function board(rows, crew, L, dev) {
   const working = crew.filter((e) => e.state === 'work');
   const act = (role) => (L.doing || LABELS.en.doing)[role];
   const cap = (s) => s.charAt(0).toLocaleUpperCase(L.locale || 'en') + s.slice(1);
-  const tip = (role, n) => {
-    const t = dev ? `${ROLE_NAME[role]} · ${act(role)}` : (n ? act(role) : cap(act(role)));
-    const s = esc(n ? `${n} · ${t}` : t);
+  // the tooltip is the job text (owner, 2026-10-12), with the role name in developer mode; an icon with no
+  // job (Voice, idle) falls back to what the role does
+  const tip = (role, n, jobs = []) => {
+    const j = jobs.filter(Boolean).join('; ');
+    const t = j ? (dev ? `${ROLE_NAME[role]} — ${j}` : j)
+      : dev ? `${ROLE_NAME[role]} · ${act(role)}` : (n ? act(role) : cap(act(role)));
+    const s = esc(j || !n ? t : `${n} · ${t}`);
     return ` role="img" title="${s}" aria-label="${s}"`;
   };
   const G = { run: [], you: [], wait: [], ok: [], plan: [] };
@@ -672,7 +695,7 @@ function board(rows, crew, L, dev) {
     const title = r ? r.title : es[0].job;
     const id = r ? slugId(`d-${g}`, title) : slugId(`d-${g}`, es[0].job, `crew ${es[0].role} ${es[0].job}`);
     const strip = g === 'run';
-    const mark = strip && es.length ? es.map((e) => `<span${tip(e.role, 0)}>${ICONS[e.role]}</span>`).join('') : '<span class="sq"></span>';
+    const mark = strip && es.length ? es.map((e) => `<span${tip(e.role, 0, [e.job])}>${ICONS[e.role]}</span>`).join('') : '<span class="sq"></span>';
     let time = `<time>${esc(it.t)}</time>`;
     if (strip && es.length) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
@@ -736,7 +759,7 @@ function board(rows, crew, L, dev) {
   // lines; nothing running says so
   const sum = crew.length ? `<div class="crew-sum">${CREW_ROLES.filter((r) => r === 'voice' || working.some((e) => e.role === r)).map((r) => {
     const n = working.filter((e) => e.role === r).length;
-    return `<span${n ? ' class="work"' : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${tip(r, n)}>${ICONS[r]}${n >= 2 ? n : ''}</span>`;
+    return `<span${n ? ' class="work"' : ''}${dev ? ` data-role="${r}"` : ''}${n >= 2 ? ` data-count="${n}"` : ''}${tip(r, n, working.filter((e) => e.role === r).map((e) => e.job))} tabindex="0">${ICONS[r]}${n >= 2 ? '<b class="badge">' + n + '</b>' : ''}</span>`;
   }).join('')}</div>` : '';
   const stripLines = units('run', G.run).join('') || `  <li class="crew-none">${esc(L.none || LABELS.en.none)}</li>\n`;
   const strip = `<div class="hd">${esc(L.groups[GROUP.run])} <span>${G.run.length}</span>${sum}</div><ul>\n${stripLines}</ul>`;

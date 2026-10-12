@@ -51,6 +51,8 @@ in `.claude/agents/<role>.md`, or the cheaper model you passed):
 started: <role> <job> · agent <id> · <model> <effort> · <log path>
 ```
 
+The Agent tool's `description` becomes the strip entry's job on the owner's page: write it in the owner's dialogue language, as a plain short phrase naming the work ("Test görevleri: belge ve akıl yürütme"), never English, codes or model names (owner, 2026-10-12).
+
 Your `owner ·` line moves the entry to waiting; the worker's completion notice moves it to idle. The hooks
 are only the backstop.
 

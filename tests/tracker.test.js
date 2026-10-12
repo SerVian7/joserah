@@ -351,8 +351,8 @@ test('strip: icon, line, state class; counts only working entries (owner, 2026-1
   assert.match(html, /class="crew"/);
   assert.doesNotMatch(html, /data-count=/, 'one working scout, one working lead: no badge');
   assert.doesNotMatch(stripOf(html), /class="crew-line (owner|idle)"|approval|>B</, 'waiting and idle entries are not strip lines');
-  assert.match(html, /<span class="ic"><span role="img" title="Scout · researching" aria-label="Scout · researching">/, 'the role and its activity are the icon\'s title');
-  assert.doesNotMatch(html, /Scout · A/, 'never in the line text');
+  assert.match(html, /<span class="ic"><span role="img" title="Scout — A" aria-label="Scout — A">/, 'the role and its job are the icon\'s title');
+  assert.doesNotMatch(html, />Scout — A</, 'never in the line text');
   assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
   // template tokens: icons in the muted text token, `owner` in the page's owner colour (no --accent exists)
   assert.match(html, /\.crew svg\{[^}]*color:var\(--muted\)/);
@@ -396,10 +396,10 @@ test('devMode on: the role shows only as the icon\'s title', (t) => {
   const dir = devWs(t);
   crew(dir, ['--role', 'scout', '--job', 'A', '--state', 'work']);
   const html = page(dir);
-  assert.match(html, /<span class="ic"><span role="img" title="Scout · researching" aria-label="Scout · researching"><svg/);
+  assert.match(html, /<span class="ic"><span role="img" title="Scout — A" aria-label="Scout — A"><svg/);
   assert.match(html, /class="tx" aria-expanded="false" aria-controls="d-[a-z0-9-]+">A<\/button>/);
-  assert.doesNotMatch(html, />[^<>]*Scout · /, 'never in the line text');
-  assert.match(html, /data-role="scout"[^>]*title="1 · Scout · researching"/, 'the summary icon says it with its count');
+  assert.doesNotMatch(html, />[^<>]*Scout — /, 'never in the line text');
+  assert.match(html, /data-role="scout"[^>]*title="Scout — A"/, 'the summary icon says it too');
 });
 test('the template carries the strip styles and the crew slot; an old page gets them once', (t) => {
   const { CREW_CSS } = require('../tools/tracker.js');
@@ -600,7 +600,7 @@ test('style: each section is its own area; the section title outweighs a group n
   assert.ok(weight(grp) > weight(line), 'a group name is still told apart from its lines');
   assert.ok(size(line) > size(grp), 'a line reads larger than its group name');
   assert.match(rule('section.crew,main .blk'), /background:var\(--card\);border:1px solid var\(--line\);border-top:3px solid/, 'a section is an area of its own');
-  assert.match(rule('li.cat>ol,li.cat>details>ol'), /padding-left:14px;border-left:2px solid var\(--line\)/, 'a group\'s lines indent under it');
+  assert.match(rule('li.cat>ol,li.cat>details>ol'), /padding-left:18px;border-left:2px solid var\(--line\)/, 'a group\'s lines indent under it');
   assert.doesNotMatch(CONSOLE_CSS, /li\.cat \.jh em|li\.cat summary em/, 'no running word on a group');
 });
 test('waiting categories never fold; plans fold by group', (t) => {
@@ -836,7 +836,7 @@ test('crew --row: category and summary from the row, one detail panel, one line 
   assert.strictEqual(ls.length, 4, 'Sinan (two entries, one line), Kendi işi, Zenger, Loose');
   assert.strictEqual(ls.filter((l) => l.includes('Sinan')).length, 1, 'one row, one line');
   const sinan = ls.find((l) => l.includes('Sinan'));
-  assert.match(sinan, /^<li class="crew-line work" data-role="lead" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span role="img" title="Lead · yönetiyor" aria-label="Lead · yönetiyor"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder · kod yazıyor" aria-label="Builder · kod yazıyor"><svg/);
+  assert.match(sinan, /^<li class="crew-line work" data-role="lead" data-key="[^"]+" data-sig="[^"]+"><span class="ic"><span role="img" title="Lead — Zenger işleri" aria-label="Lead — Zenger işleri"><svg[\s\S]*?<\/svg><\/span><span role="img" title="Builder — Mail taslağı" aria-label="Builder — Mail taslağı"><svg/);
   // Zenger runs too: it is the category line, Sinan under it without a prefix, the row's link on the line
   const sid = sinan.match(/aria-controls="(d-run-[^"]+)">Sinan Bey'e cevap<\/button><a class="lk" href="https:\/\/example\.com\/d" target="_blank" rel="noopener">taslak<\/a>/)[1];
   assert.match(stripOf(html), /<li class="cat"><ul class="ch">\n  <li class="crew-line run" data-key="[^"]+" data-sig="[^"]+">[^\n]*>Zenger <span class="n">1<\/span><\/button>/);
@@ -872,7 +872,7 @@ test('devMode off: no role name in a mapped strip line or its detail', (t) => {
   crew(dir, ['--role', 'scout', '--job', 'Fiyat taraması', '--state', 'work', '--row', 'Fiyat', '--model', 'opus', '--effort', 'high']);
   const html = page(dir);
   assert.match(stripOf(html), /class="jt">Dell[\s\S]*?>Fiyat/);
-  assert.match(stripOf(html), /<span class="ic"><span role="img" title="Araştırıyor" aria-label="Araştırıyor"><svg/, 'the icon stays, titled with the activity only');
+  assert.match(stripOf(html), /<span class="ic"><span role="img" title="Fiyat taraması" aria-label="Fiyat taraması"><svg/, 'the icon stays, titled with the job only');
   assert.doesNotMatch(html, ROLE_WORDS);
   assert.doesNotMatch(html, /ajan|agent/i);
   assert.doesNotMatch(stripOf(html), /class="cm"|opus/, 'no model tail');
@@ -973,10 +973,12 @@ test('strip: each line opens its detail directly under itself, never under anoth
   assert.match(items[1], new RegExp(`id="${first}"`));
   assert.ok(ul.lastIndexOf(`id="${first}"`) < ul.indexOf(lines[1]), 'the first line\'s detail comes before the second line');
   assert.strictEqual(page(dir).split('<script id="panel">').length, 2, 'one panel script');
-  // attached to its line as a child is: the children's indent and left rule
+  // owner, 2026-10-12: the detail starts at the left edge of its own row, never pushed right of it
   const { STRIP_CSS } = require('../tools/tracker.js');
   const rule = STRIP_CSS.find((c) => c.startsWith(':is(.crew,main) li.crew-dl{'));
-  assert.match(rule, /margin:0 0 0 2px;padding:0 0 0 16px;[^}]*border-left:1px solid var\(--line\)\}/);
+  assert.match(rule, /margin:0;padding:0;[^}]*border:0\}/);
+  assert.match(STRIP_CSS.find((c) => c.startsWith('.cd{')), /^\.cd\{padding:10px 0 12px 0;/, 'the detail text starts at the row\'s own left edge');
+  assert.doesNotMatch(STRIP_CSS.join('\n'), /li\.crew-dl\{[^}]*padding(-left)?:[^;}]*[1-9]\d*px/, 'no indent on a detail, on a phone either');
   assert.ok(page(dir).includes(rule), 'the page carries it');
 });
 
@@ -1038,37 +1040,82 @@ test('strip: nothing running says so, in both languages', (t) => {
 // says, on hover and to a screen reader, what that role is doing; the summary icons add the count.
 test('strip icons say what each role is doing (title and aria-label)', (t) => {
   const tip = (s) => `role="img" title="${s}" aria-label="${s}"`;
-  // developer mode on, Turkish: the role, then the activity
+  // developer mode on, Turkish: the role, then the job
   const on = trWs(t);
   crew(on, ['--role', 'builder', '--job', 'A', '--state', 'work']);
   crew(on, ['--role', 'builder', '--job', 'B', '--state', 'work']);
   crew(on, ['--role', 'scout', '--job', 'C', '--state', 'work']);
   let html = page(on);
-  const want = { lead: 'Lead · yönetiyor', architect: 'Architect · planlıyor', builder: 'Builder · kod yazıyor', scout: 'Scout · araştırıyor', sentry: 'Sentry · izliyor' };
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip(want.builder)}><svg`), 'a line icon');
-  assert.ok(stripOf(html).includes(`<span ${tip(want.scout)}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="work" data-role="builder" data-count="2" ${tip('2 · Builder · kod yazıyor')}><svg`), 'the summary icon with its count');
-  assert.ok(stripOf(html).includes(`<span class="work" data-role="scout" ${tip('1 · Scout · araştırıyor')}><svg`));
-  for (const [r, s] of Object.entries(want)) {
-    const d = trWs(t); crew(d, ['--role', r, '--job', 'X', '--state', 'work']);
-    assert.ok(stripOf(page(d)).includes(`<span class="ic"><span ${tip(s)}><svg`), r);
-  }
-  // developer mode off: the activity only, no role name
+  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('Builder — A')}><svg`), 'a line icon');
+  assert.ok(stripOf(html).includes(`<span ${tip('Scout — C')}><svg`));
+  assert.ok(stripOf(html).includes(`<span class="work" data-role="builder" data-count="2" ${tip('Builder — A; B')} tabindex="0"><svg`), 'the summary icon lists its jobs');
+  assert.ok(stripOf(html).includes(`<span class="work" data-role="scout" ${tip('Scout — C')} tabindex="0"><svg`));
+  // Voice has no job of its own: it keeps saying what it does
+  assert.ok(stripOf(html).includes(`data-role="voice" ${tip('Voice · sizinle konuşuyor')} tabindex="0"`));
+  // developer mode off: the job only, no role name
   const off = tmpdir(t); init(off, ['--lang', 'tr']);
   crew(off, ['--role', 'builder', '--job', 'A', '--state', 'work']);
   crew(off, ['--role', 'builder', '--job', 'B', '--state', 'work']);
   crew(off, ['--role', 'sentry', '--job', 'C', '--state', 'work']);
   html = page(off);
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('Kod yazıyor')}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('İzliyor')}><svg`));
-  assert.ok(stripOf(html).includes(`<span class="work" data-count="2" ${tip('2 · kod yazıyor')}><svg`));
+  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('A')}><svg`));
+  assert.ok(stripOf(html).includes(`<span class="ic"><span ${tip('C')}><svg`));
+  assert.ok(stripOf(html).includes(`<span class="work" data-count="2" ${tip('A; B')} tabindex="0"><svg`));
+  assert.ok(stripOf(html).includes(`<span ${tip('Sizinle konuşuyor')} tabindex="0"><svg`), 'Voice: the activity, capitalised');
   assert.doesNotMatch(html, ROLE_WORDS);
-  // English
-  const en = tmpdir(t); init(en);
-  for (const r of ['lead', 'architect', 'builder', 'scout', 'sentry']) crew(en, ['--role', r, '--job', r, '--state', 'work']);
-  const s = stripOf(page(en));
-  for (const a of ['Managing', 'Planning', 'Writing code', 'Researching', 'Watching']) assert.ok(s.includes(`<span class="ic"><span ${tip(a)}><svg`), a);
-  assert.ok(s.includes(tip('1 · writing code')));
+});
+
+// Owner, 2026-10-12: hovering (and focusing) a crew icon says what it is: the role (developer mode) and the job text.
+test('crew icons carry the job text as their tooltip (title and aria-label)', (t) => {
+  const tip = (s) => `role="img" title="${s}" aria-label="${s}"`;
+  const on = trWs(t);
+  crew(on, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work']);
+  crew(on, ['--role', 'builder', '--job', 'Takip testi', '--state', 'work']);
+  const html = stripOf(page(on));
+  assert.ok(html.includes(`<span class="ic"><span ${tip('Builder — Folio 1.0.3 sürümü')}><svg`), 'a line icon: role and its job');
+  assert.ok(html.includes(`data-count="2" ${tip('Builder — Folio 1.0.3 sürümü; Takip testi')} tabindex="0"><svg`), 'the summary icon lists its jobs');
+  assert.match(html, /<span class="work" data-role="builder" data-count="2" role="img"[^>]*aria-label="[^"]*" tabindex="0">/, 'summary icons take keyboard focus');
+  const off = tmpdir(t); init(off, ['--lang', 'tr']);
+  crew(off, ['--role', 'builder', '--job', 'Folio 1.0.3 sürümü', '--state', 'work']);
+  const h2 = stripOf(page(off));
+  assert.ok(h2.includes(`<span class="ic"><span ${tip('Folio 1.0.3 sürümü')}><svg`), 'developer mode off: the job only');
+  assert.doesNotMatch(h2, ROLE_WORDS);
+});
+
+// Owner, 2026-10-12: "listeye bak hangisi hangisinin çocuğu belli değil. kapalıyken bile gösteriyorsun"; "işlerin
+// arasını açman lazım"; "açıklama sola yaslı olmalı". A parent line folds its children, children carry a
+// marker, separate jobs have a gap, a detail starts at its row's left edge.
+test('parent line: children sit after it in their own list, with a marker, and the jobs are spaced', (t) => {
+  const { STRIP_CSS } = require('../tools/tracker.js');
+  const dir = devWs(t);
+  setRows(dir, [{ state: 'run', title: 'Main', time: '09:00' }, { state: 'run', title: 'Kid', parent: 'Main', time: '09:10' }, { state: 'run', title: 'Solo', time: '09:20' }]);
+  crew(dir, ['--role', 'lead', '--job', 'Yönetim', '--state', 'work']);
+  const s = stripOf(page(dir));
+  assert.match(s, /<li class="cat"><ul class="ch">\n[\s\S]*?>Main <span class="n">1<\/span><\/button>[\s\S]*?<\/ul><ol>\n[^\n]*>Kid<\/button>[\s\S]*?<\/ol><\/li>/, 'the children are the list right after the parent line, inside its category');
+  assert.ok(STRIP_CSS.some((c) => /^li\.cat>ol>li\.crew-line>\.ic::before\{content:"\\21B3"/.test(c)), 'a child marker');
+  assert.ok(STRIP_CSS.some((c) => /section\.crew>ul>li\.crew-line,section\.crew>ul>li\.cat[^{]*\{margin-top:18px\}/.test(c)), 'a gap between jobs and between groups');
+  assert.ok(STRIP_CSS.some((c) => /li\.cat>ol,li\.cat>details>ol\{margin:0 0 8px/.test(c)), 'children stay tight inside one parent');
+  assert.ok(STRIP_CSS.some((c) => /li\.cat>ol\[hidden\]\{display:none\}/.test(c)), 'a closed parent hides the list');
+});
+test('the panel script: a parent line starts open, its toggle folds its children, other lines leave it alone', () => {
+  const vm = require('vm');
+  const { PANEL_JS } = require('../tools/tracker.js');
+  const ds = { 'cd-p': { hidden: false }, 'cd-a': { hidden: false } };
+  const kidsOl = { tagName: 'OL', hidden: false };
+  const btn = (id, ol) => { const a = { 'aria-controls': id, 'aria-expanded': 'false' }; return { getAttribute: (k) => a[k], setAttribute: (k, v) => { a[k] = v; }, closest(q) { return q === 'ul.ch' ? (ol ? { nextElementSibling: ol } : null) : this; } }; };
+  const bs = [btn('cd-p', kidsOl), btn('cd-a', null)];
+  let onClick = null; let onReady = null;
+  const document = { readyState: 'loading', documentElement: { classList: { add() {} } }, querySelectorAll: () => bs, getElementById: (id) => ds[id],
+    addEventListener: (ev, f) => { if (ev === 'click') onClick = f; if (ev === 'DOMContentLoaded') onReady = f; } };
+  vm.runInNewContext(PANEL_JS, { document });
+  onReady();
+  assert.deepStrictEqual([bs[0].getAttribute('aria-expanded'), kidsOl.hidden, ds['cd-p'].hidden, ds['cd-a'].hidden], ['true', false, false, true], 'the parent starts open, a plain line closed');
+  onClick({ target: bs[1] });
+  assert.deepStrictEqual([kidsOl.hidden, ds['cd-a'].hidden], [false, false], 'opening a plain line does not close the parent');
+  onClick({ target: bs[0] });
+  assert.deepStrictEqual([bs[0].getAttribute('aria-expanded'), kidsOl.hidden, ds['cd-p'].hidden, ds['cd-a'].hidden], ['false', true, true, false], 'closing the parent hides its children and detail, and leaves the plain line open');
+  onClick({ target: bs[0] });
+  assert.deepStrictEqual([kidsOl.hidden, ds['cd-p'].hidden], [false, false], 'a second click opens it again');
 });
 
 // Owner, 2026-10-05, "Tracker yeni düzen" (Architect's build note, design-note.md): one board above —

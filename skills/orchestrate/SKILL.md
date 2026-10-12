@@ -225,7 +225,7 @@ per other audience. With `"artifacts": false` in config.json nothing is publishe
   hairline separators, a mono state tag, a right-aligned time column. One line per row; every row carries
   a time, stamped once and kept; a done row shows when it finished.
 - **Active work first.** The sections run agent working → owner → waiting → plans → done (owner,
-  2026-10-05, replacing the 2026-10-03 order). Active work never folds and is never clamped.
+  2026-10-05, replacing the 2026-10-03 order). Active work never folds and is never clamped. Its section never folds and every parent line starts open, so nothing active is hidden by default; only the owner's own click closes a parent line, and then its children and its description close with it (owner, 2026-10-12: "kapalıyken bile gösteriyorsun"). A child line carries a marker and sits in the parent's indent, separate jobs have visible space between them, and an opened description starts at the left edge of its own row.
 - **Lists are never fully closed.** A long list (more than five items) shows its first rows, the rest
   fades, and a button opens it in place. Only finished work folds: sub-jobs under their main job
   (`row --parent "<main job's title>"`, set only once it is certain), closed by default; an active
