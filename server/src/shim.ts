@@ -1,5 +1,5 @@
 // The artifact runtime's window.claude, served by this server at /_/shim.js (spec §1 part 3). ES5 on purpose: TVs and
-// old phones run it. Page scripts (tracker.js STATE_JS, ANSWER_JS, MOTION_JS) call use("db") and hot.*.
+// old phones run it. Page scripts (a page tool's state, answer and motion scripts) call use("db") and hot.*.
 // - use("db") gives the page's `answers` collection over HTTP: doc(id).set(a) is a PUT, onSnapshot a GET now and again
 //   on every `answers` event for this page. The TV view and a page with no id get no database.
 // - hot carries what the page scripts snapshot across a reload (sessionStorage, used once), as a republish did.

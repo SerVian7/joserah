@@ -1,21 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import type { JobType } from './config.ts';
-import { toolPath, localDay } from './paths.ts';
-import { dailyTrackerLib } from './cjs.ts';
+import crypto from 'node:crypto';
+import { now } from './paths.ts';
+import { jobsLib } from './cjs.ts';
 
+/** The Tracker is job files (.joserah/desk/jobs/<slug>.json, tools/jobs-check.js rules); the hooks keep who is working, the server runs its own jobs. */
 export interface TrackerBridge {
   row(o: { title: string; state: 'run' | 'you' | 'wait' | 'ok'; small?: string; url?: string; label?: string }): boolean;
-  crew(o: { role: string; job: string; state: 'work' | 'owner' | 'idle'; row?: string; reason?: string }): boolean;
   rowState(title: string): string | null;
   dir(): string;
-}
-
-export function roleFor(type: JobType): 'builder' | 'scout' | 'architect' {
-  if (type === 'research' || type === 'query') return 'scout';
-  if (type === 'plan' || type === 'review') return 'architect';
-  return 'builder';
 }
 
 export const JOB_TEXT = {
@@ -27,28 +20,43 @@ export const JOB_TEXT = {
     cancelled: 'Stopped at your request. Next: Retry on the job page if needed.', check: 'Check the changes', checkNext: 'Next: look at the file list on the job page; the checkpoint undoes them if wrong.', empty: 'The job ended without a result. Next: look at the job page.' },
 } as const;
 
+const ASCII: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', â: 'a' };
+/** A file name from a row title: ascii words plus a short hash, so two titles never share a file. */
+export function slugOf(title: string): string {
+  const words = title.toLowerCase().replace(/[çğıöşüâ]/g, (c) => ASCII[c]).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/, '');
+  return `${words || 'job'}-${crypto.createHash('sha1').update(title).digest('hex').slice(0, 6)}`;
+}
+
 export function cliTracker(workspace: string, lang: 'tr' | 'en'): TrackerBridge {
-  const tool = toolPath('tracker.js');
-  const exec = (args: string[]) => { const r = spawnSync(process.execPath, [tool, ...args], { encoding: 'utf8', timeout: 20000, windowsHide: true }); if (r.status !== 0) process.stderr.write(`tracker: ${(r.stderr || r.stdout).trim().split('\n')[0]}\n`); return r.status === 0; };
-  const dir = (): string => {
-    const day = localDay();
-    const found = dailyTrackerLib.dailyTracker(workspace, day);
-    if (found) return found;
-    const d = path.join(workspace, '.joserah', 'desk', 'artifacts', day, 'daily-tracker');
-    exec(['init', d, '--title', 'Daily Tracker', '--lang', lang]);
-    return d;
-  };
+  const dir = (): string => path.join(workspace, '.joserah', 'desk', 'jobs');
+  const file = (title: string): string => path.join(dir(), `${slugOf(title)}.json`);
+  const read = (title: string): Record<string, unknown> | null => { try { return JSON.parse(fs.readFileSync(file(title), 'utf8')); } catch { return null; } };
   return {
     dir,
-    row(o) { return exec(['row', dir(), '--title', o.title, '--state', o.state, ...(o.small ? ['--small', o.small] : []), ...(o.url ? ['--url', o.url] : []), ...(o.label ? ['--label', o.label] : [])]); },
-    crew(o) { return exec(['crew', dir(), '--role', o.role, '--job', o.job, '--state', o.state, ...(o.reason ? ['--reason', o.reason] : []), ...(o.row !== undefined ? ['--row', o.row] : [])]); },
-    rowState(title) {
+    row(o) {
       try {
-        const j = JSON.parse(fs.readFileSync(path.join(dir(), 'rows.json'), 'utf8'));
-        const rows: Array<{ title?: string; state?: string }> = Array.isArray(j) ? j : j.rows ?? [];
-        const k = title.trim().toLowerCase();
-        return rows.find((r) => String(r.title ?? '').trim().toLowerCase() === k)?.state ?? null;
-      } catch { return null; }
+        const prior = read(o.title);
+        const at = jobsLib.isoLocal(now());
+        const job: Record<string, unknown> = {
+          title: o.title, project: lang === 'tr' ? 'Sunucu işleri' : 'Server jobs', state: o.state === 'ok' ? 'done' : o.state,
+          // the server runs these itself: no hook pairs an agent to them
+          ...(o.state === 'run' ? { unattended: true } : {}),
+          ...(o.small ? { note: o.small } : {}), ...(o.url ? { url: o.url } : {}), ...(o.label ? { label: o.label } : {}),
+          started: typeof prior?.started === 'string' ? prior.started : at, ...(o.state === 'ok' ? { finished: at } : {}),
+        };
+        const slug = slugOf(o.title);
+        fs.mkdirSync(dir(), { recursive: true });
+        const errors = jobsLib.check(job, slug, fs.readdirSync(dir()));
+        if (errors.length) { process.stderr.write(`tracker: ${slug}: ${errors.join('; ')}\n`); return false; }
+        const f = file(o.title);
+        fs.writeFileSync(f + '.tmp', JSON.stringify(job, null, 1) + '\n'); fs.renameSync(f + '.tmp', f);
+        jobsLib.afterWrite(workspace, f, now()); // the journal line, once, when the job is done
+        return true;
+      } catch (e) { process.stderr.write(`tracker: ${(e as Error).message}\n`); return false; }
+    },
+    rowState(title) {
+      const s = read(title)?.state;
+      return typeof s === 'string' ? (s === 'done' ? 'ok' : s) : null;
     },
   };
 }

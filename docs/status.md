@@ -10,7 +10,7 @@ Last change: 7df96af · 2026-10-13 01:25 +0300 · JSON-driven Tracker (job files
 - Released: 0.20.0 on main, 818 tests (`node --test tests/*.test.js`), prompt v30.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
-- Open: server/ (the 0.19.0 web server) still drives the retired tools/tracker.js through server/src/tracker-bridge.ts and pages.ts; it needs the job-file bridge before it ships. getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
+- Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
 
 ## Changes since 0.17.0
 

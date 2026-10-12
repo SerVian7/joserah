@@ -6,12 +6,12 @@ import { assess, matches, GitCheckpointer } from '../src/checkpoint.ts';
 import { spawn } from 'node:child_process';
 import { Store } from '../src/store.ts';
 import { EventBus } from '../src/events.ts';
-import { runnerFor, git, tmpdir, tmpWorkspace } from './helpers.ts';
+import { runnerFor, git, tmpdir, tmpWorkspace, trackerRows } from './helpers.ts';
 
 const DAY = '2026-10-06';
 test.beforeEach(() => { process.env.JOSERAH_NOW = `${DAY}T09:00:00`; });
 test.afterEach(() => { delete process.env.JOSERAH_NOW; });
-const rowOf = (ws: string, title: string) => { const j = JSON.parse(fs.readFileSync(path.join(ws, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json'), 'utf8')); return (Array.isArray(j) ? j : j.rows).find((r: { title: string }) => r.title === title); };
+const rowOf = (ws: string, title: string) => trackerRows(ws).find((r) => r.title === title)!;
 
 test('assess: deletions and writes outside the area are flagged; server writes are not', () => {
   assert.ok(matches('imports/**', 'imports/a/b.pdf'));
@@ -109,7 +109,7 @@ test('a clean workspace adds no empty commit, the job records stay out of git, a
   assert.equal(new Set(paths).size, paths.length);
   assert.ok(paths.includes('notes/a.md'));
   assert.ok(!paths.some((p) => p.startsWith('.joserah/desk/jobs/')));
-  assert.equal(git(ws, 'ls-files', '.joserah/desk/jobs').trim(), '');
+  assert.equal(git(ws, 'ls-files', '.joserah/desk/jobs/*/').trim(), '', 'the records in day folders stay out of git; the Tracker job files beside them are ordinary tracked files');
   assert.deepEqual(j.flags, []);
 });
 

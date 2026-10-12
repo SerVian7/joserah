@@ -5,13 +5,14 @@ import path from 'node:path';
 import { runnerFor, tmpdir } from './helpers.ts';
 import { JobRunner, ensureJobIgnores, rotateLogs, Refused, type JobRecord } from '../src/jobs.ts';
 import { cliTracker } from '../src/tracker-bridge.ts';
+import { trackerRows } from './helpers.ts';
 import { fakeEngine, ORIGIN } from './helpers.ts';
 
 const DAY = '2026-10-06';
 const FAKE_SID = '00000000-0000-4000-8000-000000000001';
 test.beforeEach(() => { process.env.JOSERAH_NOW = `${DAY}T09:00:00`; });
 test.afterEach(() => { delete process.env.JOSERAH_NOW; });
-const rowsOf = (ws: string) => { const j = JSON.parse(fs.readFileSync(path.join(ws, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json'), 'utf8')); return { rows: Array.isArray(j) ? j : j.rows, crew: Array.isArray(j) ? [] : j.crew }; };
+const rowsOf = (ws: string) => ({ rows: trackerRows(ws) });
 const rec = (ws: string, j: JobRecord) => JSON.parse(fs.readFileSync(path.join(ws, '.joserah/desk/jobs', j.day, `${j.id}.job.json`), 'utf8'));
 
 test('a job runs, keeps its session id, logs redacted, writes its digest and closes its row', async (t) => {
@@ -30,11 +31,10 @@ test('a job runs, keeps its session id, logs redacted, writes its digest and clo
   assert.ok(!log.includes('hunter2hunter2'), 'redacted');
   const md = fs.readFileSync(path.join(ws, '.joserah/desk/jobs', DAY, `${job.id}.md`), 'utf8');
   assert.match(md, /^# Job /m); assert.match(md, /Cost estimate: \$0\.0123 \(CLI estimate\)/); assert.match(md, /Claude Code: 2\.1\.289/);
-  const { rows, crew } = rowsOf(ws);
+  const { rows } = rowsOf(ws);
   const row = rows.find((x: { title: string }) => x.title === job.rowTitle);
   assert.equal(row.state, 'ok');
   assert.equal(row.url, `${ORIGIN}/jobs/${job.id}`);
-  assert.equal(crew.find((c: { job: string }) => c.job === job.rowTitle).state, 'idle', 'strip cleared at the end');
 });
 
 test('denied tool calls end needs-approval with an owner row', async (t) => {
@@ -105,16 +105,14 @@ test('recover marks running jobs interrupted and keeps the queue', async (t) => 
   const tracker = cliTracker(ws, 'en');
   const mk = (id: string, state: string): JobRecord => ({ id, day: DAY, type: 'task', target: 'server', text: id, state: state as JobRecord['state'], createdAt: `${DAY}T08:00:0${id.slice(-1)}.000Z`, model: 'sonnet', budgetUsd: 2, rowTitle: `${id} · 08:00`, turns: 0 });
   tracker.row({ title: 'j-running · 08:00', state: 'run' });
-  tracker.crew({ role: 'builder', job: 'j-running · 08:00', state: 'work', row: 'j-running · 08:00' });
   deps.store.writeJson(`.joserah/desk/jobs/${DAY}/j-running.job.json`, mk('j-running', 'running'));
   deps.store.writeJson(`.joserah/desk/jobs/${DAY}/j-queued2.job.json`, mk('j-queued2', 'queued'));
   runner.recover();
   await runner.idle();
   assert.equal(runner.get('j-running')!.state, 'interrupted');
   assert.equal(runner.get('j-queued2')!.state, 'done', 'queued jobs still run');
-  const { rows, crew } = rowsOf(ws);
+  const { rows } = rowsOf(ws);
   assert.equal(rows.find((x: { title: string }) => x.title === 'j-running · 08:00').state, 'you');
-  assert.equal(crew.find((c: { job: string }) => c.job === 'j-running · 08:00').state, 'idle');
 });
 
 test('reply resumes the same session', async (t) => {
@@ -192,9 +190,8 @@ test('shutdown stops a running job as interrupted, closes its row and keeps the 
   stopped = true;
   assert.equal(rec(ws, a).state, 'interrupted');
   assert.equal(rec(ws, b).state, 'queued', 'a queued job is left for the next start');
-  const { rows, crew } = rowsOf(ws);
+  const { rows } = rowsOf(ws);
   assert.equal(rows.find((x: { title: string }) => x.title === a.rowTitle).state, 'you');
-  assert.equal(crew.find((c: { job: string }) => c.job === a.rowTitle).state, 'idle');
   const [pid] = JSON.parse(fs.readFileSync(pids, 'utf8')) as number[];
   let alive = true;
   for (let i = 0; i < 50 && alive; i++) { try { process.kill(pid, 0); await new Promise((r) => setTimeout(r, 20)); } catch { alive = false; } }

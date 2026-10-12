@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { signedIn, ORIGIN } from './helpers.ts';
+import { signedIn, ORIGIN, trackerRows } from './helpers.ts';
 import { scanUpload, safeName, slug } from '../src/wiki-books.ts';
 import { ingestBookkeeping } from '../src/wiki-books.ts';
 
@@ -36,8 +36,8 @@ test('a credential-shaped upload is quarantined verbatim, with an owner row and 
   assert.equal(j.path, `imports/${DAY}-quarantine/creds.txt`);
   assert.equal(fs.readFileSync(path.join(deps.workspace, j.path), 'utf8'), 'password: hunter2hunter2', 'verbatim');
   assert.equal(deps.jobs.list().length, 0, 'no model reads it');
-  const rows = JSON.parse(fs.readFileSync(path.join(deps.workspace, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json'), 'utf8'));
-  const row = (Array.isArray(rows) ? rows : rows.rows).find((x: { title: string }) => /creds\.txt/.test(x.title));
+  const rows = trackerRows(deps.workspace);
+  const row = rows.find((x: { title: string }) => /creds\.txt/.test(x.title));
   assert.equal(row.state, 'you');
   assert.ok(!JSON.stringify(rows).includes('hunter2'));
 });

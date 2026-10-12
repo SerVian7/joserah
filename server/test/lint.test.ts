@@ -5,6 +5,7 @@ import path from 'node:path';
 import { msUntil, LintScheduler } from '../src/lint-scheduler.ts';
 import { runnerFor, tmpdir, signedIn, ORIGIN } from './helpers.ts';
 import { cliTracker } from '../src/tracker-bridge.ts';
+import { trackerRows } from './helpers.ts';
 import { DEFAULT_CONFIG, type ServerConfig } from '../src/config.ts';
 
 const DAY = '2026-10-06';
@@ -54,8 +55,8 @@ test('conflicts the lint job quotes become owner rows', async (t) => {
   const { s, ws, runner } = sched(t, { FAKE_CLAUDE_WRITE: `.joserah/knowledge/.lint/conflicts.json:${conflicts}` });
   put(ws, 'wiki/x.md', '# X\nruns at 50 fps\n');
   s.runLlm(); await runner.idle();
-  const j = JSON.parse(fs.readFileSync(path.join(ws, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json'), 'utf8'));
-  const row = (Array.isArray(j) ? j : j.rows).find((r: { title: string }) => r.title.startsWith('Wiki conflict: wiki/x.md vs wiki/y.md'));
+
+  const row = trackerRows(ws).find((r: { title: string }) => r.title.startsWith('Wiki conflict: wiki/x.md vs wiki/y.md'));
   assert.equal(row.state, 'you');
   assert.match(row.small, /"runs at 50 fps" ↔ "runs at 25 fps"/);
   assert.match(fs.readFileSync(path.join(ws, '.joserah/knowledge/wiki/log.md'), 'utf8'), /lint \| 1 conflict/);
@@ -65,8 +66,8 @@ test('unreadable conflicts output fails closed: an owner row, nothing marked che
   const { s, ws, runner } = sched(t, { FAKE_CLAUDE_WRITE: '.joserah/knowledge/.lint/conflicts.json:not json' });
   put(ws, 'wiki/x.md', '# X\n');
   s.runLlm(); await runner.idle();
-  const j = JSON.parse(fs.readFileSync(path.join(ws, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json'), 'utf8'));
-  assert.ok((Array.isArray(j) ? j : j.rows).some((r: { title: string; state: string }) => r.title.startsWith('Wiki check output unreadable') && r.state === 'you'));
+
+  assert.ok(trackerRows(ws).some((r: { title: string; state: string }) => r.title.startsWith('Wiki check output unreadable') && r.state === 'you'));
   assert.deepEqual(s.changedSet(), ['wiki/x.md'], 'not marked as checked');
 });
 
@@ -104,9 +105,9 @@ test('a conflicts file left by an earlier run is not read as this run\'s answer'
   put(ws, '.lint/conflicts.json', 'stale, not json');
   put(ws, 'wiki/x.md', '# X\n');
   s.runLlm(); await runner.idle();
-  const p = path.join(ws, '.joserah/desk/artifacts', DAY, 'daily-tracker', 'rows.json');
-  const rows = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : [];
-  assert.ok(!(Array.isArray(rows) ? rows : rows.rows).some((r: { title: string }) => r.title.startsWith('Wiki check output unreadable')));
+
+
+  assert.ok(!trackerRows(ws).some((r: { title: string }) => r.title.startsWith('Wiki check output unreadable')));
   assert.deepEqual(s.changedSet(), [], 'the pass finished and covered the page');
 });
 

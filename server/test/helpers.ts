@@ -79,15 +79,23 @@ export async function login(app: App, password = 'pw-0123456789'): Promise<strin
   return (r.headers.get('set-cookie') ?? '').split(';')[0];
 }
 
-/** A Daily Tracker page made by tools/tracker.js (init, then one `row` per entry); returns the page directory. */
+/** A plain page in a day folder (the Tracker itself is the job-file page now); returns the page directory. */
 export function trackerPage(ws: string, day: string, rows: Array<{ title: string; state: string; small?: string }> = []): string {
   const dir = path.join(ws, '.joserah', 'desk', 'artifacts', day, 'daily-tracker');
-  const tool = path.join(REPO_ROOT, 'tools', 'tracker.js');
-  const run = (args: string[]) => { const r = spawnSync(process.execPath, [tool, ...args], { encoding: 'utf8' }); if (r.status !== 0) throw new Error(r.stderr); };
-  run(['init', dir, '--title', 'Daily Tracker', '--lang', 'en']);
-  for (const r of rows) run(['row', dir, '--title', r.title, '--state', r.state, ...(r.small ? ['--small', r.small] : [])]);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html><html><head><title>Daily Tracker</title></head><body><ul>${rows.map((r) => `<li>${r.title}</li>`).join('')}</ul></body></html>`);
   return dir;
 }
+
+/** The Tracker's job files as rows (state done is 'ok', note is 'small'), newest file last. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function trackerRows(ws: string): any[] {
+  const dir = path.join(ws, '.joserah', 'desk', 'jobs');
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir).filter((n) => /^[^.].*\.json$/.test(n)); } catch { return []; }
+  return names.map((n) => JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'))).map((j) => ({ ...j, state: j.state === 'done' ? 'ok' : j.state, small: j.note }));
+}
+
 
 /** An app with auth ready and a signed-in session cookie. */
 export async function signedIn(t: TestContext, over: Partial<AppDeps> = {}): Promise<{ app: App; deps: AppDeps; cookie: string }> {

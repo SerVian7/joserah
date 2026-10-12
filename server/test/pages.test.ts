@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { signedIn, trackerPage } from './helpers.ts';
+import { signedIn, trackerPage, REPO_ROOT } from './helpers.ts';
 import { listPages } from '../src/pages.ts';
 
 const DAY = '2026-10-06';
@@ -20,28 +20,30 @@ test('a page is served with its page id and a viewport', async (t) => {
   assert.match(html, /<meta name="viewport"/);
 });
 
-test('/p/tracker goes to today\'s Daily Tracker', async (t) => {
+test('/p/tracker and the TV view lead to the living Tracker page, which is served with the job files it polls', async (t) => {
   const { app, deps, cookie } = await signedIn(t);
-  let r = await app.request('/p/tracker', { headers: { cookie } });
-  assert.equal(r.status, 200);
-  assert.match(await r.text(), /no Tracker for today/);
-  trackerPage(deps.workspace, DAY);
-  r = await app.request('/p/tracker', { headers: { cookie } });
-  assert.equal(r.status, 302);
-  assert.equal(r.headers.get('location'), `/p/${DAY}/daily-tracker/`);
+  for (const p of ['/p/tracker', '/tv', '/tracker']) {
+    const r = await app.request(p, { headers: { cookie } });
+    assert.equal(r.status, 302, p);
+    assert.equal(r.headers.get('location'), '/tracker/');
+  }
+  assert.match(await (await app.request('/tracker/', { headers: { cookie } })).text(), /no Tracker for today/, 'not installed yet');
+  const page = path.join(deps.workspace, '.joserah/desk/artifacts/tracker'); fs.mkdirSync(page, { recursive: true });
+  for (const n of ['index.html', 'style.css', 'jobs.js']) fs.copyFileSync(path.join(REPO_ROOT, 'templates/jobs', n), path.join(page, n));
+  const idx = await app.request('/tracker/', { headers: { cookie } });
+  assert.match(idx.headers.get('content-type') ?? '', /text\/html/);
+  assert.match(await idx.text(), /<script src="jobs\.js"/);
+  assert.match((await app.request('/tracker/style.css', { headers: { cookie } })).headers.get('content-type') ?? '', /text\/css/);
+  assert.equal((await app.request('/tracker/secret.txt', { headers: { cookie } })).status, 200, 'any other name gets the not-installed shell, never a file');
+  const jobs = path.join(deps.workspace, '.joserah/desk/jobs'); fs.mkdirSync(path.join(jobs, DAY), { recursive: true });
+  fs.writeFileSync(path.join(jobs, 'a.json'), '{"title":"A","state":"run"}'); fs.writeFileSync(path.join(jobs, 'a.json.tmp'), 'x');
+  const list = await (await app.request('/jobs/index.json', { headers: { cookie } })).json();
+  assert.deepEqual(list.map((f: { n: string }) => f.n), ['a.json'], 'flat job files only, no day folders or temp files');
+  assert.equal(await (await app.request('/jobs/a.json', { headers: { cookie } })).text(), '{"title":"A","state":"run"}');
+  assert.equal((await app.request('/jobs/..%2F..%2Fconfig.json', { headers: { cookie } })).status, 404, 'no path out of the folder');
+  assert.equal((await app.request('/jobs/index.json')).status === 200, false, 'signed out: refused');
 });
 
-test('a hand edit of rows.json is re-rendered before serving', async (t) => {
-  const { app, deps, cookie } = await signedIn(t);
-  const dir = trackerPage(deps.workspace, DAY, [{ title: 'First', state: 'run' }]);
-  const rows = JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'));
-  const list = Array.isArray(rows) ? rows : rows.rows;
-  list.push({ title: 'Added by hand', state: 'wait' });
-  fs.writeFileSync(path.join(dir, 'rows.json'), JSON.stringify(Array.isArray(rows) ? list : { ...rows, rows: list }));
-  const later = new Date(Date.now() + 5000); fs.utimesSync(path.join(dir, 'rows.json'), later, later);
-  const html = await (await app.request(`/p/${DAY}/daily-tracker/`, { headers: { cookie } })).text();
-  assert.match(html, /Added by hand/);
-});
 
 test('markdown reports render inside the shell', async (t) => {
   const { app, deps, cookie } = await signedIn(t);
@@ -72,22 +74,13 @@ test('traversal is refused', async (t) => {
   }
 });
 
-test('the TV view is the Tracker, large and without forms', async (t) => {
-  const { app, deps, cookie } = await signedIn(t);
-  trackerPage(deps.workspace, DAY, [{ title: 'On air', state: 'run' }]);
-  const html = await (await app.request('/tv', { headers: { cookie } })).text();
-  assert.match(html, /On air/);
-  assert.match(html, /<meta name="joserah-mode" content="tv">/);
-  assert.match(html, /html\{font-size:28px\}/);
-});
-
 test('listPages finds the kinds and the reports', (t) => {
   return signedIn(t).then(({ deps }) => {
     const dir = trackerPage(deps.workspace, DAY);
     fs.writeFileSync(path.join(dir, 'notes.md'), '# n');
     const p = listPages(deps.workspace);
     assert.equal(p.length, 1);
-    assert.equal(p[0].kind, 'tracker');
+    assert.equal(p[0].kind, 'static');
     assert.deepEqual(p[0].reports, ['notes.md']);
     assert.equal(p[0].url, `/p/${DAY}/daily-tracker/`);
   });

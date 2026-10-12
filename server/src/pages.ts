@@ -1,19 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { toolPath, localDay } from './paths.ts';
-import { dailyTrackerLib } from './cjs.ts';
+import { toolPath } from './paths.ts';
 import { TV_CSS, esc } from './layout.ts';
 
 export const ARTIFACTS = '.joserah/desk/artifacts';
-export type PageKind = 'tracker' | 'trail' | 'case' | 'static';
+export type PageKind = 'trail' | 'case' | 'static';
 export interface PageInfo { day: string; folder: string; kind: PageKind; title: string; url: string; mtimeMs: number; reports: string[] }
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 // One path segment of an asset: no separator, no drive or stream colon, no wildcard, no control character.
 const SEG_RE = /^[^\\/:*?"<>|\x00-\x1f]{1,160}$/;
 const SOURCES: Record<Exclude<PageKind, 'static'>, { file: string; args: (d: string) => string[] }> = {
-  tracker: { file: 'rows.json', args: (d) => [toolPath('tracker.js'), d] },
   trail: { file: 'trail.json', args: (d) => [toolPath('trail.js'), 'render', d] },
   case: { file: 'cases.json', args: (d) => [toolPath('case.js'), 'render', d] },
 };
@@ -40,7 +38,7 @@ export function indexOf(dir: string): string | null {
 }
 
 export function kindOf(dir: string): PageKind {
-  for (const k of ['tracker', 'trail', 'case'] as const) if (fs.existsSync(path.join(dir, SOURCES[k].file))) return k;
+  for (const k of ['trail', 'case'] as const) if (fs.existsSync(path.join(dir, SOURCES[k].file))) return k;
   return 'static';
 }
 
@@ -88,12 +86,6 @@ export function resolveAsset(pageDirAbs: string, sub: string): string | null {
   if (!segs.length || segs.some((s) => !SEG_RE.test(s) || s.startsWith('.') || /[. ]$/.test(s))) return null;
   const p = within(pageDirAbs, path.join(pageDirAbs, ...segs));
   try { return p && fs.statSync(p).isFile() ? p : null; } catch { return null; }
-}
-
-export function todayTrackerPage(ws: string): { day: string; folder: string } | null {
-  const day = localDay();
-  const d = dailyTrackerLib.dailyTracker(ws, day);
-  return d ? { day, folder: path.basename(d) } : null;
 }
 
 /** Marks a served page (page id, mode) and loads the artifact shim before any page script; adds a viewport when the page has none, and the TV styles in `tv` mode. */

@@ -8,7 +8,7 @@ import { JOB_TYPES, RESTRICTED_TYPES, modelFor, type JobType, type ServerConfig 
 import { localDay, hhmm, now } from './paths.ts';
 import { redactions } from './cjs.ts';
 import { composeBrief } from './briefs.ts';
-import { roleFor, JOB_TEXT, type TrackerBridge } from './tracker-bridge.ts';
+import { JOB_TEXT, type TrackerBridge } from './tracker-bridge.ts';
 
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted' | 'needs-approval' | 'refused';
 export interface ChangedFile { status: 'A' | 'M' | 'D' | 'R'; path: string }
@@ -152,7 +152,6 @@ export class JobRunner {
       if (job.state === 'running') {
         job.state = 'interrupted'; job.error = 'the server restarted while the job ran'; job.endedAt = now().toISOString();
         this.#save(job); this.#digest(job); this.#closeRow(job);
-        this.#o.tracker.crew({ role: roleFor(job.type), job: job.rowTitle, state: 'idle' });
       } else if (job.state === 'queued') queued.push(job);
     }
     this.#queue.push(...queued.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((j) => j.id));
@@ -211,7 +210,6 @@ export class JobRunner {
     this.#save(job);
     const T = JOB_TEXT[this.#o.lang];
     this.#o.tracker.row({ title: job.rowTitle, state: 'run', small: T.running, url: this.#o.jobUrl(job.id), label: T.page });
-    this.#o.tracker.crew({ role: roleFor(job.type), job: job.rowTitle, state: 'work', row: job.rowTitle });
     this.#emit(job, { kind: 'state', state: 'running' });
     const cfg = this.#o.config();
     const ej: EngineJob = { id: job.id, type: job.type, target: 'server', model: job.model, cwd: this.#o.workspace, budgetUsd: job.budgetUsd,
@@ -276,7 +274,6 @@ export class JobRunner {
     job.endedAt = now().toISOString();
     for (const fn of this.#ends) { try { fn(job); } catch (e) { job.flags = [...(job.flags ?? []), `bookkeeping failed: ${(e as Error).message}`]; } }
     this.#save(job); this.#digest(job); this.#closeRow(job);
-    this.#o.tracker.crew({ role: roleFor(job.type), job: job.rowTitle, state: 'idle' });
     this.#emit(job, { kind: 'result', ok: job.state === 'done', text: job.resultText || job.error || '', costUsd: job.costUsd ?? null });
     this.#o.bus.publish({ type: 'jobs' });
   }

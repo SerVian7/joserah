@@ -12,8 +12,7 @@
   "scripts": {
     "start": "node main.ts",
     "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json",
-    "e2e": "node --test test/browser/answer.e2e.ts"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@hono/node-server": "2.1.3",

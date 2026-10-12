@@ -5,7 +5,11 @@ export interface Claim { type: string; text: string; subject: string; value: str
 export const redactions = require('../../hooks/lib/redactions.js') as {
   SPECIFIC: Array<[RegExp, string]>; redact(text: string): { text: string; redacted: boolean };
 };
-export const dailyTrackerLib = require('../../hooks/lib/daily-tracker.js') as { dailyTracker(root: string, day: string): string | null };
+export const jobsLib = require('../../tools/jobs-check.js') as {
+  check(job: unknown, slug: string, siblings?: string[]): string[];
+  afterWrite(root: string, file: string, now?: Date): { errors: string[]; journaled: boolean } | null;
+  isoLocal(d: Date): string;
+};
 export const workspaceLib = require('../../hooks/lib/workspace.js') as { readConfig(root: string): Record<string, unknown> | null };
 export const theme = require('../../tools/lib/theme.js') as { TOKENS_CSS: string; BASE_CSS: string };
 export const noteFormat = require('../../tools/lib/note-format.js') as {

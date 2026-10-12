@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Context } from 'hono';
 import type { App, Env } from '../app.ts';
 import type { AppDeps } from '../deps.ts';
-import { pageDir, indexOf, ensureFresh, resolveAsset, todayTrackerPage, preparePage } from '../pages.ts';
+import { pageDir, indexOf, ensureFresh, resolveAsset, preparePage, ARTIFACTS } from '../pages.ts';
 import { renderMarkdown } from '../markdown.ts';
 import { shell, esc, LABELS } from '../layout.ts';
 import { workspaceLang } from '../config.ts';
@@ -21,17 +21,34 @@ export function serveIndex(dir: string, page: string, mode: 'page' | 'tv'): stri
 
 export function register(app: App, deps: AppDeps): void {
   const lang = () => workspaceLang(deps.workspace);
-  app.get('/p/tracker', (c) => {
-    const t = todayTrackerPage(deps.workspace);
-    if (t && pageDir(deps.workspace, t.day, t.folder)) return c.redirect(`/p/${t.day}/${t.folder}/`, 302);
-    return c.html(shell({ title: LABELS[lang()].tracker, lang: lang(), body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
+  // The Tracker is one living page (desk/artifacts/tracker/) drawn from the job files; /p/tracker and the TV view lead to it.
+  const TRACKER_FILES: Record<string, string> = { '': 'index.html', 'index.html': 'index.html', 'style.css': 'style.css', 'jobs.js': 'jobs.js' };
+  const TRACKER_TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
+  const trackerHome = (c: Context<Env>) => c.redirect('/tracker/', 302);
+  app.get('/p/tracker', trackerHome);
+  app.get('/tv', trackerHome);
+  app.get('/tracker', trackerHome);
+  const trackerFile = (c: Context<Env>) => {
+    const name = c.req.param('name') ?? '';
+    const f = Object.hasOwn(TRACKER_FILES, name) ? TRACKER_FILES[name] : undefined;
+    const file = f && path.join(deps.workspace, ARTIFACTS, 'tracker', f);
+    if (!file || !fs.existsSync(file)) return c.html(shell({ title: LABELS[lang()].tracker, lang: lang(), body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
+    return c.body(fs.readFileSync(file), 200, { 'Content-Type': TRACKER_TYPES[path.extname(f)], 'Cache-Control': 'no-store' });
+  };
+  app.get('/tracker/', trackerFile);
+  app.get('/tracker/:name', trackerFile);
+  // The job files the page polls: a listing and the flat .json files of desk/jobs (the server's own job records sit in day folders there).
+  const JOBS = () => path.join(deps.workspace, '.joserah', 'desk', 'jobs');
+  const JOB_FILE = /^[^.][^/\\]*\.json$/;
+  app.get('/jobs/index.json', (c) => {
+    let list: Array<{ n: string; t: number }> = [];
+    try { list = fs.readdirSync(JOBS()).filter((n) => JOB_FILE.test(n)).map((n) => ({ n, t: fs.statSync(path.join(JOBS(), n)).mtimeMs })); } catch { /* no jobs yet */ }
+    return c.json(list, 200, { 'Cache-Control': 'no-store' });
   });
-  app.get('/tv', (c) => {
-    const t = todayTrackerPage(deps.workspace);
-    const dir = t && pageDir(deps.workspace, t.day, t.folder);
-    const html = t && dir ? serveIndex(dir, `${t.day}/${t.folder}`, 'tv') : null;
-    if (!html) return c.html(shell({ title: 'TV', lang: lang(), nav: false, tv: true, head: '<meta name="joserah-mode" content="tv"><meta http-equiv="refresh" content="60">', body: `<p>${esc(LABELS[lang()].noTracker)}</p>` }));
-    return c.html(html);
+  app.get('/jobs/:name', (c, next) => {
+    const n = c.req.param('name');
+    if (!JOB_FILE.test(n)) return next();
+    try { return c.body(fs.readFileSync(path.join(JOBS(), n)), 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); } catch { return c.notFound(); }
   });
   // Only a real page gets its slash added; anything else is a plain 404, so no redirect is ever built from an unchecked name.
   app.get('/p/:day/:folder', (c) => {

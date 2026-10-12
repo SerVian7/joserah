@@ -2,32 +2,34 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { cliTracker, roleFor } from '../src/tracker-bridge.ts';
-import { tmpWorkspace } from './helpers.ts';
+import { cliTracker, slugOf } from '../src/tracker-bridge.ts';
+import { tmpWorkspace, trackerRows } from './helpers.ts';
 
 test.beforeEach(() => { process.env.JOSERAH_NOW = '2026-10-06T09:00:00'; });
 test.afterEach(() => { delete process.env.JOSERAH_NOW; });
 
-test('creates today\'s Daily Tracker, then upserts a row and a strip entry', (t) => {
+test('a row is one job file the checker accepts; the same title overwrites it and keeps its start', (t) => {
   const ws = tmpWorkspace(t);
   const tr = cliTracker(ws, 'en');
-  assert.ok(tr.row({ title: 'Summarise the week · 09:00', state: 'run', small: 'Running.' }));
-  assert.ok(tr.crew({ role: 'builder', job: 'Summarise the week · 09:00', state: 'work', row: 'Summarise the week · 09:00' }));
+  assert.ok(tr.row({ title: 'Summarise the week · 09:00', state: 'run', small: 'Running.', url: 'http://x/jobs/1', label: 'job page' }));
   assert.equal(tr.rowState('Summarise the week · 09:00'), 'run');
-  assert.equal(tr.dir(), path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-06', 'daily-tracker'));
-  const store = JSON.parse(fs.readFileSync(path.join(tr.dir(), 'rows.json'), 'utf8'));
-  assert.equal(store.crew[0].state, 'work');
-  assert.ok(tr.crew({ role: 'builder', job: 'Summarise the week · 09:00', state: 'idle' }));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(tr.dir(), 'rows.json'), 'utf8')).crew[0].state, 'idle');
+  assert.equal(tr.dir(), path.join(ws, '.joserah', 'desk', 'jobs'));
+  const f = path.join(tr.dir(), `${slugOf('Summarise the week · 09:00')}.json`);
+  const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+  assert.deepEqual([j.state, j.unattended, j.project, j.note, j.label], ['run', true, 'Server jobs', 'Running.', 'job page']);
+  process.env.JOSERAH_NOW = '2026-10-06T09:30:00';
+  assert.ok(tr.row({ title: 'Summarise the week · 09:00', state: 'ok', small: 'Done.' }));
+  const k = JSON.parse(fs.readFileSync(f, 'utf8'));
+  assert.equal(k.state, 'done'); assert.equal(k.started, j.started); assert.match(k.finished, /^2026-10-06T09:30:00/);
+  assert.equal(tr.rowState('Summarise the week · 09:00'), 'ok', 'done reads back as ok');
+  assert.equal(trackerRows(ws).length, 1);
+  assert.match(fs.readFileSync(path.join(ws, '.joserah/desk/daily/2026/2026-10-06.md'), 'utf8'), /Summarise the week · 09:00/, 'done adds the journal line');
 });
 
-test('a Tracker failure returns false, never throws', (t) => {
-  const tr = cliTracker(tmpWorkspace(t), 'en');
-  assert.equal(tr.crew({ role: 'builder', job: 'x', state: 'work', row: 'no such row' }), false);
-});
-
-test('job types map to strip roles', () => {
-  assert.equal(roleFor('research'), 'scout');
-  assert.equal(roleFor('review'), 'architect');
-  assert.equal(roleFor('code'), 'builder');
+test('a bad row returns false, never throws; two titles never share a file', (t) => {
+  const tr = cliTracker(tmpWorkspace(t), 'tr');
+  assert.equal(tr.row({ title: '  ', state: 'run' }), false);
+  assert.notEqual(slugOf('Sürekli iş · 09:00'), slugOf('Sürekli iş · 09:01'));
+  assert.match(slugOf('Çalışıyor'), /^calisiyor-[0-9a-f]{6}$/);
+  assert.equal(tr.rowState('never written'), null);
 });
