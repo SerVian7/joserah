@@ -291,8 +291,10 @@ test('feedback carries Distill', () => {
 test('orchestrate: the chat gives a warm full-sentence summary; rows and items name their topic', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
   assert.match(text, /Brevity means no padding, never coldness/);
-  assert.match(text, /warm, full-sentence summary: what was done, what waits on the owner, what comes next/);
-  assert.match(text, /background progress is kept on the Tracker/);
+  assert.match(text, /warm, full-sentence summary: what was done, what comes next\./);
+  assert.match(text, /whatever it shows \(job starts, progress, items waiting on the owner\) is not repeated in the reply/);
+  assert.match(text, /carries only what the page cannot \(the answer, a result just asked for\) plus the Tracker link/);
+  assert.doesNotMatch(text, /background progress is kept on the Tracker, not narrated/);
   assert.match(text, /names its topic and gives one sentence of background/);
   assert.match(text, /never a bare label/);
   assert.match(text, /Row text is plain sentences, not a keyword chain/);
@@ -301,6 +303,8 @@ test('orchestrate: the chat gives a warm full-sentence summary; rows and items n
   const agents = fs.readFileSync(path.join(PLUGIN_ROOT, 'templates', 'AGENTS.md'), 'utf8');
   const row = agents.split('\n').find((l) => l.startsWith('|') && l.includes('`orchestrate`'));
   assert.match(row, /warm, full-sentence summary/);
+  assert.doesNotMatch(row, /what waits on the owner, what comes next/);
+  assert.match(agents, /It repeats nothing the page shows, only what it cannot \(the answer, a result asked for\)\./);
   assert.match(row, /names its topic with one sentence of background/);
   assert.doesNotMatch(row, /chat carries one line and the link/);
 });
