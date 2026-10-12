@@ -75,3 +75,10 @@ test('afterWrite ignores files that are not job files (_agents.json, other folde
   for (const n of ['_agents.json', 'x.json.tmp']) assert.strictEqual(J.afterWrite(root, path.join(root, '.joserah', 'desk', 'jobs', n), NOW), null);
   assert.strictEqual(J.afterWrite(root, path.join(root, 'other.json'), NOW), null);
 });
+test('afterWrite: the journal stub lone dash placeholder is replaced', (t) => {
+  const root = ws(t);
+  const dir = path.join(root, '.joserah', 'desk', 'daily', '2026'); fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '2026-10-13.md'), '# d\n\n## Done today\n-\n\n## Notes\n');
+  J.afterWrite(root, put(root, 'a', { ...ok, state: 'done', finished: '2026-10-13T10:00:00+03:00' }), NOW);
+  assert.doesNotMatch(journal(root), /\n-\n/);
+});

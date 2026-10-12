@@ -34,6 +34,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/crew.js\" subagent-start",
             "shell": "bash"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jobs.js\" subagent-start",
+            "shell": "bash"
           }
         ]
       }
@@ -43,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/crew.js\" subagent-stop",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jobs.js\" subagent-stop",
             "shell": "bash"
           }
         ]
@@ -77,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/crew.js\" pre-tool-use",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jobs.js\" pre-tool-use",
             "shell": "bash"
           }
         ]
@@ -99,7 +104,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/crew.js\" post-tool-use",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/jobs.js\" post-tool-use",
             "shell": "bash"
           }
         ]

@@ -58,7 +58,8 @@ function journalDone(root, slug, job) {
   if (text.includes(`job:${slug}@${job.finished} `)) return false;
   const line = journalLine(slug, job);
   const m = /^## Done today[^\n]*\n/m.exec(text);
-  text = m ? text.slice(0, m.index + m[0].length) + line + '\n' + text.slice(m.index + m[0].length)
+  const at = m ? m.index + m[0].length : 0;
+  text = m ? text.slice(0, at) + line + '\n' + text.slice(at).replace(/^-\n/, '') // the stub's lone dash goes
     : text.replace(/\n*$/, '\n') + `\n## Done today\n${line}\n`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
