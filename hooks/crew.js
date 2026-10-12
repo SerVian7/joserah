@@ -25,7 +25,8 @@
  *                   (open jobs, owner lines, last decisions, Lead's agent id)
  *                   and, for the main session, the Daily Tracker's open rows.
  *   subagent-start / subagent-stop  the Crew strip's safety net: a crew role
- *                   with no entry on today's Daily Tracker gets one (work), and
+ *                   with no entry on today's Daily Tracker gets one (work, job = its Agent-tool
+ *                   description), and
  *                   at the stop the hook's own entry, or one tagged with that
  *                   agent's id (`--agent`), is dimmed (idle).
  *   post-tool-use   a worker's Write of its own report log (desk/crew/<day>/<role>/HHMM-<slug>.md) closes its
@@ -179,7 +180,10 @@ function reinject(root, input) {
  *
  *   pre-tool-use (Agent)   the description waits in a per-session pending list (OS temp dir)
  *   subagent-start         the agent's entry: role from its type, job the oldest waiting description of
- *                          that type (else its agent id), state work, model and effort from its definition
+ *                          that type (no description and no entry of its own: nothing is written, never a
+ *                          line titled with the agent id; a finished entry is never revived), state work,
+ *                          model and effort only as the launch said (the Agent tool's model/effort), else the
+ *                          model its own transcript shows it is served on; never the role's definition
  *   post-tool-use (Agent)  the exact agent id ↔ description: the entry is created if the start has not
  *                          come yet, its job corrected if the start took another one's description
  *   subagent-stop          its entry goes idle
@@ -198,26 +202,6 @@ function readPending(session) {
 function writePending(session, list) {
   const t = now().getTime();
   try { fs.writeFileSync(pendingFile(session), JSON.stringify(list.filter((x) => t - x.at < PENDING_TTL))); } catch { /* best effort */ }
-}
-
-/** model and effort from the agent's definition frontmatter (workspace, user, plugin), as written there. */
-function agentDefinition(root, type) {
-  const name = String(type).split(':').pop();
-  if (!/^[\w-]{1,60}$/.test(name)) return {};
-  const dirs = [path.join(root, '.claude', 'agents'), path.join(require('os').homedir(), '.claude', 'agents'), path.join(__dirname, '..', 'agents')];
-  for (const d of dirs) {
-    let text;
-    try { text = fs.readFileSync(path.join(d, `${name}.md`), 'utf8'); } catch { continue; }
-    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-    if (!m) return {};
-    const field = (k) => ((new RegExp(`^${k}:\\s*(.+?)\\s*$`, 'm').exec(m[1]) || [])[1] || '');
-    const out = {};
-    const model = field('model'); const effort = field('effort');
-    if (/^[\w.:[\]-]{1,40}$/.test(model) && model !== 'inherit') out.model = model;
-    if (['low', 'medium', 'high'].includes(effort)) out.effort = effort;
-    return out;
-  }
-  return {};
 }
 
 /** Reads today's store, lets `change` edit its crew, writes and re-renders when it changed. */
@@ -256,16 +240,37 @@ function upsertAgent(crew, { role, agent, job, state, model, effort }) {
   return e;
 }
 
+// What the launch itself said the agent runs on: the Agent tool's own `model` and `effort` arguments. Never the
+// role's frontmatter, which is only what the role would run on by default (owner, 2026-10-13: an agent shown as
+// opus/high that ran on sonnet). Unknown stays unknown: the page shows none.
+function launchOf(ti) {
+  const out = {};
+  if (typeof ti.model === 'string' && /^[\w.:[\]-]{1,40}$/.test(ti.model) && ti.model !== 'inherit') out.model = ti.model;
+  if (['low', 'medium', 'high'].includes(ti.effort)) out.effort = ti.effort;
+  return out;
+}
+
 function agentToolStart(input) {
   const ti = input.tool_input || {};
   const role = roleOf(ti.subagent_type);
   const desc = typeof ti.description === 'string' ? ti.description.trim() : '';
   if (!CREW_ROLES.includes(role) || !desc || !id(input.session_id)) return;
   const list = readPending(input.session_id);
-  list.push({ tu: String(input.tool_use_id || ''), role, desc, at: now().getTime() });
+  const launch = launchOf(ti);
+  list.push({ tu: String(input.tool_use_id || ''), role, desc, at: now().getTime(), ...launch });
   writePending(input.session_id, list);
 }
 
+/**
+ * SubagentStart. Which entry moves is decided by what is on the page, never by inventing one (owner,
+ * 2026-10-13: lines titled with a raw agent id; a resumed agent reviving its old finished job):
+ *   - the entry already carrying this agent id that is not finished (the latest one) goes to work;
+ *   - else, with a description waiting from the Agent tool call: the entry of this agent with that very
+ *     description (a resume of that job), else an untagged entry of the role with it (Lead wrote it), else a
+ *     new entry titled with the description;
+ *   - else nothing is written. A finished entry is never revived by an id alone.
+ * Model and effort are what the launch said (see launchOf), nothing from the definition.
+ */
 function agentStarted(root, input) {
   const role = roleOf(input.agent_type);
   const agent = id(input.agent_id);
@@ -274,8 +279,20 @@ function agentStarted(root, input) {
   const known = list.find((x) => x.agent === agent);
   const next = known || list.find((x) => x.role === role && !x.agent);
   if (next) { next.agent = agent; writePending(input.session_id, list); }
-  const def = agentDefinition(root, input.agent_type);
-  withCrew(root, (crew) => { upsertAgent(crew, { role, agent, job: next ? next.desc : agent, state: 'work', ...def }); return true; });
+  withCrew(root, (crew) => {
+    const mine = crew.filter((x) => x && x.agent === agent);
+    const live = mine.filter((x) => x.state !== 'idle');
+    let e = (next && mine.find((x) => k(x.job) === k(next.desc))) || live[live.length - 1];
+    if (!e && next) e = crew.find((x) => x && x.role === role && !x.agent && k(x.job) === k(next.desc));
+    if (!e && !next) e = crew.find((x) => x && x.role === role && !x.agent && x.state !== 'idle' && k(x.job) === k(agent)); // an older id-titled entry
+    if (!e && !next) return false;
+    if (!e) { e = { role, job: next.desc }; crew.push(e); }
+    e.agent = agent;
+    if (next && next.model && !e.model) e.model = next.model;
+    if (next && next.effort && !e.effort) e.effort = next.effort;
+    stampNow(e, 'work');
+    return true;
+  });
 }
 
 function agentToolDone(root, input) {
@@ -291,7 +308,7 @@ function agentToolDone(root, input) {
   const swapped = list.find((x) => x.agent === agent && x !== mine);
   if (swapped && mine && mine.agent) { const other = mine.agent; mine.agent = agent; swapped.agent = other; } else if (mine) mine.agent = agent;
   writePending(input.session_id, list);
-  const def = agentDefinition(root, ti.subagent_type);
+  const def = launchOf(ti);
   if (!def.model && typeof tr.resolvedModel === 'string') def.model = tr.resolvedModel;
   withCrew(root, (crew) => {
     const e = crew.find((x) => x && x.agent === agent);
@@ -373,7 +390,8 @@ function lastContext(file) {
       if (!parts.every((n) => Number.isInteger(n) && n >= 0)) continue;
       const at = new Date(j.timestamp);
       if (!Number.isFinite(at.getTime())) continue;
-      return { ctx: parts[0] + parts[1] + parts[2], ctxTime: hm(at) };
+      const model = typeof j.message.model === 'string' && /^[\w.:[\]-]{1,60}$/.test(j.message.model) ? j.message.model : undefined;
+      return { ctx: parts[0] + parts[1] + parts[2], ctxTime: hm(at), model };
     }
   } catch { /* no transcript yet */ } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch { /* closed */ }
@@ -424,9 +442,11 @@ function recordContext(root, input, force) {
   if (!j || Array.isArray(j) || !Array.isArray(j.crew)) return; // no crew entry yet, so not this agent's
   const e = j.crew.find((x) => x && x.role === role && x.agent === agent)
     || j.crew.find((x) => x && x.role === role && String(x.job).trim().toLowerCase() === agent.toLowerCase());
-  if (!e || (e.ctx === fig.ctx && e.ctxTime === fig.ctxTime)) return;
+  const model = !e || e.model ? undefined : fig.model; // what the agent is actually served on, when nothing said it
+  if (!e || (e.ctx === fig.ctx && e.ctxTime === fig.ctxTime && !model)) return;
   e.ctx = fig.ctx;
   e.ctxTime = fig.ctxTime;
+  if (model) e.model = model;
   fs.writeFileSync(rowsPath, JSON.stringify(j, null, 1) + '\n');
 }
 

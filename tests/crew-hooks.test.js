@@ -207,25 +207,83 @@ function trackerFixture(t) {
 }
 const sub = (ws, ev, type, agent = 'A7', now = '2026-10-05T09:00:00') =>
   hook(ws, ev, JSON.stringify({ session_id: 'S1', agent_id: agent, agent_type: type }), now);
+// An agent launched the way the runtime does it: the Agent tool call (PreToolUse, with the description and any
+// model/effort it passed) comes first, then SubagentStart. A start with no description writes nothing
+// (owner, 2026-10-13: no more lines titled with a raw agent id).
+let beginSeq = 0;
+const begin = (ws, type, agent, desc, extra = {}, now = '2026-10-05T09:00:00') => {
+  const session = 'SB-' + agent + '-' + process.pid + '-' + (++beginSeq);
+  hook(ws, 'pre-tool-use', JSON.stringify({ session_id: session, tool_name: 'Agent', tool_use_id: 'tu-' + agent, tool_input: { subagent_type: type, description: desc, ...extra } }), now);
+  return hook(ws, 'subagent-start', JSON.stringify({ session_id: session, agent_id: agent, agent_type: type }), now);
+};
 
-test('safety net: a crew worker with no entry is added at start and dimmed at stop', (t) => {
+test('safety net: a crew worker with no entry is added at start (job from its description) and dimmed at stop', (t) => {
   const { ws, store } = trackerFixture(t);
-  const r = sub(ws, 'subagent-start', 'scout');
+  const r = begin(ws, 'scout', 'A7', 'Price research');
   assert.strictEqual(r.status, 0, r.stderr);
   assert.strictEqual(r.stdout, '', 'a worker\'s start prints nothing');
-  assert.deepStrictEqual(store().crew.map(({ role, job, state }) => ({ role, job, state })), [{ role: 'scout', job: 'A7', state: 'work' }]);
+  assert.deepStrictEqual(store().crew.map(({ role, job, state, model, effort }) => ({ role, job, state, model, effort })), [{ role: 'scout', job: 'Price research', state: 'work', model: undefined, effort: undefined }], 'no model or effort the launch did not say');
   sub(ws, 'subagent-stop', 'scout', 'A7', '2026-10-05T09:20:00');
   const e = store().crew[0];
   assert.strictEqual(e.state, 'idle');
   assert.strictEqual(e.time, '09:20');
 });
 
+// Owner, 2026-10-13: "Tracker da ... AI olmayan ..." — lines titled with a raw agent id, a finished job revived by
+// a resumed agent, a model the agent does not run on.
+test('start: no description and no entry of its own — nothing is written, never a line titled with the agent id', (t) => {
+  const { ws, tr } = trackerFixture(t);
+  const before = fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  assert.strictEqual(sub(ws, 'subagent-start', 'builder', 'ac0794c').status, 0);
+  assert.strictEqual(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8'), before);
+});
+test('start: the entry that already carries the agent id is the one that moves — no second entry', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  runTool('tracker.js', ['crew', tr, '--role', 'lead', '--job', 'Yönetim', '--state', 'owner', '--reason', 'approval', '--agent', 'L1'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
+  sub(ws, 'subagent-start', 'lead', 'L1');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.agent, e.state]), [['Yönetim', 'L1', 'work']]);
+});
+test('resume: a resumed agent never revives a finished job; only its current entry moves', (t) => {
+  const { ws, tr, store } = trackerFixture(t);
+  const env = (h) => ({ env: { JOSERAH_NOW: '2026-10-05T' + h } });
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'Old job', '--state', 'work', '--agent', 'B1'], env('08:00:00'));
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'Old job', '--state', 'idle', '--agent', 'B1'], env('08:30:00'));
+  const bytes = () => fs.readFileSync(path.join(tr, 'rows.json'), 'utf8');
+  const only = bytes();
+  sub(ws, 'subagent-start', 'builder', 'B1', '2026-10-05T09:00:00');
+  assert.strictEqual(bytes(), only, 'only a finished entry: nothing is written');
+  // this job's entry, opened by hand with the agent id: it moves, the old one stays finished
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'New job', '--state', 'idle', '--agent', 'B1'], env('08:50:00'));
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'New job', '--state', 'work', '--agent', 'B1'], env('08:51:00'));
+  sub(ws, 'subagent-start', 'builder', 'B1', '2026-10-05T09:01:00');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state]), [['Old job', 'idle'], ['New job', 'work']]);
+  // a resume that names the old job (its description) is that job's start
+  runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'New job', '--state', 'idle', '--agent', 'B1'], env('09:10:00'));
+  begin(ws, 'builder', 'B1', 'Old job', {}, '2026-10-05T09:20:00');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state]), [['Old job', 'work'], ['New job', 'idle']]);
+});
+test('model and effort are what the launch said, never the role\'s frontmatter; unknown shows none', (t) => {
+  const { ws, store } = trackerFixture(t);
+  assert.match(fs.readFileSync(path.join(ws, '.claude', 'agents', 'builder.md'), 'utf8'), /^model: opus/m, 'the definition says opus');
+  begin(ws, 'builder', 'B1', 'Job A', { model: 'sonnet', effort: 'medium' });
+  begin(ws, 'builder', 'B2', 'Job B');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.model, e.effort]), [['Job A', 'sonnet', 'medium'], ['Job B', undefined, undefined]]);
+});
+test('model: when nothing said it, the worker\'s own transcript does (the model it is served on)', (t) => {
+  const f = ctxFixture(t);
+  begin(f.ws, 'scout', f.agent, 'Job C');
+  assert.strictEqual(f.store().crew[0].model, undefined);
+  f.write(JSON.stringify({ type: 'assistant', timestamp: '2026-10-05T06:02:00.000Z', message: { model: 'claude-sonnet-5-5', content: [], usage: { input_tokens: 1, cache_read_input_tokens: 2, cache_creation_input_tokens: 3 } } }));
+  f.post('2026-10-05T09:05:00');
+  assert.deepStrictEqual([f.store().crew[0].model, f.store().crew[0].effort], ['claude-sonnet-5-5', undefined]);
+});
+
 // A1 (owner, 2026-10-05): every agent appears, also when its role already has an entry; that entry is kept.
 test('safety net: an existing entry for the role is kept; the agent gets its own beside it', (t) => {
   const { ws, tr, store } = trackerFixture(t);
   runTool('tracker.js', ['crew', tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
-  sub(ws, 'subagent-start', 'scout');
-  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.agent]), [['DOTS research', 'work', undefined], ['A7', 'work', 'A7']]);
+  begin(ws, 'scout', 'A7', 'Own job');
+  assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.agent]), [['DOTS research', 'work', undefined], ['Own job', 'work', 'A7']]);
   sub(ws, 'subagent-stop', 'scout');
   assert.deepStrictEqual(store().crew.map((e) => e.state), ['work', 'idle'], 'the stop touches only its own agent\'s entry');
 });
@@ -257,9 +315,9 @@ test('safety net: not a crew role, or no Tracker today, writes nothing', (t) => 
 
 test('safety net: Lead\'s start adds its entry and still prints only its Ledger path', (t) => {
   const { ws, store } = trackerFixture(t);
-  const r = sub(ws, 'subagent-start', 'lead', 'A1');
+  const r = begin(ws, 'lead', 'A1', 'Lead job');
   assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /^Your Ledger: \.joserah\/desk\/crew\/2026-10-05\/lead\/ledger-0900\.md$/);
-  assert.deepStrictEqual(store().crew.map((e) => [e.role, e.job, e.state]), [['lead', 'A1', 'work']]);
+  assert.deepStrictEqual(store().crew.map((e) => [e.role, e.job, e.state]), [['lead', 'Lead job', 'work']]);
 });
 
 test('safety net: a broken rows.json is left alone and the hook exits 0', (t) => {
@@ -293,7 +351,7 @@ function ctxFixture(t) {
 
 test('ctx: a worker\'s tool call sets its entry\'s context size from its own transcript', (t) => {
   const f = ctxFixture(t);
-  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  begin(f.ws, 'scout', f.agent, 'Ctx job');
   f.write(usageLine('2026-10-05T06:01:00.000Z', 10, 0, 16904), usageLine('2026-10-05T06:02:00.000Z', 8, 16904, 1930));
   const r = f.post('2026-10-05T09:05:00');
   assert.strictEqual(r.status, 0, r.stderr);
@@ -306,7 +364,7 @@ test('ctx: a worker\'s tool call sets its entry\'s context size from its own tra
 
 test('ctx: at most once a minute per agent', (t) => {
   const f = ctxFixture(t);
-  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  begin(f.ws, 'scout', f.agent, 'Ctx job');
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0), usageLine('2026-10-05T06:02:30.000Z', 1, 200, 0));
@@ -318,7 +376,7 @@ test('ctx: at most once a minute per agent', (t) => {
 
 test('ctx: nothing measured, nothing written', (t) => {
   const f = ctxFixture(t);
-  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  begin(f.ws, 'scout', f.agent, 'Ctx job');
   const before = () => fs.readFileSync(path.join(f.tr, 'rows.json'), 'utf8');
   const b = before();
   f.post('2026-10-05T09:05:00'); // no transcript yet (measured: none before the first tool call)
@@ -334,15 +392,15 @@ test('ctx: nothing measured, nothing written', (t) => {
 test('ctx: only the hook\'s own entry for that agent is touched', (t) => {
   const f = ctxFixture(t);
   runTool('tracker.js', ['crew', f.tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
-  sub(f.ws, 'subagent-start', 'scout', f.agent); // A1: the agent gets its own entry beside the role's other one
+  begin(f.ws, 'scout', f.agent, 'Ctx job'); // A1: the agent gets its own entry beside the role's other one
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
-  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.ctx]), [['DOTS research', undefined], [f.agent, 101]], 'the other entry is not touched');
+  assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.ctx]), [['DOTS research', undefined], ['Ctx job', 101]], 'the other entry is not touched');
 });
 
 test('ctx: SubagentStop writes the final figure as it dims the entry', (t) => {
   const f = ctxFixture(t);
-  sub(f.ws, 'subagent-start', 'scout', f.agent);
+  begin(f.ws, 'scout', f.agent, 'Ctx job');
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0), usageLine('2026-10-05T06:05:10.000Z', 8, 18834, 222));
@@ -366,7 +424,7 @@ test('ctx: crew.js is registered for PostToolUse, one command string', () => {
 test('ctx: an entry Lead wrote with --agent is matched by its agent id first', (t) => {
   const f = ctxFixture(t);
   runTool('tracker.js', ['crew', f.tr, '--role', 'scout', '--job', 'DOTS research', '--state', 'work', '--agent', f.agent], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
-  sub(f.ws, 'subagent-start', 'scout', f.agent); // the role has an entry: the hook adds none
+  begin(f.ws, 'scout', f.agent, 'Ctx job'); // the role has an entry: the hook adds none
   f.write(usageLine('2026-10-05T06:02:00.000Z', 1, 100, 0));
   f.post('2026-10-05T09:05:00');
   assert.deepStrictEqual(f.store().crew.map((e) => [e.job, e.agent, e.ctx]), [['DOTS research', f.agent, 101]]);
@@ -396,14 +454,14 @@ function pendingClean(t) {
   t.after(clear);
 }
 
-test('A1: background launches in their measured order — one entry each, job from the description, model/effort from the definition, idle at stop', (t) => {
+test('A1: background launches in their measured order — one entry each, job from the description, no model/effort the launch did not say, idle at stop', (t) => {
   pendingClean(t);
   const { ws, tr, store } = trackerFixture(t);
   for (const n of ['bg-PreToolUse1', 'bg-PreToolUse2']) assert.strictEqual(run(ws, n).status, 0);
   assert.strictEqual(run(ws, 'bg-SubagentStart1', '2026-10-05T09:01:00').status, 0);
   let c = store().crew;
   assert.deepStrictEqual(c.map((e) => [e.role, e.job, e.state, e.agent, e.model, e.effort, e.time]),
-    [['builder', 'Probe one', 'work', 'a7677bfe7d813817e', 'opus', 'high', '09:01']]);
+    [['builder', 'Probe one', 'work', 'a7677bfe7d813817e', undefined, undefined, '09:01']]);
   assert.match(strip(tr), />Probe one<\/button>/, 're-rendered: the line is on the page');
   run(ws, 'bg-PostToolUse1', '2026-10-05T09:01:00');
   run(ws, 'bg-PostToolUse2', '2026-10-05T09:01:00'); // its SubagentStart comes after (measured)
@@ -433,14 +491,14 @@ test('A1: two launches of one role started out of order — the PostToolUse puts
   assert.deepStrictEqual(by, { a7677bfe7d813817e: 'Probe one', ab9a3d315a2a8cc37: 'Probe two' });
   assert.strictEqual(store().crew.length, 2);
 });
-test('A1: no definition — the model is the one the runtime resolved; a launch without PreToolUse still appears', (t) => {
+test('A1: the model is the one the runtime resolved; a launch without PreToolUse still appears', (t) => {
   pendingClean(t);
   const { ws, store } = trackerFixture(t);
   fs.rmSync(path.join(ws, '.claude', 'agents', 'builder.md'));
   run(ws, 'bg-PostToolUse1');
   assert.deepStrictEqual(store().crew.map((e) => [e.job, e.state, e.model, e.effort]), [['Probe one', 'work', 'claude-haiku-4-5-20251001', undefined]]);
-  run(ws, 'fg-SubagentStart1'); // no PreToolUse recorded: its agent id stands in, as before
-  assert.deepStrictEqual(store().crew.map((e) => e.job), ['Probe one', 'a2c4c87ea93f66eaa']);
+  run(ws, 'fg-SubagentStart1'); // no PreToolUse recorded and no entry of its own: nothing is written, no line titled with its id
+  assert.deepStrictEqual(store().crew.map((e) => e.job), ['Probe one']);
 });
 test('A1: not a crew role, a non-Agent tool, or no Tracker today writes nothing; a broken store is left alone', (t) => {
   pendingClean(t);
@@ -480,7 +538,7 @@ test('A1: pending descriptions live under JOSERAH_STATE_DIR — a list left else
   const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'crew.js'), 'subagent-start'],
     { cwd: ws, input: JSON.stringify(p), encoding: 'utf8', env: { ...process.env, JOSERAH_NOW: '2026-10-05T09:00:00', JOSERAH_STATE_DIR: own }, timeout: 8000 });
   assert.strictEqual(r.status, 0);
-  assert.deepStrictEqual(store().crew.map((e) => e.job), ['a2c4c87ea93f66eaa'], 'no description of its own: its agent id, not another run\'s');
+  assert.deepStrictEqual(store().crew || [], [], 'no description of its own: nothing, and never another run\'s');
 });
 
 // Owner, 2026-10-12: "bu tracker'ı hep güncel tutman lazım … en ucuz yolunu bul". The Crew strip's hooks
@@ -495,7 +553,7 @@ test('hooks: crew off but dailyTracker on — start and stop still move the stri
   setCfg(ws, { crew: false });
   runTool('tracker.js', ['row', tr, '--title', 'Folio', '--state', 'run'], { env: { JOSERAH_NOW: '2026-10-05T08:30:00' } });
   runTool('tracker.js', ['crew', tr, '--role', 'builder', '--job', 'Folio 1.0.3', '--state', 'work', '--agent', 'B1', '--row', 'Folio'], { env: { JOSERAH_NOW: '2026-10-05T08:31:00' } });
-  const r = sub(ws, 'subagent-start', 'scout', 'S9');
+  const r = begin(ws, 'scout', 'S9', 'Tarama');
   assert.strictEqual(r.status, 0, r.stderr);
   assert.deepStrictEqual(store().crew.map((e) => [e.role, e.state, e.agent]), [['builder', 'work', 'B1'], ['scout', 'work', 'S9']]);
   sub(ws, 'subagent-stop', 'builder', 'B1', '2026-10-05T09:20:00');
@@ -507,7 +565,7 @@ test('hooks: crew off but dailyTracker on — start and stop still move the stri
 test('hooks: crew off — no Ledger for Lead, no compaction stamps; the strip entry is still written', (t) => {
   const { ws, store } = trackerFixture(t);
   setCfg(ws, { crew: false });
-  const r = sub(ws, 'subagent-start', 'lead', 'L1');
+  const r = begin(ws, 'lead', 'L1', 'Yönetim');
   assert.strictEqual(r.stdout, '', 'no Ledger path printed');
   assert.ok(!fs.existsSync(path.join(ws, '.joserah', 'desk', 'crew')), 'no Ledger');
   assert.deepStrictEqual(store().crew.map((e) => [e.role, e.state]), [['lead', 'work']]);
@@ -556,7 +614,7 @@ test('hooks: a Daily Tracker titled in Turkish ("Günlük Takip") is found too, 
   const ws = wsFor(t);
   const tr = path.join(ws, '.joserah', 'desk', 'artifacts', '2026-10-05', 'daily-tracker');
   runTool('tracker.js', ['init', tr, '--title', 'Günlük Takip', '--lang', 'tr'], { env: { JOSERAH_NOW: '2026-10-05T08:00:00' } });
-  sub(ws, 'subagent-start', 'scout', 'S9');
+  begin(ws, 'scout', 'S9', 'Tarama');
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8')).crew.map((e) => [e.role, e.state]), [['scout', 'work']]);
   sub(ws, 'subagent-stop', 'scout', 'S9');
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(tr, 'rows.json'), 'utf8')).crew[0].state, 'idle');

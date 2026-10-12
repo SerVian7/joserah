@@ -20,8 +20,8 @@
  *       `time` and is re-stamped now; small/url/label not given are cleared.
  *       [--unattended]: a run with no agent on it (a batch, an unattended chain) is Active
  *       work with no icon; the flag is kept while the row runs and dropped when it leaves
- *       the run state. A run row whose crew entries (--row) have all ended, and that is not
- *       unattended, shows "no one on it" / "başında kimse yok" (stale).
+ *       the run state. The page shows nothing extra for it: a row with no AI on it simply has no AI
+ *       marker, never a word about it (owner, 2026-10-13).
  *       [--parent "<title>"]: the row's main job (a row title, case and outer
  *       spaces ignored); its sub-jobs form a container under it. One level only: a
  *       row with a parent cannot be a parent, nor its own. A row re-run without
@@ -148,8 +148,8 @@ const fs = require('fs');
 const path = require('path');
 
 const LABELS = {
-  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', write: 'write a note', send: 'Send', none: 'Nothing running right now', today: "Today's page", stale: 'no one on it', doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
-  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', write: 'not yazın', send: 'Gönder', none: 'Şu an çalışan iş yok', today: 'Bugünün sayfası', stale: 'başında kimse yok', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
+  en: { locale: 'en', rec: 'recommended', choice: 'Your choice', note: 'note (optional)', write: 'write a note', send: 'Send', none: 'Nothing running right now', today: "Today's page", doing: { voice: 'talking with you', lead: 'managing', architect: 'planning', builder: 'writing code', scout: 'researching', sentry: 'watching' }, reasons: { decision: 'decision', 'sign-in': 'sign-in', connection: 'connection', approval: 'approval' }, run: 'Active work', runPlain: 'Active work', you: 'Owner', wait: 'Waiting', plan: 'Plan', ok: 'Done', next: 'next', decide: 'decision page', groups: ['Active work', 'Owner', 'Waiting', 'Done today', 'Plans'], link: 'page', other: 'Other', upd: 'updated', more: 'all', less: 'show less' },
+  tr: { locale: 'tr', rec: 'önerim', choice: 'Seçiminiz', note: 'not (isteğe bağlı)', write: 'not yazın', send: 'Gönder', none: 'Şu an çalışan iş yok', today: 'Bugünün sayfası', doing: { voice: 'sizinle konuşuyor', lead: 'yönetiyor', architect: 'planlıyor', builder: 'kod yazıyor', scout: 'araştırıyor', sentry: 'izliyor' }, reasons: { decision: 'karar', 'sign-in': 'oturum açma', connection: 'bağlantı', approval: 'onay' }, run: 'Aktif çalışma', runPlain: 'Aktif çalışma', you: 'Sizde', wait: 'Beklemede', plan: 'Plan', ok: 'Bitti', next: 'sonraki', decide: 'karar sayfası', groups: ['Aktif çalışma', 'Sizde', 'Beklemede', 'Bugün biten', 'Planlar'], link: 'sayfa', other: 'Diğer', upd: 'güncelleme', more: 'tümü', less: 'daralt' },
 };
 const GROUP = { run: 0, you: 1, wait: 2, ok: 3, plan: 4 };
 const { findWorkspace, readConfig } = require('../hooks/lib/workspace');
@@ -207,7 +207,6 @@ const STRIP_CSS = [
   `${LN} .ic>.sq{display:inline-block;width:5px;height:5px;background:currentColor;color:var(--faint)}`,
   `${LN}.run .sq{color:var(--run)}${LN}.you .sq{color:var(--you)}${LN}.wait .sq,${LN}.plan .sq{color:var(--wait)}${LN}.ok .sq{color:var(--ok)}`,
   `${LN} .tx{display:block;width:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;color:var(--ink)}`,
-  `${LN} .stale{margin-left:8px;font:500 11px var(--mono);color:var(--wait)}`,
   `${LN} .ct{font:500 11px var(--mono);color:var(--faint)}${LN} .tx .n{margin-left:8px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}`,
   `${LN} .tx[aria-expanded="true"]::before{content:"\\25BE"}`,
@@ -718,10 +717,8 @@ function board(rows, crew, L, dev) {
       const since = es.filter((e) => e.since).map((e) => e.since).sort()[0];
       time = elapsedTime({ state: 'work', since, time: es.map((e) => String(e.time)).sort().pop() });
     }
-    // a running row whose crew entries have all ended (and that is no unattended run) says so: it may be stale
-    const stale = strip && r && r.state === 'run' && !r.unattended && !es.length && crew.some((e) => e.state === 'idle' && key(e.row) === key(r.title));
     const answerable = isChoice(r);
-    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${stale ? ` <span class="stale">${esc(L.stale || LABELS.en.stale)}</span>` : ''}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
+    const text = `${prefix && cat ? `<span class="ct">${esc(cat)} ·</span> ` : ''}${esc(title)}${answerable ? ` <span class="an" data-an="${slugId('a', r.title)}" hidden></span>` : ''}${extra}`;
     const link = r && isUrl(r.url) ? `<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label || L.link)}</a>` : '';
     const d = detailOf(r, es, L, { dev, decide: g === 'you' });
     const form = r ? formOf(r, L) : '';

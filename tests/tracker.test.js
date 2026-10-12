@@ -1869,21 +1869,15 @@ test('unattended run: --unattended marks the row, kept while it runs, dropped wh
   row('--state', 'wait');
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'rows.json'), 'utf8'))[0].unattended, undefined, 'dropped when it leaves the run state');
 });
-test('stale run row: running, its agents all ended, not unattended — flagged; with a live agent or unattended — not', (t) => {
+test('a running row whose agents ended says nothing about it: no "no one on it", no agent wording, no marker', (t) => {
   const dir = tmpdir(t); init(dir, ['--lang', 'tr']);
-  setRows(dir, [{ state: 'run', title: 'Eski iş', time: '09:00' }, { state: 'run', title: 'Canlı iş', time: '09:01' }, { state: 'run', title: 'Toplu', unattended: true, time: '09:02' }, { state: 'run', title: 'Hiç başlamamış', time: '09:03' }]);
+  setRows(dir, [{ state: 'run', title: 'Eski iş', time: '09:00' }, { state: 'run', title: 'Toplu', unattended: true, time: '09:02' }]);
   crew(dir, ['--role', 'builder', '--job', 'Bitti', '--state', 'idle', '--row', 'Eski iş']);
-  crew(dir, ['--role', 'builder', '--job', 'Bitti 2', '--state', 'idle', '--row', 'Canlı iş']);
-  crew(dir, ['--role', 'scout', '--job', 'Sürüyor', '--state', 'work', '--row', 'Canlı iş']);
-  crew(dir, ['--role', 'scout', '--job', 'Bitti 3', '--state', 'idle', '--row', 'Toplu']);
-  const ls = linesOf(page(dir));
-  const of = (n) => ls.find((l) => l.includes(`>${n}`));
-  assert.match(of('Eski iş'), /class="stale"/, 'ended agents, not unattended: flagged');
-  assert.doesNotMatch(of('Canlı iş'), /class="stale"/, 'a live agent');
-  assert.doesNotMatch(of('Toplu'), /class="stale"/, 'unattended');
-  assert.doesNotMatch(of('Hiç başlamamış'), /class="stale"/, 'never had an agent: nothing to say');
-  assert.doesNotMatch(page(dir), ROLE_WORDS);
-  assert.doesNotMatch(page(dir), /ajan|agent/i, 'plain words, no agent wording');
+  const html = page(dir);
+  assert.doesNotMatch(html, /kimse yok|no one on it|class="stale"/);
+  assert.doesNotMatch(html, ROLE_WORDS);
+  assert.doesNotMatch(html, /ajan|agent/i);
+  assert.doesNotMatch(html, /class="ag"/, 'no AI marker on a row with no AI');
 });
 
 // Owner, 2026-10-12 ("hala adı değişmedi"): a tab left on yesterday's frozen page must follow to today's. The

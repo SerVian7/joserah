@@ -240,8 +240,8 @@ per other audience. With `"artifacts": false` in config.json nothing is publishe
   adding a repeating one (the updater refuses two rows with the same title).
 - **Explicit states.** A row is one of: active work (`run`: a background agent is on it, or it is a run marked `--unattended` — a batch or
   an unattended chain, shown in Active work with no icon; when the agent ends the hook only dims its crew entry
-  and never moves the row, and a running row whose agents have all ended and that is not unattended is flagged
-  "no one on it" so staleness shows, owner (2026-10-12)), owner (the owner's decision or action, linked to the page where
+  and never moves the row; the page says nothing about a row with no AI on it, it simply has no AI marker (owner,
+  2026-10-13)), owner (the owner's decision or action, linked to the page where
   it is decided), waiting (on someone outside, no AI working), done, plan (`run`, `you`, `wait`, `ok`,
   `plan` in rows.json). With `devMode` off the page says "In progress" for agent working.
 - **The agent-working row is added in the same turn the agent is started** — never later — and moved
