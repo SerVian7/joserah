@@ -186,6 +186,10 @@ const CREW_CSS = '.crew{padding:8px 0 6px;border-bottom:1px solid var(--line)}'
 // script every detail shows under its own line. Theme tokens only. The selectors carry :is(.crew,main)
 // so they outweigh the strip's older CREW_CSS on any page, the plugin's or an outside updater's.
 const LN = ':is(.crew,main) li.crew-line';
+// A header is a project or parent line, and every top-level line with no parent: one visual level, one style
+// (owner, 2026-10-13: "stili değiştiremiyosun mu, görsel olarak onu başlık yapsana"). A single job is a group of one.
+const HDR_LINES = ['li.cat>ul.ch>li.crew-line', 'section.crew>ul>li.crew-line', '.blk>.clip>ol>li.crew-line', '.blk>details>.clip>ol>li.crew-line'];
+const HDR = [...HDR_LINES, 'li.cat>.jh', 'li.cat>details>summary'];
 const STRIP_CSS = [
   // each section is its own area (owner, 2026-10-05: "Aktif çalışma gibi alanların ayrı gözükmesi lazım
   // stilde … çocuklar için de geçerli"): a quiet surface, a hairline frame, a top band in its state's colour
@@ -198,7 +202,7 @@ const STRIP_CSS = [
   `.crew svg,${LN} svg{width:16px;height:16px}`,
   // the columns carry no gap of their own: each part brings its margin, so a part that is not there (no link,
   // a reply icon still hidden) leaves no hole
-  `${LN}{position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto auto minmax(46px,auto);grid-template-areas:"m x r l a t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
+  `${LN}{min-height:42px;position:relative;display:grid;grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto auto minmax(46px,auto);grid-template-areas:"m x r l a t";gap:0;align-items:center;margin:0;padding:9px 0;background:none;border:0;border-bottom:1px solid var(--line);font:400 14px/1.45 var(--sans)}`,
   `${LN}>.ic{grid-area:m;margin-right:12px}${LN}>.tx{grid-area:x}${LN}>.rp{grid-area:r}${LN}>.lk{grid-area:l;margin-left:12px}${LN}>time{grid-area:t;margin-left:12px}${LN}>.ag{grid-area:a;margin-left:12px}`,
   // the crew icons of a job: just left of its time (owner, 2026-10-12)
   `${LN}>.ag{display:inline-flex;align-items:center;gap:12px}${LN}>.ag>span{position:relative;display:inline-flex;align-items:center}${LN}>.ag .badge{position:absolute;top:-6px;right:-8px;min-width:14px;height:14px;padding:0 3px;background:var(--muted);color:var(--bg);font:600 10px/14px var(--mono);text-align:center}`,
@@ -253,21 +257,23 @@ const STRIP_CSS = [
   // a category line (a project group): its name and the member count, a label over its indented lines,
   // quieter than the section title above it and than the lines under it; a done or plan one folds
   'li.cat{display:block}li.cat>ul.ch,li.cat>ol{list-style:none;margin:0;padding:0}',
-  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:0 12px;padding:14px 0 6px;font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}',
-  'li.cat>details>summary{padding:10px 0 9px;border-bottom:1px solid var(--line)}li.cat>details[open]>summary{border-bottom:0;padding-bottom:6px}',
-  '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
+  // A header is a band of its own, told apart from a job row without the coloured square (owner, 2026-10-13:
+  // "Mavi kare olmasa hangisi başlık anlamam"): a tinted band with a left rule, mono capitals; a child job row
+  // stays plain sans on no band. Every line, header or job, has the same height.
+  `${HDR.join(',')}{min-height:42px;padding:0 12px;border-left:3px solid var(--muted);border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--ink) 8%,transparent)}`,
+  'li.cat>.jh,li.cat>details>summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:0 12px;color:var(--ink)}',
+  `.jt,${HDR_LINES.map((x) => x + ' .tx').join(',')}{font:700 12px/1.35 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}${HDR_LINES.map((x) => x + ':hover .tx').join(',')}{color:var(--link)}`,
+  '.jt{min-width:0;overflow-wrap:anywhere}li.cat>.jh>span:last-child,li.cat>details>summary>span:last-child{text-transform:none;letter-spacing:0;font:500 11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}',
   'li.cat>details>summary{cursor:pointer;list-style:none}li.cat>details>summary::-webkit-details-marker{display:none}',
   'li.cat>details>summary .jt::before{content:"\\25B8";display:inline-block;width:14px;font:500 11px var(--mono);color:var(--faint)}li.cat>details[open]>summary .jt::before{content:"\\25BE"}',
   'li.cat>details>summary:hover .jt{color:var(--link)}li.cat>details>summary:focus-visible{outline:1px solid var(--link);outline-offset:2px}',
   // a row heading its own category reads as the category's name, still a line that opens
-  `li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')}{padding:14px 0 6px;border-bottom:0}li.cat>ul.ch>${LN.replace(':is(.crew,main) ', '')} .tx{font:600 13px/1.35 var(--sans);letter-spacing:.01em;color:var(--muted)}`,
   // the lines of a group: an evident indented block under its name
-  'li.cat>ol,li.cat>details>ol{margin:0 0 8px 3px;padding-left:18px;border-left:2px solid var(--line)}',
+  'li.cat>ol,li.cat>details>ol{margin:0 0 0 3px;padding-left:18px;border-left:2px solid var(--line)}',
   // a child line carries a marker, so it reads as the child of the line above its block (owner, 2026-10-12)
   'li.cat>ol>li.crew-line>.ic::before{content:"\\21B3";margin-right:6px;font:500 11px var(--mono);color:var(--faint)}',
   // visible space between separate jobs (top-level lines and groups), tighter inside one parent (owner, 2026-10-12)
-  'section.crew>ul>li.crew-line,section.crew>ul>li.cat,.blk>.clip>ol>li.crew-line,.blk>.clip>ol>li.cat{margin-top:18px}',
-  'section.crew>ul>li:first-child,.blk>.clip>ol>li:first-child{margin-top:0}',
+  'section.crew>ul,.blk>.clip,.blk>details>.clip{margin-top:12px}',
   // phone width: mark, text and time on the first row, the link label under the text
   `@media (max-width:560px){${LN}{grid-template-columns:minmax(16px,auto) minmax(0,1fr) auto auto auto;grid-template-areas:"m x r a t" ". l . . .";row-gap:2px}${LN}>.lk{justify-self:start;margin-left:0}.cd{padding-left:0}li.cat>ol,li.cat>details>ol{padding-left:10px}section.crew,main .blk{padding:12px 12px 4px}}`,
 ];

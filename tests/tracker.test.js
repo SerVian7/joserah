@@ -588,22 +588,40 @@ test('a clamped list has no fade: no fade element, no fade style, the clamp cuts
 });
 // Owner, 2026-10-05: "font stilleri ayırt edici ve sade olmalı"; "Aktif çalışma gibi alanların ayrı
 // gözükmesi lazım stilde … çocuklar için de geçerli". One order: section > project group > line > meta.
-test('style: each section is its own area; the section title outweighs a group name, a group name stays calm, its lines indent', () => {
-  const { CONSOLE_CSS } = require('../tools/tracker.js');
+test('style: each section is its own area; a header is a band of its own, a child line stays plain, every line has one height', () => {
+  const { CONSOLE_CSS, STRIP_CSS } = require('../tools/tracker.js');
   const rule = (sel) => (CONSOLE_CSS.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}')) || [])[1] || '';
-  const weight = (r) => +((r.match(/font:(\d{3})/) || [])[1]);
-  const size = (r) => +((r.match(/font:\d{3} ([\d.]+)px/) || [])[1]);
   const sec = rule('main .blk>.hd,main .blk>details>summary.hd,main .crew>.hd');
-  const grp = rule('li.cat>.jh,li.cat>details>summary');
   const line = rule(':is(.crew,main) li.crew-line');
-  assert.ok(weight(sec) > weight(grp), 'the section title is heavier than a group name');
   assert.match(sec, /color:var\(--ink\)/);
-  assert.match(grp, /color:var\(--muted\)/, 'a group name is calm, not bright');
-  assert.ok(weight(grp) > weight(line), 'a group name is still told apart from its lines');
-  assert.ok(size(line) > size(grp), 'a line reads larger than its group name');
   assert.match(rule('section.crew,main .blk'), /background:var\(--card\);border:1px solid var\(--line\);border-top:3px solid/, 'a section is an area of its own');
+  // owner, 2026-10-13: a header reads as one without the coloured square: a tinted band, a left rule, mono capitals
+  const hdr = STRIP_CSS.find((c) => c.startsWith('li.cat>ul.ch>li.crew-line,'));
+  assert.ok(hdr, 'one rule for every header');
+  assert.match(hdr, /\{min-height:42px;padding:0 12px;border-left:3px solid var\(--muted\);border-bottom:1px solid var\(--line\);background:color-mix\(in srgb,var\(--ink\) 8%,transparent\)\}$/);
+  const caps = STRIP_CSS.find((c) => /^\.jt,li\.cat>ul\.ch>li\.crew-line \.tx/.test(c));
+  assert.match(caps, /\{font:700 12px\/1\.35 var\(--mono\);letter-spacing:\.08em;text-transform:uppercase;color:var\(--ink\)\}/, 'headers: mono capitals');
+  assert.doesNotMatch(line, /text-transform|background:color-mix/, 'a job row is plain sans on no band');
+  // the same one rule covers a project line, a category label, a fold, and every top-level line with no parent
+  for (const sel of ['li.cat>ul.ch>li.crew-line', 'section.crew>ul>li.crew-line', '.blk>.clip>ol>li.crew-line', 'li.cat>.jh', 'li.cat>details>summary']) assert.ok(hdr.split('{')[0].split(',').includes(sel), sel);
+  // one height for a header and a job row
+  assert.match(line, /min-height:42px/, 'a job row');
+  assert.match(hdr, /min-height:42px/, 'a header');
   assert.match(rule('li.cat>ol,li.cat>details>ol'), /padding-left:18px;border-left:2px solid var\(--line\)/, 'a group\'s lines indent under it');
   assert.doesNotMatch(CONSOLE_CSS, /li\.cat \.jh em|li\.cat summary em/, 'no running word on a group');
+});
+test('a top-level line with no parent sits where a group header sits: the same list level as the project lines', (t) => {
+  const dir = devWs(t);
+  setRows(dir, [{ state: 'run', title: 'Stream', time: '09:00' }, { state: 'run', title: 'Alt iş', parent: 'Stream', time: '09:05' }, { state: 'run', title: 'Gün sonu özeti', time: '09:10' }]);
+  crew(dir, ['--role', 'scout', '--job', 'Özet', '--state', 'work', '--row', 'Gün sonu özeti']);
+  const s = stripOf(page(dir));
+  // the project line and the loose line are both direct items of the strip's list (the rule's "section.crew>ul>"), the child is not
+  const rest = s.replace(/<li class="cat">[\s\S]*?<\/ol><\/li>\n/g, '');
+  assert.doesNotMatch(rest, />Stream|Alt iş/, 'the project and its child are inside the category');
+  assert.match(rest, /\n\s+<li class="crew-line work"[^>]*>[\s\S]*?>Gün sonu özeti<\/button>/, 'the loose line is a direct list item, beside the category');
+  assert.match(s, /<li class="cat"><ul class="ch">\n  <li class="crew-line[^>]*>[\s\S]*?>Stream <span class="n">1<\/span>/);
+  assert.match(s, /\n  <li class="crew-line work"[^>]*>[\s\S]*?>Gün sonu özeti<\/button>/, 'the loose line is a direct list item');
+  assert.match(s, /<\/ul><ol>\n  <li class="crew-line[^>]*>[\s\S]*?>Alt iş<\/button>/, 'the child is inside the parent\'s own list, a plain row');
 });
 test('waiting categories never fold; plans fold by group', (t) => {
   const dir = tmpdir(t); init(dir);
@@ -1101,8 +1119,10 @@ test('parent line: children sit after it in their own list, with a marker, and t
   const s = stripOf(page(dir));
   assert.match(s, /<li class="cat"><ul class="ch">\n[\s\S]*?>Main <span class="n">1<\/span><\/button>[\s\S]*?<\/ul><ol>\n[^\n]*>Kid<\/button>[\s\S]*?<\/ol><\/li>/, 'the children are the list right after the parent line, inside its category');
   assert.ok(STRIP_CSS.some((c) => /^li\.cat>ol>li\.crew-line>\.ic::before\{content:"\\21B3"/.test(c)), 'a child marker');
-  assert.ok(STRIP_CSS.some((c) => /section\.crew>ul>li\.crew-line,section\.crew>ul>li\.cat[^{]*\{margin-top:18px\}/.test(c)), 'a gap between jobs and between groups');
-  assert.ok(STRIP_CSS.some((c) => /li\.cat>ol,li\.cat>details>ol\{margin:0 0 8px/.test(c)), 'children stay tight inside one parent');
+  // owner, 2026-10-13: the group bands stack with a hairline only, the first one a little below the section title
+  assert.ok(STRIP_CSS.some((c) => /^section\.crew>ul,\.blk>\.clip,\.blk>details>\.clip\{margin-top:12px\}$/.test(c)), 'room under the section title');
+  assert.ok(!STRIP_CSS.some((c) => /margin-top:18px/.test(c)), 'no gap between bands');
+  assert.ok(STRIP_CSS.some((c) => /li\.cat>ol,li\.cat>details>ol\{margin:0 0 0 3px/.test(c)), 'a group\'s children run straight into the next band');
   assert.ok(STRIP_CSS.some((c) => /li\.cat>ol\[hidden\]\{display:none\}/.test(c)), 'a closed parent hides the list');
 });
 test('the panel script: a parent line starts open, its toggle folds its children, other lines leave it alone', () => {
