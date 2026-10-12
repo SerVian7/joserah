@@ -183,3 +183,10 @@ test('crew off with --check removes nothing', (t) => {
   assert.strictEqual(r.status, 0);
   assert.ok(fs.existsSync(agent(dir, 'lead')), '--check never writes or removes');
 });
+
+test('no crew template, skill, hook or prompt names the retired tools/tracker.js', () => {
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  for (const dir of ['templates', 'skills', 'hooks', 'agents']) {
+    for (const f of walk(path.join(PLUGIN_ROOT, dir))) assert.ok(!/tools\/tracker\.js/.test(fs.readFileSync(f, 'utf8')), `${f} still names tools/tracker.js`);
+  }
+});
