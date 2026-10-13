@@ -72,6 +72,29 @@ A wave with one folder or one stage gets no manager: the layer costs a full agen
 - The final report to the owner and the publish step stay with you: the manager writes the
   report file, you publish it.
 
+### Link workers
+
+A small agent is the link between the work agent and the owner, not a worker. It follows the work
+agent's lines (started, running, finished, stalled) and keeps the page and the Tracker row in step with
+them. The work agent runs the commands and checks the results; the link worker never runs a command, a
+test or a check, and sends a result on only as the work agent gave it. One spawn is one batch of lines.
+A large data file is patched in place (Grep for the spot, Read a window around it, Edit it), never read or written whole;
+a small file (a Tracker row, a log) is written whole.
+
+Its definition is lean, because an agent that inherits everything starts a conversation at tens of thousands
+of tokens (measured here: ~65K with every tool, the skill listing and the CLAUDE.md files; ~7K with the three
+lines below):
+
+```yaml
+tools: Read, Grep, Edit, Write, SendMessage
+disallowedTools: mcp__*
+omitClaudeMd: true
+```
+
+`tools` is an allowlist, so name only what the job needs; the brief and the definition's body carry every rule
+the agent needs, since it reads no CLAUDE.md. The agent list is read when the session starts: a changed
+definition reaches the next session, not the running one.
+
 ## Crew
 
 Off by default; `"crew": true` in `.joserah/config.json` switches it on (a `crew` block of overrides

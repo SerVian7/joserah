@@ -4,8 +4,11 @@
 // headless CLI 2.1.251 does not load AGENTS.md at all, does load CLAUDE.md and
 // expands its @ imports whole (a 59,928-byte file arrived), while any single
 // hook command over 10,000 characters is replaced by a ~2,000-character stub.
-// Also measured: started from a SUBFOLDER, the parent CLAUDE.md loads but its
-// @ imports do not expand — so the hook stands down only at the workspace root.
+// Also measured on 2.1.251: started from a SUBFOLDER, the parent CLAUDE.md loads
+// but its @ imports do not expand. Re-measured 2026-10-13 on 2.1.296: they DO
+// expand from a subfolder (a marker line in directives.md reached a headless
+// session started in <ws>/sub), so the hook stands down there too and a
+// subagent spawned from a subfolder no longer gets role + directives twice.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -89,12 +92,15 @@ test('at the workspace root the hook leaves the imported layers to CLAUDE.md', (
   }
 });
 
-test('the hook still injects every layer without the stub, or from a subfolder', (t) => {
+test('the hook leaves the imported layers to CLAUDE.md from a subfolder too, and injects them without the stub', (t) => {
   const dir = ws(t);
   fs.mkdirSync(path.join(dir, 'projects', 'p'), { recursive: true });
-  const sub = standing(path.join(dir, 'projects', 'p'));
-  assert.match(sub, /DIRECTIVE-MARKER/, 'a parent CLAUDE.md\'s imports do not expand in a subfolder');
-  assert.match(sub, /\(JOSERAH-ROLE\.md\)/);
+  for (const args of [[], ['subagent']]) {
+    const sub = standing(path.join(dir, 'projects', 'p'), args);
+    assert.doesNotMatch(sub, /DIRECTIVE-MARKER/, 'CLAUDE.md imports expand from a subfolder (2.1.296): sent once');
+    assert.doesNotMatch(sub, /\(JOSERAH-ROLE\.md\)/);
+    assert.match(sub, /## This workspace/, 'identity stays in the hook');
+  }
 
   fs.rmSync(claudeMd(dir));
   const bare = standing(dir);

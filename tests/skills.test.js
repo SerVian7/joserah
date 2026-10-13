@@ -313,3 +313,26 @@ test('orchestrate: every Tracker job names its project group and never repeats i
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
   assert.match(text, /`project` is the group; the title never repeats it/);
 });
+
+// 2026-10-13 (owner): a one-job worker's start cost was ~65K tokens because it
+// inherited every tool, the skill listing and the CLAUDE.md files; with a
+// `tools` allowlist, `disallowedTools: mcp__*` and `omitClaudeMd` it starts at
+// ~7K. And a small agent is the link between the work agent and the owner, not
+// a worker: it follows the work agent's lines and keeps page and Tracker in
+// step; it runs nothing and checks nothing.
+test('orchestrate carries the link-worker template: lean frontmatter, no commands, no checking', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
+  const i = text.indexOf('### Link workers');
+  assert.ok(i >= 0, 'missing: ### Link workers');
+  const section = text.slice(i, text.indexOf('\n## ', i));
+  const yaml = /```yaml\n([\s\S]*?)```/.exec(section);
+  assert.ok(yaml, 'no frontmatter template');
+  assert.match(yaml[1], /^tools: Read, Grep, Edit, Write, SendMessage$/m);
+  assert.match(yaml[1], /^disallowedTools: mcp__\*$/m);
+  assert.match(yaml[1], /^omitClaudeMd: true$/m);
+  assert.doesNotMatch(yaml[1], /Bash|PowerShell/, 'a link worker runs no commands');
+  const flat = section.replace(/\s+/g, ' ');
+  assert.match(flat, /never runs a command, a test or a check/);
+  assert.match(flat, /agent list is read when the session starts/);
+  assert.match(flat, /never read or written whole/, 'a large data file is patched in place');
+});

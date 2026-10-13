@@ -154,10 +154,10 @@ const parts = [];
 // through CLAUDE.md, whole and without this command's 10,000-character cliff,
 // so it is not sent a second time here. Everything else stays: the identity
 // block and the agent overlay are always this hook's, and a workspace with no
-// stub, an owner-written CLAUDE.md that imports nothing, or a session started
-// in a subfolder (where the imports do not expand) gets every layer from here
-// exactly as before. See CLAUDE_MD in lib/standing-context.js.
-const viaClaudeMd = layersViaClaudeMd(ROOT, process.cwd());
+// stub or an owner-written CLAUDE.md that imports nothing
+// gets every layer from here exactly as before. A session started in a subfolder
+// also gets the imports through CLAUDE.md (re-measured on 2.1.296). See CLAUDE_MD in lib/standing-context.js.
+const viaClaudeMd = layersViaClaudeMd(ROOT);
 
 const role = viaClaudeMd.has('JOSERAH-ROLE.md') ? '' : roleBlock(ROOT);
 if (role) parts.push(role.trim());

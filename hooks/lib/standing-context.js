@@ -193,9 +193,12 @@ function standingContextSize(root) {
 // and expanded an @ import in it whole — 59,928 bytes arrived, with no cliff —
 // while a hook command over 10,000 characters arrives as a ~2,000-character
 // stub. So the files travel this way and the hook stands down for them.
-// Also measured on 2.1.251: from a SUBFOLDER of the workspace, the parent
-// CLAUDE.md loads but its @ lines are not expanded. That is why the hook stands
-// down only when the session starts at the workspace root (layersViaClaudeMd).
+// On 2.1.251 a session started in a SUBFOLDER loaded the parent CLAUDE.md
+// without expanding its @ lines, so the hook stood down only at the root.
+// Re-measured 2026-10-13 on 2.1.296: from a subfolder the imports expand, so
+// the hook stands down there too; sent twice, role + directives cost a subagent
+// ~1.7K tokens (layersViaClaudeMd). A subagent with `omitClaudeMd` reads no
+// CLAUDE.md at all and so gets none of these layers: that is the point of it.
 // .joserah/agent.md is not imported: only the text below its marker is the
 // owner's overlay, the rest is the shipped explanation, so it stays in the hook.
 const CLAUDE_MD_MARKER = '<!-- joserah:claude-md';
@@ -213,10 +216,10 @@ function claudeMdImports(root) {
 }
 
 // The layers this session already gets through CLAUDE.md, so the hook must not
-// send them again. Empty unless the session starts at the workspace root —
-// see the subfolder measurement above.
-function layersViaClaudeMd(root, cwd) {
-  return path.resolve(cwd) === path.resolve(root) ? claudeMdImports(root) : new Set();
+// send them again. Any cwd inside the workspace: Claude Code walks up to the
+// root CLAUDE.md and expands its @ lines (see the subfolder measurement above).
+function layersViaClaudeMd(root) {
+  return claudeMdImports(root);
 }
 
 // Install or refresh the stub. A CLAUDE.md without the marker is the owner's
