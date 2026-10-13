@@ -204,6 +204,8 @@ owner speaks:
 
 ## Trackers
 
+
+**The job file changes in the same command as the work** (owner, 2026-10-13): a job's file is written inside the very command that starts, changes or finishes it, never as a separate later step; before every reply, the running jobs are compared with what actually runs and every mismatch fixed.
 **The Daily Tracker is one living page** (owner, 2026-10-13), on unless `.joserah/config.json` says `"dailyTracker": false`. It is
 drawn from job files, one per job, in `.joserah/desk/jobs/` and served from `.joserah/desk/artifacts/tracker/`
 (set up once with `node "${CLAUDE_PLUGIN_ROOT}/tools/jobs-install.js"`). You write jobs, the hooks write who is working, the
