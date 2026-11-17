@@ -313,3 +313,17 @@ test('orchestrate: every Tracker job names its project group and never repeats i
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
   assert.match(text, /`project` is the group; the title never repeats it/);
 });
+
+// 0.21.0 (owner, 2026-11-17): the 1Password skills ship inside the plugin; whoever wants them, uses them.
+test('the four 1Password skills ship with the plugin', () => {
+  for (const name of ['onepw-install', 'onepw-add-key', 'onepw-secrets', 'onepw-research']) {
+    assert.ok(SKILLS.includes(name), `skills/${name} is missing`);
+  }
+});
+
+// Owner, 2026-11-17: "Sürekli link atıp durma defaultta." The Tracker stays; the reply link is opt-in.
+test('orchestrate ends a reply with the Tracker link only when replyLink is on', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(text, /every reply ends with its link./);
+  assert.ok(text.includes('a reply ends with its link only when `"replyLink": true`'));
+});
