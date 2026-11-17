@@ -119,7 +119,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, src);
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), src.text);
   let cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 30);
+  assert.strictEqual(cfg.promptVersion, 31);
   assert.strictEqual(cfg.promptSha256, prompt.promptSha(src.text));
 
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'untouched\n');
@@ -127,7 +127,7 @@ test('installPrompt writes the file and records version + sha; recordOnly leaves
   prompt.installPrompt(dir, other, { recordOnly: true });
   assert.strictEqual(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), 'untouched\n');
   cfg = readCfg(dir);
-  assert.strictEqual(cfg.promptVersion, 30);
+  assert.strictEqual(cfg.promptVersion, 31);
 });
 
 // ---- refresh-prompt.js -------------------------------------------------------
@@ -262,7 +262,7 @@ test('pluginVersions reads the installed plugin and the marketplace clone, null 
 
 test('prompt v19 carries the claim-line obligations, the role default, the vault, and names no third-party skill', () => {
   const text = fs.readFileSync(TEMPLATE, 'utf8');
-  assert.strictEqual(prompt.readPromptVersion(text), 30);
+  assert.strictEqual(prompt.readPromptVersion(text), 31);
   assert.ok(text.includes('**with the crew on** (off by default; on when `crew` is true)'), '§5 (v29): the crew is off by default (owner, 2026-10-05)');
   assert.ok(text.includes('added in the same turn an agent is started, never later'), '§5 (v24): the agent-working row is added in the same turn (owner, 2026-10-02)');
   assert.ok(text.includes('A page stands on its own — assume the owner reads neither chat nor agent output'), '§5 (v24): pages stand on their own (owner, 2026-10-02)');
@@ -273,7 +273,9 @@ test('prompt v19 carries the claim-line obligations, the role default, the vault
   assert.ok(text.includes('a missing price never blocks the evaluation'), '§5 (v23): evaluations go on pages, not chat (owner, 2026-10-02)');
   assert.ok(text.includes('one small JSON file per job in `.joserah/desk/jobs/`, written whole with no read first'), '§5 (v30): the Tracker is job files (owner, 2026-10-13)');
   assert.ok(text.includes('is already a `you` job file there, linked to the page where it is decided — never only in chat.'), '§2 (v20): what is left for the owner is a Daily Tracker row at once (owner, 2026-10-01)');
-  assert.ok(text.includes('While a Daily Tracker is open, the reply ends with its link, and'), '§2 (v19): every reply ends with the Daily Tracker link (owner, 2026-10-01)');
+  assert.ok(text.includes('While a Daily Tracker is open, whatever you leave for the owner'), '§2 (v20): what is left for the owner is a job file');
+  assert.ok(text.includes('The reply ends with its link only when `replyLink` is true in config'), '§2 (v31): the reply link is opt-in (owner, 2026-11-17)');
+  assert.doesNotMatch(text, /the reply ends with its link, and/, '§2 (v31): no reply link by default');
   assert.ok(text.includes('shows it on sale now'), '§2 (v19): a product is proposed only when on sale now (owner, 2026-10-01)');
   assert.ok(text.includes('only recorded brand assets, a missing brand decision left out and listed'), '§2 (v19): brand elements never improvised (owner, 2026-10-01)');
   assert.ok(text.includes('also goes into its base — template, updater — in the same turn, unasked'), '§5 (v19): a shape correction reaches the base (owner, 2026-10-01)');

@@ -210,7 +210,7 @@ owner speaks:
 drawn from job files, one per job, in `.joserah/desk/jobs/` and served from `.joserah/desk/artifacts/tracker/`
 (set up once with `node "${CLAUDE_PLUGIN_ROOT}/tools/jobs-install.js"`). You write jobs, the hooks write who is working, the
 page draws everything and `tools/jobs-check.js` (run by a hook on every write) enforces the rules: no layout rule lives in this prompt.
-Never ask about the Tracker, never announce it; every reply ends with its link.
+Never ask about the Tracker, never announce it; a reply ends with its link only when `"replyLink": true` is in `.joserah/config.json` (off by default, owner 2026-11-17).
 
 - **One file per job**, `jobs/<slug>.json` (lowercase ascii and dashes), written whole with the Write tool, no read first; an update overwrites that one file:
   `{"title","project","state","note","url","label","unattended","started","finished"}`. `project` is the group; the title never repeats it.

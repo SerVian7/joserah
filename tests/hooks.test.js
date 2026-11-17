@@ -759,7 +759,8 @@ test('the subagent marker emits SubagentStart with a worker payload', (t) => {
   assert.ok(worker.includes('You may open sub-agents of your own under the same rules: a brief each, never two on one folder or file, a checkpoint file for long work.'), 'the nesting sentence');
   assert.doesNotMatch(worker, /do not delegate/i, 'nested delegation is allowed (owner, 2026-10-01)');
   assert.doesNotMatch(worker, /Daily Tracker/, 'a worker does not keep the owner tracker');
-  assert.ok(lead.includes("Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; end every reply with its link. How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
+  assert.ok(lead.includes("Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; replies do not end with its link (on with `\"replyLink\": true` in .joserah/config.json). How: the orchestrate skill, \"Trackers\". Off when `\"dailyTracker\": false` in .joserah/config.json."), 'Daily Tracker is on by default');
+  assert.doesNotMatch(lead, /end every reply/, 'no reply link by default (owner, 2026-11-17)');
   assert.match(lead, /Open by greeting/, 'the main session is unchanged');
   assert.match(lead, /you sign/);
   assert.doesNotMatch(lead, /You are a worker/);
@@ -780,15 +781,23 @@ test('dailyTracker: false removes the Daily Tracker line from the main session',
   assert.match(JSON.parse(on.stdout).hookSpecificOutput.additionalContext, /Daily Tracker: on/, 'only false turns it off');
 });
 
-test('trackerUrl: every reply ends with that URL instead of "its link"', (t) => {
+// Owner, 2026-11-17: "Sürekli link atıp durma defaultta." The reply link is opt-in.
+test('replyLink: true ends every reply with trackerUrl (or "its link"); trackerUrl alone adds no link', (t) => {
   const dir = hookWs(t);
   const cfgPath = path.join(dir, '.joserah', 'config.json');
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  cfg.trackerUrl = 'http://100.98.118.101:8787/';
+  const ctx = () => JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
+  cfg.trackerUrl = 'http://127.0.0.1:8787/';
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-  const c = JSON.parse(runHook('session-start.js', dir).stdout).hookSpecificOutput.additionalContext;
-  assert.ok(c.includes('end every reply with http://100.98.118.101:8787/. How:'), c);
+  assert.doesNotMatch(ctx(), /end every reply/, 'trackerUrl alone turns nothing on');
+  cfg.replyLink = true;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  const c = ctx();
+  assert.ok(c.includes('end every reply with http://127.0.0.1:8787/. How:'), c);
   assert.doesNotMatch(c, /tracker.md/);
+  delete cfg.trackerUrl;
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  assert.ok(ctx().includes('end every reply with its link. How:'));
 });
 
 test('sharedMemoryAutoPush: true adds the auto-push line to the main session; off by default (owner, 2026-10-01)', (t) => {

@@ -104,8 +104,12 @@ if (!WORKER) who.push(cfg.assistantName
 // Owner decisions 2026-10-01 and 2026-10-13: the Daily Tracker is native, automatic, quiet and opt-out; since
 // 2026-10-13 one living page drawn from job files (desk/jobs). Main session only (a worker does not keep it);
 // on unless config.json says `"dailyTracker": false`. `trackerUrl` is the link the workspace serves it at.
+// Owner, 2026-11-17 ("Sürekli link atıp durma defaultta"): the reply link is opt-in, `"replyLink": true`.
 if (!WORKER && cfg.dailyTracker !== false) {
-  who.push('Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; end every reply with ' + (cfg.trackerUrl || 'its link') + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
+  const link = cfg.replyLink === true
+    ? 'end every reply with ' + (cfg.trackerUrl || 'its link')
+    : 'replies do not end with its link (on with `"replyLink": true` in .joserah/config.json)';
+  who.push('Daily Tracker: on — one small JSON file per job in .joserah/desk/jobs/, written whole with no read first (the hooks write who is working, a static page draws it); never ask about it, never announce it; ' + link + '. How: the orchestrate skill, "Trackers". Off when `"dailyTracker": false` in .joserah/config.json.');
 }
 // Owner decision 2026-10-01: a per-workspace opt-in. Off (absent or anything but
 // true) keeps the standing rule: a shared-memory push waits for the owner's yes.
