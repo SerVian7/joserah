@@ -3,6 +3,13 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.21.0
+
+0.21.0 — the 1Password skills ship with Joserah, and replies stop ending with the Tracker link. Owner, 2026-11-17.
+
+- **Four 1Password skills, built in.** `onepw-install` sets a computer up to SSH into the team's machines through 1Password, `onepw-add-key` creates and puts on a machine's key, `onepw-secrets` reads and saves passwords and tokens without ever showing them, and `onepw-research` finds secrets lying in plain text and moves them in after your yes. Nothing changes until you use them; whoever wants them, uses them.
+- **No link at the end of every reply.** The Daily Tracker is kept as before (job files, the page), but replies no longer end with its link by default. Set `"replyLink": true` in `.joserah/config.json` to have them do so again (with `trackerUrl`, that address). Prompt v31. Run `/joserah:update`.
+
 ## 0.20.0
 
 0.20.0 — the Tracker is one living page drawn from job files. Owner, 2026-10-13.
