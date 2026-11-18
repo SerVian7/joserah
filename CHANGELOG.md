@@ -3,6 +3,14 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.22.0
+
+0.22.0 — Joserah Connect: assistants on different machines talk to each other directly. Owner, 2026-11-18.
+
+- **Pair two machines, no server in between.** Each machine runs a small connection tool inside Joserah. One side asks to pair with the other's address and a name; the other side's owner sees "<name> wants to pair, code 123456" and says yes or no. Both sides show the same six-digit code; if the codes differ, refuse. There is no password to hand out.
+- **Messages and files, encrypted end to end.** Messages wait until they are read; an arriving message never starts or wakes a session, and a one-line count shows what is unread. Small files (up to 10 MB) arrive by themselves; a larger file waits for the owner's yes. Every file is checked when it lands, and nothing received is ever opened or run.
+- **Any shared network.** It listens on every network the machine is on (office LAN, Tailscale) and tries a peer's known addresses in turn. To start: `node "<plugin>/tools/connect.js" setup --name <name>`, then restart the session. The `joserah-connect` skill says how to use it.
+
 ## 0.21.1
 
 0.21.1 — screen work goes to the smallest model, under a manager. Owner, 2026-11-18.
