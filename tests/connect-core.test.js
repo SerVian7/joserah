@@ -395,12 +395,12 @@ test('store helpers: sanitizeName, validPeerName, pruneByAge, notice lines, json
   assert.strictEqual(store.sanitizeName('a<b>:c"d|e?f*.txt'), 'abcdef.txt');
   assert.strictEqual(store.sanitizeName('...'), 'file');
   assert.strictEqual(store.sanitizeName('x'.repeat(300)).length, 200);
-  for (const n of ['yusuf', 'a.b_c-9']) assert.strictEqual(store.validPeerName(n), true);
-  for (const n of ['', 'Yusuf', 'a b', '../x', 'x'.repeat(41), 'a/b', null]) assert.strictEqual(store.validPeerName(n), false, String(n));
+  for (const n of ['peerone', 'a.b_c-9']) assert.strictEqual(store.validPeerName(n), true);
+  for (const n of ['', 'Peer', 'a b', '../x', 'x'.repeat(41), 'a/b', null]) assert.strictEqual(store.validPeerName(n), false, String(n));
   const now = Date.now();
   assert.strictEqual(store.pruneByAge([{ created: new Date(now - 11 * 60000).toISOString() }, { created: new Date(now - 60000).toISOString() }], now).length, 1);
   const root = tmpdir(t);
-  const m = store.appendMessage(root, 'yusuf', { dir: 'in', text: 'file received: a.txt, 3', kind: 'notice' });
+  const m = store.appendMessage(root, 'peerone', { dir: 'in', text: 'file received: a.txt, 3', kind: 'notice' });
   assert.strictEqual(m.kind, 'notice');
   assert.throws(() => store.appendMessage(root, '../evil', { dir: 'in', text: 'x' }));
   const f = path.join(root, 'sub', 'x.json');

@@ -143,31 +143,31 @@ test('hook: silent outside a workspace and without a connect folder', (t) => {
 test('hook: one line with counts, never message text or file names', (t) => {
   const ws = wsWith(t, true);
   const c = path.join(ws, '.joserah', 'connect');
-  fs.writeFileSync(path.join(c, 'messages', 'yusuf.jsonl'),
+  fs.writeFileSync(path.join(c, 'messages', 'peerone.jsonl'),
     lines([inMsg('1', MARKER), inMsg('2', MARKER), { id: '3', dir: 'out', text: MARKER, at: 'x' }]));
   fs.writeFileSync(path.join(c, 'messages', 'laptop.jsonl'), lines([inMsg('4', MARKER)]));
   fs.writeFileSync(path.join(c, 'offers.json'), JSON.stringify([
-    { id: 'o1', peer: 'yusuf', name: MARKER + '.bin', size: 5, sha256: 'x', created: new Date().toISOString() },
-    { id: 'o2', peer: 'yusuf', name: 'old.bin', size: 5, sha256: 'x', created: new Date(Date.now() - 11 * 60000).toISOString() },
+    { id: 'o1', peer: 'peerone', name: MARKER + '.bin', size: 5, sha256: 'x', created: new Date().toISOString() },
+    { id: 'o2', peer: 'peerone', name: 'old.bin', size: 5, sha256: 'x', created: new Date(Date.now() - 11 * 60000).toISOString() },
   ]));
   const r = runHook(ws);
   assert.strictEqual(r.status, 0, r.stderr);
   const out = r.stdout.trim();
   assert.strictEqual(out.split('\n').length, 1);
   assert.match(out, /^\[connect\] /);
-  assert.match(out, /2 unread from yusuf/);
+  assert.match(out, /2 unread from peerone/);
   assert.match(out, /1 from laptop/);
-  assert.match(out, /1 file offer from yusuf/);
+  assert.match(out, /1 file offer from peerone/);
   assert.ok(!out.includes(MARKER), 'no message text or file name');
 });
 
 test('hook: messages already counted in read.json are not counted', (t) => {
   const ws = wsWith(t, true);
   const c = path.join(ws, '.joserah', 'connect');
-  fs.writeFileSync(path.join(c, 'messages', 'yusuf.jsonl'), lines([inMsg('1', 'a'), inMsg('2', 'b'), inMsg('3', 'c')]));
-  fs.writeFileSync(path.join(c, 'read.json'), JSON.stringify({ yusuf: 2 }));
-  assert.match(runHook(ws).stdout, /1 unread from yusuf/);
-  fs.writeFileSync(path.join(c, 'read.json'), JSON.stringify({ yusuf: 3 }));
+  fs.writeFileSync(path.join(c, 'messages', 'peerone.jsonl'), lines([inMsg('1', 'a'), inMsg('2', 'b'), inMsg('3', 'c')]));
+  fs.writeFileSync(path.join(c, 'read.json'), JSON.stringify({ peerone: 2 }));
+  assert.match(runHook(ws).stdout, /1 unread from peerone/);
+  fs.writeFileSync(path.join(c, 'read.json'), JSON.stringify({ peerone: 3 }));
   assert.strictEqual(runHook(ws).stdout, '');
 });
 
@@ -238,7 +238,7 @@ test('cli status shows fingerprints and counts, never a key', (t) => {
   const ws = wsWith(t, true);
   const c = path.join(ws, '.joserah', 'connect');
   fs.writeFileSync(path.join(c, 'config.json'), JSON.stringify({ name: 'laptop', port: 4790 }));
-  fs.writeFileSync(path.join(c, 'peers.json'), JSON.stringify({ yusuf: { pub: 'PUBKEY-MARKER', keyid: 'abcd1234abcd1234', addresses: ['10.0.0.5'], port: 4790, since: 'x' } }));
+  fs.writeFileSync(path.join(c, 'peers.json'), JSON.stringify({ peerone: { pub: 'PUBKEY-MARKER', keyid: 'abcd1234abcd1234', addresses: ['10.0.0.5'], port: 4790, since: 'x' } }));
   fs.writeFileSync(path.join(c, 'pending.json'), JSON.stringify([{ id: 'p1', username: 'z', code: '123456', created: new Date().toISOString() }]));
   fs.mkdirSync(path.join(ws, 'keys'), { recursive: true });
   const keys = JSON.stringify({ identity: { private: 'PRIVATE-KEY-MARKER', public: 'PUBKEY-MARKER' } });
@@ -247,7 +247,7 @@ test('cli status shows fingerprints and counts, never a key', (t) => {
   assert.strictEqual(r.status, 0, r.stderr);
   assert.match(r.stdout, /laptop/);
   assert.match(r.stdout, /all interfaces/);
-  assert.match(r.stdout, /yusuf \(abcd1234abcd1234\)/);
+  assert.match(r.stdout, /peerone \(abcd1234abcd1234\)/);
   assert.match(r.stdout, /pending: 1/);
   for (const secret of ['PRIVATE-KEY-MARKER', 'PUBKEY-MARKER']) assert.ok(!(r.stdout + r.stderr).includes(secret), secret);
   fs.writeFileSync(path.join(c, 'config.json'), JSON.stringify({ name: 'laptop', port: 4790, bind: ['127.0.0.1'] }));

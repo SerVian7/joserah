@@ -6,7 +6,7 @@ Node >= 18, no dependencies, CommonJS, `'use strict'`, built-in `crypto` only. E
 ## Requirements (owner's words, not negotiable)
 
 - One small MCP server per machine, shipped in the plugin.
-- "Pair şifresi gerekmiyor. Yusuf eşleşmek istiyor der." The joining side gives the other machine's address and
+- "Pair şifresi gerekmiyor. <isim> eşleşmek istiyor der." The joining side gives the other machine's address and
   the username to join as. The other side records a **pending** request; its assistant tells its owner
   "<username> wants to pair, code 482913"; **its owner approves or refuses**. Approval alone creates the pair.
 - "Her nic desteklesin ... mesajlar ve dosyalar şifreli gitsin." The listener accepts on every interface by
