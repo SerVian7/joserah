@@ -64,6 +64,16 @@
             "shell": "bash"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/connect-unread.js\"",
+            "shell": "bash"
+          }
+        ]
       }
     ],
     "PreToolUse": [

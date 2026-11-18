@@ -15,5 +15,13 @@
     "memory",
     "workspace",
     "pkm"
-  ]
+  ],
+  "mcpServers": {
+    "joserah-connect": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/tools/connect/mcp.js"
+      ]
+    }
+  }
 }
