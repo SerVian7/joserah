@@ -3,6 +3,12 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.21.1
+
+0.21.1 — screen work goes to the smallest model, under a manager. Owner, 2026-11-18.
+
+- **Screens are driven by small workers.** Work on a screen (KVM, BIOS, installers, remote desktop) now runs on the smallest model that can do it, one small job each, while a medium-tier manager splits the job, checks each report against the screenshot and keeps the running state in one file. The main session no longer clicks through screens itself.
+
 ## 0.21.0
 
 0.21.0 — the 1Password skills ship with Joserah, and replies stop ending with the Tracker link. Owner, 2026-11-17.

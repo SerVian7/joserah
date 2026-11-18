@@ -47,6 +47,12 @@ message on the same topic instead of a fresh brief. Truly independent pieces may
 each with its own files; rule 6 (the machine's capacity) bounds how many. Near ~300k of context the
 main session leaves a handoff and a new chat continues.
 
+**Screen work goes to the simple tier.** Work on a screen (a KVM, a BIOS, an installer, a remote
+desktop: screenshots, key presses, clicks) runs on the smallest model that can do it, one small job
+per worker, with a small context and no blocking waits. A medium-tier manager splits the job, briefs
+those workers, checks each report against the screenshot itself, and keeps the running state in one
+file. The main session never chains screen actions itself (owner, 2026-11-18).
+
 ### A manager for a wave
 
 With the crew off only (with it on, Lead runs every wave). When a wave has several independent folders or stages, brief **one Manager** for it at heavy

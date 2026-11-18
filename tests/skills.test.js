@@ -327,3 +327,13 @@ test('orchestrate ends a reply with the Tracker link only when replyLink is on',
   assert.doesNotMatch(text, /every reply ends with its link./);
   assert.ok(text.includes('a reply ends with its link only when `"replyLink": true`'));
 });
+
+// Owner, 2026-11-18: "Haiku yapsın abi biliyosun. Sonnet yönetsin bunları." Screen work goes to the
+// smallest tier in small jobs, a medium-tier manager checks each against the screenshot.
+test('orchestrate sends screen work to simple-tier workers under a medium-tier manager', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'orchestrate', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+  assert.ok(text.includes('**Screen work goes to the simple tier.**'));
+  assert.ok(text.includes('A medium-tier manager splits the job'));
+  assert.ok(text.includes('against the screenshot itself'));
+  assert.ok(text.includes('The main session never chains screen actions itself'));
+});
