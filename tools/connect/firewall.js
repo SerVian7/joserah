@@ -98,4 +98,21 @@ async function ensure(dir, port, opts = {}) {
   };
 }
 
-module.exports = { check, isAdmin, addRule, writeBat, ensure };
+// At most one firewall question per week per device. `root` = the device folder (firewall.json remembers the answer),
+// `dir` = where a .bat would go. -> null when skipped (off, or asked within 7 days), else { state, note? }; the note
+// (what to tell the person) exists only for a .bat they have to run. `opts.ensure`/`opts.now`/`opts.off` are for tests.
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+async function once(root, dir, port, opts = {}) {
+  const { now = Date.now, off = process.env.JOSERAH_CONNECT_FIREWALL === 'off', ensure: run = ensure } = opts;
+  if (off) return null;
+  const store = require('./store');
+  const file = path.join(store.connectDir(root), 'firewall.json');
+  const last = store.readJson(file, {}) || {};
+  if (last.at && now() - Date.parse(last.at) < WEEK_MS) return null;
+  let r;
+  try { r = await run(dir, port, { run: opts.run, platform: opts.platform }); } catch { r = { state: 'unknown' }; }
+  store.writeJson(file, { at: new Date(now()).toISOString(), state: r.state, port });
+  return { state: r.state, ...(r.state === 'bat' && r.say ? { note: r.say } : {}) };
+}
+
+module.exports = { check, isAdmin, addRule, writeBat, ensure, once };

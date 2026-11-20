@@ -30,4 +30,16 @@ function targets(address, peers) {
   return hit.map(([peer]) => ({ peer, to }));
 }
 
-module.exports = { parse, targets };
+// The addresses a peers.json offers, for an error message: person/device (or the flat name), then its sessions.
+function known(peers, max = 30) {
+  const out = [];
+  for (const [k, r] of Object.entries(peers || {})) {
+    if (!r || typeof r !== 'object') continue;
+    const a = r.person && r.device ? r.person + '/' + r.device : k;
+    out.push(a, ...(Array.isArray(r.sessions) ? r.sessions.map((s) => a + '/' + s) : []));
+  }
+  return out.slice(0, max);
+}
+const unknown = (address, peers) => 'no such peer: ' + String(address).slice(0, 80) + '; known addresses: ' + (known(peers).join(', ') || 'none');
+
+module.exports = { parse, targets, known, unknown };

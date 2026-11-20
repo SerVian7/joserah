@@ -6,11 +6,13 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { validPeerName } = require('./store');
+const crypto = require('crypto');
+const store = require('./store');
+const { validPeerName } = store;
 
 const DIR_NAME = '.joserah-connect';
 const BACKUP = '.v1-backup';
-const V1_LISTS = ['peers.json', 'pending.json', 'outgoing.json', 'offers.json', 'sending.json'];
+const V1_LISTS = ['peers.json', 'pending.json', 'outgoing.json', 'offers.json', 'sending.json', 'outbox.json', 'seen.json', 'delivered.json'];
 const TURKISH = { 'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ı': 'i', 'İ': 'i', 'ö': 'o', 'Ö': 'o', 'ş': 's', 'Ş': 's', 'ü': 'u', 'Ü': 'u' };
 
 function slug(s) {
@@ -25,7 +27,7 @@ function readJson(file, fallback) {
 }
 function writeFile(file, data, mode) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const tmp = file + '.tmp';
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, data, mode ? { mode } : undefined);
   fs.renameSync(tmp, file);
 }
@@ -34,10 +36,10 @@ function deviceDir(home, person) {
   if (!validPeerName(person) || /^\.+$/.test(person)) throw new Error('bad person');
   return path.join(home, DIR_NAME, person);
 }
-const isDeviceRoot = (p) => typeof p === 'string' && path.basename(path.dirname(path.resolve(p))) === DIR_NAME;
+const isDeviceRoot = (p) => typeof p === 'string' && store.isDeviceRoot(p);
 
 // Pure: reads the workspace config (and, for owner trust, the device folder's config). Creates nothing.
-function resolve(wsRoot, { home = os.homedir(), hostname = os.hostname() } = {}) {
+function resolve(wsRoot, { home = process.env.JOSERAH_CONNECT_HOME || os.homedir(), hostname = os.hostname() } = {}) {
   const cfg = readJson(path.join(wsRoot, '.joserah', 'config.json'), {}) || {};
   const mode = cfg.trust === 'owner' ? 'owner' : 'guest';
   const person = slug(cfg.ownerName) || 'owner';
@@ -51,7 +53,7 @@ function resolve(wsRoot, { home = os.homedir(), hostname = os.hostname() } = {})
 
 // One-time, idempotent move of v1 state into the person's device folder (owner trust only).
 // -> { migrated, conflict?, invalid?, moved:[file names] }; never carries a key.
-function migrate(wsRoot, { home = os.homedir(), hostname = os.hostname() } = {}) {
+function migrate(wsRoot, { home = process.env.JOSERAH_CONNECT_HOME || os.homedir(), hostname = os.hostname() } = {}) {
   const none = { migrated: false, moved: [] };
   const r = resolve(wsRoot, { home, hostname });
   if (r.mode !== 'owner') return none;
@@ -83,7 +85,7 @@ function migrate(wsRoot, { home = os.homedir(), hostname = os.hostname() } = {})
       } else writeFile(dst, fs.readFileSync(src), name === 'keys/connect.json' ? 0o600 : undefined);
     }
   }
-  for (const [, src] of found) fs.renameSync(src, src + BACKUP);
+  for (const [, src] of found) { try { fs.renameSync(src, src + BACKUP); } catch (e) { if (e.code !== 'ENOENT') throw e; } } // another session may have retired it already
   return { migrated: true, moved: found.map(([n]) => n) };
 }
 
@@ -91,9 +93,8 @@ function migrate(wsRoot, { home = os.homedir(), hostname = os.hostname() } = {})
 function registerSession(info) {
   if (!info || info.mode !== 'owner' || !isDeviceRoot(info.deviceRoot) || !info.session || !info.wsRoot) return { registered: false };
   const file = path.join(info.deviceRoot, 'sessions.json');
-  const map = readJson(file, {}) || {};
-  map[info.session] = { root: info.wsRoot, updated: new Date().toISOString() };
-  writeFile(file, JSON.stringify(map, null, 2) + '\n');
+  // under the file's lock: several sessions start at once and each adds its own entry
+  store.updateJson(file, {}, (map) => { map[info.session] = { root: info.wsRoot, updated: new Date().toISOString() }; });
   return { registered: true };
 }
 
@@ -104,4 +105,19 @@ function sessionRoot(deviceRoot, session) {
   return e && typeof e.root === 'string' ? e.root : null;
 }
 
-module.exports = { slug, resolve, deviceDir, migrate, registerSession, sessionRoot, isDeviceRoot };
+// -> the root whose inbox/files a message or file addressed to session `to` belongs in: that session's workspace when
+// it is registered here (and still there), else the device folder itself (the shared inbox).
+function inboxRoot(deviceRoot, to) {
+  const ws = typeof to === 'string' && validPeerName(to) ? sessionRoot(deviceRoot, to) : null;
+  return ws && fs.existsSync(path.join(ws, '.joserah')) ? ws : deviceRoot;
+}
+
+// What this device tells a peer about itself (the `who` answer, minus nothing secret): { person, device, sessions, version: 2 }.
+function self(root, { hostname = os.hostname() } = {}) {
+  if (!isDeviceRoot(root)) { const r = resolve(root, { hostname }); return { person: r.person, device: r.device, sessions: [r.session], version: 2 }; }
+  const cfg = readJson(path.join(root, 'config.json'), {}) || {};
+  const map = readJson(path.join(root, 'sessions.json'), {}) || {};
+  return { person: path.basename(path.resolve(root)), device: slug(cfg.device) || slug(cfg.name) || slug(hostname) || 'device', sessions: Object.keys(map).filter(validPeerName).sort(), version: 2 };
+}
+
+module.exports = { slug, resolve, deviceDir, migrate, registerSession, sessionRoot, inboxRoot, self, isDeviceRoot };

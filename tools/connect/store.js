@@ -10,7 +10,10 @@ const TTL_MS = 10 * 60 * 1000;   // pending pair requests, half-open entries, fi
 const REPLAY_WINDOW_MS = 10 * 60 * 1000;
 const SEEN_KEEP_MS = 2 * REPLAY_WINDOW_MS; // a ts may be up to a window in the future, so keep iv's twice as long
 
-const connectDir = (root) => path.join(root, '.joserah', 'connect');
+// A device root (<home>/.joserah-connect/<person>, see device.js) is its own connect folder; a workspace keeps
+// its Connect files under .joserah/connect. The same test as device.isDeviceRoot, inlined: device.js needs this file.
+const isDeviceRoot = (p) => path.basename(path.dirname(path.resolve(p))) === '.joserah-connect';
+const connectDir = (root) => (isDeviceRoot(root) ? root : path.join(root, '.joserah', 'connect'));
 const keysPath = (root) => path.join(root, 'keys', 'connect.json');
 const newId = () => crypto.randomBytes(8).toString('hex');
 
@@ -30,8 +33,15 @@ function readJson(file, fallback, strict) {
 
 // Unique tmp (pid + random) + rename, so two writers never share a tmp file; `secret` makes the file 0600 where
 // the OS allows. The rename is retried a few times where Windows refuses it while a reader has the file open.
+// The device folder and everything made under it is private to the owner (0700) where the OS has modes.
+function mkdirp(dir) {
+  let own = false;
+  for (let d = path.resolve(dir); path.dirname(d) !== d; d = path.dirname(d)) if (isDeviceRoot(d)) { own = true; break; }
+  fs.mkdirSync(dir, own ? { recursive: true, mode: 0o700 } : { recursive: true });
+}
+
 function writeJson(file, data, secret) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  mkdirp(path.dirname(file));
   const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', secret ? { mode: 0o600 } : undefined);
   for (let i = 0; ; i++) {
@@ -44,6 +54,7 @@ function writeJson(file, data, secret) {
 // return KEEP to leave the file as it is. Returns what was written (or what was read, for KEEP).
 const KEEP = Symbol('keep');
 function updateJson(file, fallback, fn, secret) {
+  mkdirp(path.dirname(file)); // before the lock makes the folder with default modes
   return withLock(file, () => {
     const data = readJson(file, fallback, true);
     const next = fn(data);
@@ -77,6 +88,8 @@ const removeEntry = (root, name, id) => updateList(root, name, (l) => l.filter((
 
 // Peer names: lowercase [a-z0-9._-], 1-40 chars.
 const validPeerName = (n) => typeof n === 'string' && /^[a-z0-9._-]{1,40}$/.test(n);
+// A person, device or session segment of an address: a peer name that is not only dots.
+const validSegment = (n) => validPeerName(n) && !/^\.+$/.test(n);
 function needPeer(n) { if (!validPeerName(n)) throw new Error('bad peer name'); return n; }
 
 // Received file names: basename only, no control chars or <>:"|?*, no leading dots, max 200.
@@ -142,9 +155,9 @@ function checkReplay(root, kid, iv, ts, now = Date.now()) {
 // Messages: one JSON per line in messages/<peer>.jsonl. Appends are a single line, not tmp+rename.
 const messagesFile = (root, peer) => path.join(connectDir(root), 'messages', needPeer(peer) + '.jsonl');
 function appendMessage(root, peer, m) {
-  const line = { id: m.id || newId(), dir: m.dir, text: m.text, ...(m.reply_to ? { reply_to: m.reply_to } : {}), at: new Date().toISOString(), kind: m.kind || 'message' };
+  const line = { id: m.id || newId(), dir: m.dir, text: m.text, ...(m.reply_to ? { reply_to: m.reply_to } : {}), ...(m.to ? { to: m.to } : {}), at: new Date().toISOString(), kind: m.kind || 'message' };
   const file = messagesFile(root, peer);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  mkdirp(path.dirname(file));
   withLock(file, () => fs.appendFileSync(file, JSON.stringify(line) + '\n'));
   return line;
 }
@@ -165,7 +178,7 @@ const writeMarks = (root, marks) => writeJson(path.join(connectDir(root), 'read.
 const updateMarks = (root, fn) => updateJson(path.join(connectDir(root), 'read.json'), {}, fn);
 
 module.exports = {
-  TTL_MS, REPLAY_WINDOW_MS, KEEP, connectDir, keysPath, newId, readJson, writeJson, updateJson, readKeys, writeKeys,
-  pruneByAge, readList, updateList, writeList, removeEntry, validPeerName, sanitizeName, readPeers, setPeer, removePeer, peerByKeyid,
+  TTL_MS, REPLAY_WINDOW_MS, KEEP, connectDir, isDeviceRoot, keysPath, newId, readJson, writeJson, updateJson, readKeys, writeKeys,
+  pruneByAge, readList, updatePeers, updateList, writeList, removeEntry, validPeerName, validSegment, sanitizeName, readPeers, setPeer, removePeer, peerByKeyid,
   addAddress, noteAddress, checkReplay, appendMessage, readMessages, messagePeers, readMarks, writeMarks, updateMarks,
 };

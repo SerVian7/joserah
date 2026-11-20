@@ -15,12 +15,12 @@ const pubKey = (raw) => crypto.createPublicKey({ key: { kty: 'OKP', crv: 'X25519
 const cache = new Map();
 function identity(root) {
   if (cache.has(root)) return cache.get(root);
-  const keys = store.readKeys(root);
-  if (!keys.identity) {
+  // under the file's lock: sessions of one person start together and must end up with one key
+  const keys = store.updateJson(store.keysPath(root), {}, (k) => {
+    if (k.identity) return store.KEEP;
     const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519');
-    keys.identity = { private: privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64'), public: publicKey.export({ format: 'jwk' }).x };
-    store.writeKeys(root, keys);
-  }
+    k.identity = { private: privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64'), public: publicKey.export({ format: 'jwk' }).x };
+  }, true);
   const pub = unb64(keys.identity.public);
   const id = { priv: crypto.createPrivateKey({ key: Buffer.from(keys.identity.private, 'base64'), format: 'der', type: 'pkcs8' }), pub, pubB64: keys.identity.public, keyid: keyid(pub) };
   cache.set(root, id);
