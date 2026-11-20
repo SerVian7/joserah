@@ -176,26 +176,66 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     const m = ctx.msg;
     if (typeof m.text !== 'string' || !m.text || !HEX(16).test(m.id)) throw Object.assign(new Error('bad message'), { status: 400 });
     if (Buffer.byteLength(m.text) > MAX_TEXT) throw Object.assign(new Error('message over 64 KB'), { status: 413 });
+    if (store.readMessages(ctx.root, ctx.name).some((x) => x.id === m.id)) return { ok: true }; // already logged: at-least-once delivery
     store.appendMessage(ctx.root, ctx.name, { id: m.id, dir: 'in', text: m.text, reply_to: typeof m.reply_to === 'string' && m.reply_to.length <= 64 ? m.reply_to : undefined });
     return { ok: true };
   });
 
-  // POST /m: every authenticated call. Unknown sender, a seal that does not open, a stale ts or a repeated iv: 401.
+  // POST /m: every authenticated call; the work is handleSealed, which a fetch (outbox.js) runs too.
   add('POST', '/m', async (ctx) => {
-    const { root, state } = ctx;
     let env;
     try { env = JSON.parse((await readBody(ctx.req, MAX_SEALED)).toString('utf8')); } catch (e) { if (e.status) throw e; return ctx.send(400, { error: 'bad request' }); }
-    const s = sender(root, env && env.from);
-    const msg = s && cx.open(s.keys.recv, env, cx.requestAad(env.from));
-    if (!msg || typeof msg.type !== 'string' || !store.checkReplay(root, env.from, env.iv, msg.ts, state.now())) return ctx.send(401, { error: 'not accepted' });
-    const h = sealedTypes.get(msg.type);
-    if (!h) return ctx.send(400, { error: 'unknown type' });
-    if (!s.rec && !h.pairing) return ctx.send(401, { error: 'not accepted' });
-    if (s.rec) store.addAddress(root, s.name, ctx.remote);
-    const result = await h.fn({ ...ctx, ...s, msg });
-    if (!ctx.res.headersSent) ctx.send(200, result || { ok: true });
+    const r = await handleSealed(ctx.root, ctx.state, env, ctx.remote, ctx);
+    if (!ctx.res.headersSent) ctx.send(r.status, r.body || { ok: true });
   });
 });
+
+// A sealed envelope { from, iv, ct }, from POST /m or from an outbox fetch: sender lookup, seal open, replay check,
+// type dispatch. Resolves { status, body, oid }; a handler's {status} error is thrown (with .oid). `ctx` is the base
+// handler context (a fetch passes { fetched: true }); `remote` the source address, or null for a fetch.
+// Unknown sender, a seal that does not open, a stale ts or a repeated iv: 401.
+// An envelope with an `oid` (a queued item) runs its handler once: a repeat answers 200 { duplicate:true } (delivered.json).
+async function handleSealed(root, state, env, remote, ctx = {}) {
+  const s = sender(root, env && env.from);
+  const msg = s && cx.open(s.keys.recv, env, cx.requestAad(env.from));
+  if (!msg || typeof msg.type !== 'string' || !store.checkReplay(root, env.from, env.iv, msg.ts, state.now())) return { status: 401, body: { error: 'not accepted' } };
+  const h = sealedTypes.get(msg.type);
+  if (!h) return { status: 400, body: { error: 'unknown type' } };
+  if (!s.rec && !h.pairing) return { status: 401, body: { error: 'not accepted' } };
+  if (s.rec && remote) store.addAddress(root, s.name, remote);
+  const oid = typeof msg.oid === 'string' && HEX(16).test(msg.oid) ? msg.oid : null;
+  if (oid && !claim(root, env.from, oid, state.now())) return { status: 200, body: { ok: true, duplicate: true }, oid };
+  try {
+    const result = await h.fn({ root, state, remote, config: config.loadConfig(root), ...ctx, ...s, msg });
+    return { status: 200, body: result, oid };
+  } catch (e) {
+    // a failure worth retrying (or one nobody answered) frees the oid; any other answer is final
+    if (oid && (!e || !e.status || e.status === 429 || e.status >= 500)) release(root, env.from, oid);
+    if (e && typeof e === 'object') e.oid = oid;
+    throw e;
+  }
+}
+
+// delivered.json: { keyid: { oid: ms } }, kept 14 days.
+const DELIVERED_KEEP_MS = 14 * 24 * 3600 * 1000;
+const deliveredFile = (root) => path.join(store.connectDir(root), 'delivered.json');
+function claim(root, from, oid, now) {
+  let fresh = false;
+  store.updateJson(deliveredFile(root), {}, (d) => {
+    for (const k of Object.keys(d)) {
+      for (const i of Object.keys(d[k])) if (now - d[k][i] > DELIVERED_KEEP_MS) delete d[k][i];
+      if (!Object.keys(d[k]).length) delete d[k];
+    }
+    const mine = d[from] || (d[from] = {});
+    if (mine[oid]) return;
+    mine[oid] = now;
+    fresh = true;
+  });
+  return fresh;
+}
+function release(root, from, oid) {
+  store.updateJson(deliveredFile(root), {}, (d) => { if (d[from]) delete d[from][oid]; });
+}
 
 // ---- server ---------------------------------------------------------------
 // startListener(root, { port, bind, now }) -> Promise<Array<http.Server>> with .port and .close().
@@ -232,4 +272,4 @@ async function startListener(root, opts = {}) {
   return servers;
 }
 
-module.exports = { startListener, registerRoutes, sender, readBody, send };
+module.exports = { startListener, registerRoutes, handleSealed, sender, readBody, send };

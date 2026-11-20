@@ -9,10 +9,12 @@ const config = require('./config');
 const store = require('./store');
 const cx = require('./crypto');
 const http = require('./http');
+const outbox = require('./outbox');
 const { registerRoutes } = require('./listener');
 
 const CHUNK = 64 * 1024;
 const MAX_OFFERS = 20;
+const QUEUED_LIFE_MS = 7 * 24 * 3600 * 1000; // a `sending` entry that waits for a fetch lives as long as its outbox item
 const HEX = (n) => new RegExp('^[0-9a-f]{' + n + '}$');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const fmt = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
@@ -115,7 +117,7 @@ registerRoutes(({ route, sealed, sender, send }) => {
     } catch (e) { send(ctx.res, e.status || 422, { error: e.message }); }
   });
 
-  sealed('file-offer', (ctx) => {
+  sealed('file-offer', async (ctx) => {
     const m = ctx.msg;
     if (!HEX(16).test(m.id) || typeof m.name !== 'string' || !Number.isInteger(m.size) || m.size < 0 || !HEX(64).test(m.sha256)) throw fail(400, 'bad offer');
     store.updateList(ctx.root, 'offers', (list) => {
@@ -124,6 +126,8 @@ registerRoutes(({ route, sealed, sender, send }) => {
       list.push({ id: m.id, peer: ctx.name, name: m.name, size: m.size, sha256: m.sha256, created: new Date(ctx.state.now()).toISOString() });
     });
     notice(ctx.root, ctx.name, 'in', `${ctx.name} wants to send ${safeName(m.name)}, ${fmt(m.size)}`);
+    // a small file the sender queued (it could not be reached) is pulled at once, from here to there; a large one waits for accept_file
+    if (m.auto === true && ctx.fetched && m.size <= ctx.config.smallFileMax) await acceptFile(ctx.root, m.id);
     return { ok: true };
   });
 
@@ -155,6 +159,16 @@ registerRoutes(({ route, sealed, sender, send }) => {
 });
 
 // ---- tool functions (root first) -------------------------------------------
+const queuedNote = (peer) => peer + ' cannot be reached right now; the file waits until they collect it';
+// pruneByAge keeps an entry while now - created < 10 min, so a `created` that far ahead gives it a longer life.
+const keepSending = (root, id) => store.updateList(root, 'sending', (l) => l.map((e) => (e.id === id ? { ...e, created: new Date(Date.now() + QUEUED_LIFE_MS - store.TTL_MS).toISOString() } : e)));
+function queueOffer(root, peer, hdr, abs, auto) {
+  store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
+  keepSending(root, hdr.id);
+  outbox.queue(root, peer, { type: 'file-offer', ...hdr, ...(auto ? { auto: true } : {}) });
+  return { ok: true, queued: true, id: hdr.id, name: hdr.name, size: hdr.size, note: queuedNote(peer) };
+}
+
 async function sendFile(root, peer, file) {
   try {
     if (!store.readPeers(root)[peer]) return { ok: false, error: 'no such peer' };
@@ -167,11 +181,17 @@ async function sendFile(root, peer, file) {
       const w = cx.frameWriter(cx.linkKeys(root, store.readPeers(root)[peer]).send, cx.identity(root).keyid);
       const out = [];
       for await (const f of frames(w, abs, hdr)) out.push(f); // shortcut: whole file in memory, bounded by smallFileMax
-      const r = await http.sendToPeer(root, peer, null, { path: '/f', body: Buffer.concat(out) });
+      let r;
+      try { r = await http.sendToPeer(root, peer, null, { path: '/f', body: Buffer.concat(out) }); }
+      catch (e) {
+        if (!e.connect) throw e;
+        return queueOffer(root, peer, hdr, abs, true); // unreachable: the receiver pulls it when it collects
+      }
       return r.status === 200 ? { ok: true, name: hdr.name, size: hdr.size } : { ok: false, error: await errorOf(r) };
     }
     store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
-    const r = await http.sendToPeer(root, peer, { type: 'file-offer', ...hdr });
+    const r = await outbox.deliver(root, peer, { type: 'file-offer', ...hdr });
+    if (r.queued) { keepSending(root, hdr.id); return { ok: true, waiting: true, queued: true, id: hdr.id, name: hdr.name, size: hdr.size, note: queuedNote(peer) }; }
     if (r.status !== 200) { store.removeEntry(root, 'sending', hdr.id); return { ok: false, error: await errorOf(r) }; }
     return { ok: true, waiting: true, id: hdr.id, name: hdr.name, size: hdr.size };
   } catch (e) { return { ok: false, error: e.message === 'file changed' ? 'the file changed while it was being sent' : e.message }; }
@@ -203,7 +223,7 @@ async function acceptFile(root, id) {
     result = { ok: true, saved: got.name, size: got.size };
   } catch (e) { result = { ok: false, error: e.status ? e.message : 'the transfer was interrupted' }; }
   store.removeEntry(root, 'offers', id);
-  try { await http.sendToPeer(root, offer.peer, { type: 'file-result', id, ok: result.ok }); } catch { /* sender will time the entry out */ }
+  try { await outbox.deliver(root, offer.peer, { type: 'file-result', id, ok: result.ok }); } catch { /* sender will time the entry out */ }
   return result;
 }
 
@@ -211,7 +231,7 @@ async function refuseFile(root, id) {
   const offer = store.readList(root, 'offers').find((o) => o.id === id);
   if (!offer) return { ok: false, error: 'no such offer (it may have expired)' };
   store.removeEntry(root, 'offers', id);
-  try { await http.sendToPeer(root, offer.peer, { type: 'file-result', id, ok: false, refused: true }); return { ok: true, peer: offer.peer }; }
+  try { const r = await outbox.deliver(root, offer.peer, { type: 'file-result', id, ok: false, refused: true }); return { ok: true, peer: offer.peer, ...(r.queued ? { queued: true } : {}) }; }
   catch { return { ok: true, peer: offer.peer, warning: 'could not tell ' + offer.peer }; }
 }
 

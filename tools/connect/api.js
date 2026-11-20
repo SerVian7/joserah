@@ -6,6 +6,7 @@ const store = require('./store');
 const config = require('./config');
 const cx = require('./crypto');
 const net = require('./http');
+const outbox = require('./outbox');
 
 const MAX_TEXT = 64 * 1024;
 const fail = (error, status) => ({ ok: false, error, ...(status ? { status } : {}) });
@@ -69,14 +70,18 @@ async function answer(root, id, approve, now) {
   store.updateList(root, 'pending', (l) => (l.some((x) => x.id === id && !x.open) ? (claimed = true, l.filter((x) => x.id !== id)) : store.KEEP), now);
   if (!claimed) return fail('no such pairing request (it may have expired)');
   if (approve) store.setPeer(root, e.username, { pub: e.pub, keyid: e.keyid, salt: salt.toString('hex'), addresses: e.addresses, port: e.port });
-  let warning;
+  let warning; let queued;
   try {
-    const keys = cx.deriveKeys(me, cx.unb64(e.pub), salt);
-    const r = await net.postSealed(root, e, keys, body);
-    if (r.status !== 200) warning = e.username + ' did not confirm (answered ' + r.status + ')';
-    else if (approve) store.noteAddress(root, e.username, r.address);
+    if (approve) { // the requester is a stored peer now: an unreachable one collects the accept by fetching
+      const r = await outbox.deliver(root, e.username, body);
+      if (r.queued) queued = true;
+      else if (r.status !== 200) warning = e.username + ' did not confirm (answered ' + r.status + ')';
+    } else {
+      const r = await net.postSealed(root, e, cx.deriveKeys(me, cx.unb64(e.pub), salt), body);
+      if (r.status !== 200) warning = e.username + ' did not confirm (answered ' + r.status + ')';
+    }
   } catch { warning = e.username + ' could not be reached; ' + (approve ? 'they are kept as a peer here' : 'the refusal was not delivered'); }
-  return { ok: true, peer: e.username, ...(warning ? { warning } : {}) };
+  return { ok: true, peer: e.username, ...(queued ? { queued: true, note: e.username + ' cannot be reached right now; the approval waits until they collect it' } : {}), ...(warning ? { warning } : {}) };
 }
 const approve = safe((root, id, now) => answer(root, id, true, now));
 const refuse = safe((root, id, now) => answer(root, id, false, now));
@@ -89,8 +94,12 @@ async function send(root, peer, text, replyTo) {
   if (Buffer.byteLength(text) > MAX_TEXT) return fail('the message is over 64 KB');
   const id = store.newId();
   let r;
-  try { r = await net.sendToPeer(root, peer, { type: 'message', id, text, ...(replyTo ? { reply_to: replyTo } : {}) }); }
+  try { r = await outbox.deliver(root, peer, { type: 'message', id, text, ...(replyTo ? { reply_to: replyTo } : {}) }); }
   catch { return fail(peer + ' could not be reached'); }
+  if (r.queued) {
+    store.appendMessage(root, peer, { id, dir: 'out', text, reply_to: replyTo });
+    return { ok: true, id, queued: true, note: peer + ' cannot be reached right now; the message waits until they collect it' };
+  }
   if (r.status === 401) return fail(peer + ' no longer recognises this machine; disconnect and pair again', 401);
   if (r.status !== 200) return fail(peer + ' answered ' + r.status, r.status);
   store.appendMessage(root, peer, { id, dir: 'out', text, reply_to: replyTo });
