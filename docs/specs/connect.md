@@ -1,4 +1,4 @@
-# Joserah Connect: build contract (v2)
+# Joserah Connect: build contract (first version; Connect 2 at the end)
 
 Assistants on different machines message each other and send files, peer to peer. No central server.
 Node >= 18, no dependencies, CommonJS, `'use strict'`, built-in `crypto` only. Everything under `tools/connect/`.
@@ -123,3 +123,102 @@ Results are plain objects `{ ok:true, ... }` / `{ ok:false, error }`; nothing th
 `tests/connect-*.test.js`, `node:test`, two temp roots, listeners on `127.0.0.1` port 0 (tests set `bind`).
 Address fallback: give a peer a dead first address (e.g. `127.0.0.2` on a closed port, or a closed port on
 127.0.0.1) before the live one.
+
+## Connect 2 (plugin 0.23.0)
+
+What v2 adds on top of the contract above. Everything above still holds unless said otherwise.
+
+### Layout: owner vs guest
+
+Trust comes from the workspace config; only exactly `owner` is owner mode, anything else is guest.
+
+- **Owner**: the device state lives in the user's home folder, `<home>/.joserah-connect/<person>/` (mode 0700;
+  `<home>` is `JOSERAH_CONNECT_HOME` or the real home). It holds `keys/connect.json` (0600), `config.json`,
+  `sessions.json`, `peers.json`, `pending.json`, `outgoing.json`, `offers.json`, `sending.json`, `outbox.json`,
+  `seen.json`, `delivered.json`, `listener.json`, `firewall.json`, and the device's shared inbox
+  (`messages/<peer>.jsonl`, `files/<peer>/`). Each workspace keeps its own inbox, `read.json` and received
+  files under `<ws>/.joserah/connect/` (read marks: `peer` and `shared:peer`).
+- **Guest**: the v1 layout, everything (device and inbox alike) inside the workspace
+  (`<ws>/keys/connect.json`, `<ws>/.joserah/connect/`); the home folder is never read or written.
+- `store.connectDir(root)` returns `root` itself when it is a device root (parent folder named
+  `.joserah-connect`), else `<root>/.joserah/connect`.
+- Names: person = slug of the workspace owner's name (else `owner`); session = slug of the workspace name
+  (else the folder name, else `workspace`); device = device config `device`/`name` > the v1 workspace config
+  `name` (an existing v1 name is kept) > slug of the host name. `slug` transliterates Turkish letters and
+  yields `[a-z0-9-]`, at most 40 chars.
+
+### Addresses
+
+`person/device/session`, each segment a valid peer name that is not only dots; at most 3 segments.
+
+| address | reaches |
+|---|---|
+| `person/device/session` | that session's own inbox only |
+| `person/device` | the device's shared inbox, readable by every session of that person there |
+| `person` | every paired device of that person (one delivery per device) |
+
+A single segment first matches a peer's key or device name, else its person. A peer record without a
+person (v1 pairing) matches on device or key alone, so old flat names keep working. No match returns an error
+listing the known addresses. On the receiving side a message carries `to` (the session); a `to` that is not a
+registered, still existing session on that device goes to the shared inbox. Pairing messages carry `person`
+and `device`; a pair answer without them still pairs. `who` is a sealed request answering
+`{ person, device, sessions, version: 2 }`; an old peer answers 400 and is shown as version 1.
+
+### Outbox, fetch and fetch-ack
+
+A message or file for a machine that cannot be reached (only a connection error queues; a real answer, even an
+error status, is returned as before) is appended to `outbox.json[peer]` as `{ oid, obj, created }`: at most 500
+per peer, items older than 7 days dropped. The unreachable machine collects over its own outgoing connection:
+on each tool call (`kick`, at most once per 10 s, raced against 800 ms) and by polling about every minute
+(backing off, capped at 10 minutes). Both are ordinary sealed `POST /m` bodies from a stored peer:
+
+- `fetch`, plaintext `{type:'fetch', ts}` -> `200 { items:[env,...], more?:true }`. Each `env` is a freshly
+  sealed request (new iv, new ts) of the queued object plus `oid`; at most 50 items or about 400 KB per answer.
+- `fetch-ack`, `{type:'fetch-ack', oids:[...]}` -> `200 {ok:true}`; those items leave the outbox.
+
+The fetcher acks an oid when its handler gave a final answer (2xx, or 4xx other than 401/429); 401
+(tampered or replayed), 429 and 5xx are not acked and stay queued. It repeats while `more` and something was
+acked (at most 20 rounds). Receivers dedupe by `oid` (`delivered.json`, 14 days): a repeat answers
+`200 {ok:true,duplicate:true}` without running the handler; a claim is released if the handler failed with 429,
+5xx or an unknown error. A small file queued while the receiver is unreachable goes as a `file-offer` with
+`auto:true`; fetched, the receiver pulls it itself when its size is within its own `smallFileMax`. A large file
+stays an offer until `accept_file`. `disconnect` and `refuse` are not queued (the peer record is gone, or never
+existed, so the other side could not authenticate a fetch). Pairing by fetch works only while the requester's
+`outgoing` entry exists (10 minutes).
+
+### Port choice and `GET /id`
+
+One listener per person-device. If the port is taken, the session asks `GET /id` on 127.0.0.1 (public,
+answers `{ keyid }`): the same key id, or no connection, means another session of this device holds it and this
+one keeps waiting to take over (retry 5 s, doubling to 60 s, with jitter; the record `{ pid, port, since }` is in
+`listener.json`); any other answer means a different identity owns the port, so the session uses the next free
+port upward and saves it. Sessions share the store through a file lock (`<file>.lock`, stale after 10 s or when
+its pid is dead) and atomic writes; the identity key is created under the lock. Peers already paired still hold
+the old port after a move; they are reached again by this side fetching from them.
+
+### Migration
+
+When the first owner session starts it moves v1 state in place: it copies the key, peers, pending, outgoing,
+offers, sending, outbox, seen, delivered and the config (`name` as `device`, port, bind, `smallFileMax`) into the
+device folder (never overwriting an existing device file), then renames each v1 original to `*.v1-backup`.
+`messages/`, `read.json` and `files/` stay in the workspace. A different key already in the device folder is a
+conflict and nothing changes; a second run does nothing. Guest workspaces are never migrated. With no stored
+config, startup writes `{ name, port }` itself (port from `JOSERAH_CONNECT_PORT` or 4790), so no setup command
+is needed; `connect.js setup` remains an override and `connect.js status` prints mode, address, listener,
+peers, pending, outbox and firewall.
+
+### Firewall helper
+
+Optional; nothing depends on it. After the listener is up (and at most once in 7 days, remembered in
+`firewall.json`; `JOSERAH_CONNECT_FIREWALL=off` skips it) `firewall.once` checks on Windows whether an enabled
+inbound Allow rule exists for the TCP port. If closed and the session is administrator (`fltmc` exits 0) it adds
+the rule with `netsh`; otherwise it writes `connect-firewall-add.bat` and `connect-firewall-remove.bat` in the
+workspace's `.joserah/connect` folder and the next tool result carries a note asking the person to run the add
+file as administrator. On other systems, or when the state cannot be read, nothing is written. The module never
+elevates.
+
+### Compatibility and upgrade order
+
+A v2 machine paired with a v1 one: `who` marks it version 1 (400), `fetch` against it is skipped quietly (400,
+unknown type), and the flat name keeps working. Update both machines and restart their sessions; an owner-mode
+machine migrates itself on its first session.
