@@ -9,7 +9,7 @@ const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
 
 const { createServer } = require(path.join(PLUGIN_ROOT, 'tools', 'connect', 'mcp.js'));
 
-const TOOLS = ['connect', 'pending', 'approve', 'refuse', 'peers', 'send', 'inbox', 'reply',
+const TOOLS = ['connect', 'pending', 'approve', 'refuse', 'peers', 'who', 'send', 'inbox', 'reply',
   'send_file', 'files', 'accept_file', 'refuse_file', 'disconnect'];
 const MARKER = 'ZZ-SECRET-MARKER-ZZ';
 
@@ -26,7 +26,7 @@ async function talk(handlers, msgs) {
 }
 const call = (id, name, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args || {} } });
 
-test('initialize, ping and tools/list return the 13 tools', async () => {
+test('initialize, ping and tools/list return the 14 tools', async () => {
   const r = await talk({}, [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },
@@ -42,7 +42,7 @@ test('initialize, ping and tools/list return the 13 tools', async () => {
   for (const x of r[2].result.tools) assert.strictEqual(x.inputSchema.type, 'object');
   const conn = r[2].result.tools.find((x) => x.name === 'connect').inputSchema;
   assert.deepStrictEqual(Object.keys(conn.properties), ['ip', 'username']);
-  assert.deepStrictEqual(conn.required, ['ip', 'username']);
+  assert.deepStrictEqual(conn.required, ['ip'], 'the username is optional now: it defaults to the device name');
   assert.ok(!JSON.stringify(r[2].result.tools).includes('password'), 'no pair password anywhere');
 });
 
@@ -99,7 +99,7 @@ test('unknown method answers -32601; unknown tool is an error result', async () 
   assert.strictEqual(r[1].result.isError, true);
 });
 
-test('run as main without config: every tool says Connect is not set up', (t) => {
+test('run as main with an empty config: Connect sets itself up (guest layout), no setup command', (t) => {
   const ws = path.join(tmpdir(t), 'ws');
   fs.mkdirSync(path.join(ws, '.joserah'), { recursive: true });
   fs.writeFileSync(path.join(ws, '.joserah', 'config.json'), '{}');
@@ -108,12 +108,22 @@ test('run as main without config: every tool says Connect is not set up', (t) =>
     call(2, 'peers'),
   ].map((m) => JSON.stringify(m)).join('\n') + '\n';
   const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'connect', 'mcp.js')],
-    { cwd: ws, input, encoding: 'utf8', timeout: 20000, env: { ...process.env, CLAUDE_PROJECT_DIR: ws } });
+    { cwd: ws, input, encoding: 'utf8', timeout: 20000,
+      env: { ...process.env, CLAUDE_PROJECT_DIR: ws, JOSERAH_CONNECT_HOME: tmpdir(t), JOSERAH_CONNECT_PORT: '0', JOSERAH_CONNECT_FIREWALL: 'off' } });
   assert.strictEqual(r.status, 0, r.stderr);
   const lines = r.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l));
   assert.strictEqual(lines.length, 2);
-  assert.match(lines[1].result.content[0].text, /not set up/i);
-  assert.match(lines[1].result.content[0].text, /connect\.js\\" setup/); // the text is JSON-encoded, so the quote is escaped
+  assert.deepStrictEqual(JSON.parse(lines[1].result.content[0].text).peers, []);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(ws, '.joserah', 'connect', 'config.json'), 'utf8')).name);
+});
+
+test('run as main outside a workspace: every tool says it needs one', (t) => {
+  const dir = tmpdir(t);
+  const input = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }, call(2, 'peers')].map((m) => JSON.stringify(m)).join('\n') + '\n';
+  const r = spawnSync(process.execPath, [path.join(PLUGIN_ROOT, 'tools', 'connect', 'mcp.js')],
+    { cwd: dir, input, encoding: 'utf8', timeout: 20000, env: { ...process.env, CLAUDE_PROJECT_DIR: dir } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l))[1].result.content[0].text, /needs a Joserah workspace/);
 });
 
 // ---- hook ----
