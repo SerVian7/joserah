@@ -10,6 +10,8 @@ const store = require('./store');
 const cx = require('./crypto');
 const http = require('./http');
 const outbox = require('./outbox');
+const device = require('./device');
+const address = require('./address');
 const { registerRoutes } = require('./listener');
 
 const CHUNK = 64 * 1024;
@@ -19,7 +21,7 @@ const HEX = (n) => new RegExp('^[0-9a-f]{' + n + '}$');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const fmt = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
 const dirOf = (root, peer) => path.join(store.connectDir(root), 'files', peer);
-const notice = (root, peer, dir, text) => store.appendMessage(root, peer, { dir, kind: 'notice', text });
+const notice = (root, peer, dir, text, to) => store.appendMessage(root, peer, { dir, kind: 'notice', text, to });
 
 function hashFile(p) {
   return new Promise((resolve, reject) => {
@@ -50,8 +52,7 @@ const safeName = (n) => { const s = store.sanitizeName(n); return /^(con|prn|aux
 // `offer` (large files): the header must match it. Resolves { name, size }; throws {status, message} and removes
 // the part file on any failure.
 async function receive(root, s, source, now, offer) {
-  const dir = dirOf(root, s.name);
-  fs.mkdirSync(dir, { recursive: true });
+  let dir = null; let dest = root; // the folder is chosen by the header's `to` (the offer's, for a large file)
   const r = cx.frameReader(s.keys.recv, s.rec.keyid);
   const hash = crypto.createHash('sha256');
   let hdr = null; let part = null; let fd = null; let n = 0;
@@ -65,6 +66,9 @@ async function receive(root, s, source, now, offer) {
           if (!HEX(16).test(hdr.id) || typeof hdr.name !== 'string' || !Number.isInteger(hdr.size) || hdr.size < 0 || !HEX(64).test(hdr.sha256)) throw fail(422, 'bad file header');
           if (!offer && hdr.size > config.loadConfig(root).smallFileMax) throw fail(413, 'the file is too large to send without asking first');
           if (offer && ['id', 'name', 'size', 'sha256'].some((k) => hdr[k] !== offer[k])) throw fail(422, 'the file is not the one offered');
+          dest = device.inboxRoot(root, offer ? offer.to : hdr.to);
+          dir = dirOf(dest, s.name);
+          fs.mkdirSync(dir, { recursive: true });
           part = path.join(dir, '.' + hdr.id + '.part');
           fd = fs.openSync(part, 'wx');
         } else {
@@ -88,7 +92,7 @@ async function receive(root, s, source, now, offer) {
       if (path.dirname(path.resolve(target)) !== path.resolve(dir)) throw fail(422, 'bad file name');
       try { fs.closeSync(fs.openSync(target, 'wx')); } catch (e) { if (e.code === 'EEXIST') continue; throw e; }
       fs.renameSync(part, target);
-      notice(root, s.name, 'in', `file received: ${candidate}, ${fmt(n)}`);
+      notice(dest, s.name, 'in', `file received: ${candidate}, ${fmt(n)}`);
       return { name: candidate, size: n };
     }
   } catch (e) {
@@ -120,12 +124,14 @@ registerRoutes(({ route, sealed, sender, send }) => {
   sealed('file-offer', async (ctx) => {
     const m = ctx.msg;
     if (!HEX(16).test(m.id) || typeof m.name !== 'string' || !Number.isInteger(m.size) || m.size < 0 || !HEX(64).test(m.sha256)) throw fail(400, 'bad offer');
+    // an offer for a session registered here is that session's; any other goes to the device's shared inbox
+    const to = store.validSegment(m.to) && device.inboxRoot(ctx.root, m.to) !== ctx.root ? m.to : undefined;
     store.updateList(ctx.root, 'offers', (list) => {
       if (list.length >= MAX_OFFERS) throw fail(429, 'too many open offers');
       if (list.some((o) => o.id === m.id)) throw fail(409, 'duplicate offer');
-      list.push({ id: m.id, peer: ctx.name, name: m.name, size: m.size, sha256: m.sha256, created: new Date(ctx.state.now()).toISOString() });
+      list.push({ id: m.id, peer: ctx.name, name: m.name, size: m.size, sha256: m.sha256, ...(to ? { to } : {}), created: new Date(ctx.state.now()).toISOString() });
     });
-    notice(ctx.root, ctx.name, 'in', `${ctx.name} wants to send ${safeName(m.name)}, ${fmt(m.size)}`);
+    notice(device.inboxRoot(ctx.root, to), ctx.name, 'in', `${ctx.name} wants to send ${safeName(m.name)}, ${fmt(m.size)}`, to);
     // a small file the sender queued (it could not be reached) is pulled at once, from here to there; a large one waits for accept_file
     if (m.auto === true && ctx.fetched && m.size <= ctx.config.smallFileMax) await acceptFile(ctx.root, m.id);
     return { ok: true };
@@ -152,7 +158,7 @@ registerRoutes(({ route, sealed, sender, send }) => {
     const e = store.readList(ctx.root, 'sending').find((x) => x.id === ctx.msg.id && x.peer === ctx.name);
     if (e) {
       store.removeEntry(ctx.root, 'sending', e.id);
-      notice(ctx.root, ctx.name, 'in', ctx.msg.refused ? `${e.name} refused` : ctx.msg.ok ? `${e.name} delivered` : `${e.name} failed the check and was deleted`);
+      notice(e.origin && fs.existsSync(path.join(e.origin, '.joserah')) ? e.origin : ctx.root, ctx.name, 'in', ctx.msg.refused ? `${e.name} refused` : ctx.msg.ok ? `${e.name} delivered` : `${e.name} failed the check and was deleted`);
     }
     return { ok: true };
   });
@@ -162,21 +168,22 @@ registerRoutes(({ route, sealed, sender, send }) => {
 const queuedNote = (peer) => peer + ' cannot be reached right now; the file waits until they collect it';
 // pruneByAge keeps an entry while now - created < 10 min, so a `created` that far ahead gives it a longer life.
 const keepSending = (root, id) => store.updateList(root, 'sending', (l) => l.map((e) => (e.id === id ? { ...e, created: new Date(Date.now() + QUEUED_LIFE_MS - store.TTL_MS).toISOString() } : e)));
-function queueOffer(root, peer, hdr, abs, auto) {
-  store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
+function queueOffer(root, peer, hdr, abs, auto, origin) {
+  store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, ...(origin ? { origin } : {}), created: new Date().toISOString() }]);
   keepSending(root, hdr.id);
   outbox.queue(root, peer, { type: 'file-offer', ...hdr, ...(auto ? { auto: true } : {}) });
   return { ok: true, queued: true, id: hdr.id, name: hdr.name, size: hdr.size, note: queuedNote(peer) };
 }
 
-async function sendFile(root, peer, file) {
+// One file to one stored peer, for session `to` there (or its shared inbox). `ws` = the sending workspace, for notices.
+async function sendOne(root, peer, to, file, ws) {
   try {
-    if (!store.readPeers(root)[peer]) return { ok: false, error: 'no such peer' };
     let st;
     try { st = fs.statSync(file); } catch { return { ok: false, error: 'file not found' }; }
     if (!st.isFile()) return { ok: false, error: 'not a file' };
     const abs = path.resolve(file);
-    const hdr = { id: store.newId(), name: path.basename(abs), size: st.size, sha256: await hashFile(abs) };
+    const origin = ws && path.resolve(ws) !== path.resolve(root) ? path.resolve(ws) : undefined;
+    const hdr = { id: store.newId(), name: path.basename(abs), size: st.size, sha256: await hashFile(abs), ...(to ? { to } : {}) };
     if (st.size <= config.loadConfig(root).smallFileMax) {
       const w = cx.frameWriter(cx.linkKeys(root, store.readPeers(root)[peer]).send, cx.identity(root).keyid);
       const out = [];
@@ -185,11 +192,11 @@ async function sendFile(root, peer, file) {
       try { r = await http.sendToPeer(root, peer, null, { path: '/f', body: Buffer.concat(out) }); }
       catch (e) {
         if (!e.connect) throw e;
-        return queueOffer(root, peer, hdr, abs, true); // unreachable: the receiver pulls it when it collects
+        return queueOffer(root, peer, hdr, abs, true, origin); // unreachable: the receiver pulls it when it collects
       }
       return r.status === 200 ? { ok: true, name: hdr.name, size: hdr.size } : { ok: false, error: await errorOf(r) };
     }
-    store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
+    store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, ...(origin ? { origin } : {}), created: new Date().toISOString() }]);
     const r = await outbox.deliver(root, peer, { type: 'file-offer', ...hdr });
     if (r.queued) { keepSending(root, hdr.id); return { ok: true, waiting: true, queued: true, id: hdr.id, name: hdr.name, size: hdr.size, note: queuedNote(peer) }; }
     if (r.status !== 200) { store.removeEntry(root, 'sending', hdr.id); return { ok: false, error: await errorOf(r) }; }
@@ -197,16 +204,38 @@ async function sendFile(root, peer, file) {
   } catch (e) { return { ok: false, error: e.message === 'file changed' ? 'the file changed while it was being sent' : e.message }; }
 }
 
-function files(root) {
+// `addr`: person/device/session, person/device, person, or a flat v1 peer name. One match: that result as it is;
+// several (a person with more devices): { ok, results: [{ peer, to, ...result }] }.
+async function sendFile(root, addr, file, ws) {
+  const peers = store.readPeers(root);
+  const targets = address.targets(addr, peers);
+  if (!targets.length) return { ok: false, error: address.unknown(addr, peers) };
+  const results = [];
+  for (const t of targets) results.push({ peer: t.peer, to: t.to || undefined, ...(await sendOne(root, t.peer, t.to, file, ws)) });
+  if (results.length === 1) { const { peer, to, ...r } = results[0]; return r; }
+  const bad = results.filter((r) => !r.ok);
+  return { ok: !bad.length, results, ...(bad.length ? { error: 'not sent to: ' + bad.map((r) => r.peer + ' (' + r.error + ')').join(', ') } : {}) };
+}
+
+// Offers and received files for workspace `ws` (default: `root`): its own, plus the device's shared ones.
+function files(root, ws) {
+  const own = ws || root;
+  const split = path.resolve(own) !== path.resolve(root);
   const received = [];
-  let peers = [];
-  try { peers = fs.readdirSync(path.join(store.connectDir(root), 'files')).filter(store.validPeerName); } catch { /* none yet */ }
-  for (const peer of peers) {
-    for (const name of fs.readdirSync(dirOf(root, peer))) {
-      if (!name.startsWith('.')) received.push({ peer, name, size: fs.statSync(path.join(dirOf(root, peer), name)).size });
+  const scan = (r, shared) => {
+    let peers = [];
+    try { peers = fs.readdirSync(path.join(store.connectDir(r), 'files')).filter(store.validPeerName); } catch { /* none yet */ }
+    for (const peer of peers) {
+      for (const name of fs.readdirSync(dirOf(r, peer))) {
+        if (!name.startsWith('.')) received.push({ peer, name, size: fs.statSync(path.join(dirOf(r, peer), name)).size, ...(shared ? { shared: true } : { shared: false }) });
+      }
     }
-  }
-  return { ok: true, offers: store.readList(root, 'offers'), received };
+  };
+  scan(own, false);
+  if (split) scan(root, true);
+  const session = split ? device.resolve(own).session : null;
+  const offers = store.readList(root, 'offers').filter((o) => !split || !o.to || o.to === session);
+  return { ok: true, offers, received: split ? received : received.map(({ shared, ...r }) => r) };
 }
 
 async function acceptFile(root, id) {

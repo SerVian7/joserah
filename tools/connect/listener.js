@@ -6,6 +6,7 @@ const path = require('path');
 const config = require('./config');
 const store = require('./store');
 const cx = require('./crypto');
+const device = require('./device');
 const crypto = require('crypto');
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -98,6 +99,9 @@ async function dispatch(root, state, req, res) {
 
 // ---- core routes ----------------------------------------------------------
 registerRoutes(({ route: add, sealed: onSealed }) => {
+  // Public: which key listens here. A second Connect on this machine asks it before it decides to wait or to move.
+  add('GET', '/id', (ctx) => ctx.send(200, { keyid: cx.identity(ctx.root).keyid }));
+
   // Pair step 1 (cleartext, no secret): rate limited per source IP, capped in total, half-open until the reveal.
   add('POST', '/pair', async (ctx) => {
     const { root, state, remote } = ctx;
@@ -115,10 +119,12 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     store.updateList(root, 'pending', (list) => {
       if (list.length >= MAX_PENDING) { refused = [429, 'too many pending requests']; return store.KEEP; }
       if (list.some((e) => e.id === b.id)) { refused = [409, 'duplicate request']; return store.KEEP; }
-      list.push({ id: b.id, username: b.username, commit: b.commit, nB: cx.b64(nB), address: remote, created: new Date(now).toISOString(), open: true });
+      list.push({ id: b.id, username: b.username, ...(store.validSegment(b.person) ? { person: b.person } : {}), ...(store.validSegment(b.device) ? { device: b.device } : {}),
+        commit: b.commit, nB: cx.b64(nB), address: remote, created: new Date(now).toISOString(), open: true });
     });
     if (refused) return ctx.send(refused[0], { error: refused[1] });
-    ctx.send(200, { name: ctx.config.name, pub: cx.identity(root).pubB64, nonce: cx.b64(nB) });
+    const me = device.self(root);
+    ctx.send(200, { name: ctx.config.name, person: me.person, device: me.device, pub: cx.identity(root).pubB64, nonce: cx.b64(nB) });
   });
 
   // Pair step 2: the reveal must match the commit; then the request is pending for the owner, with its code.
@@ -159,7 +165,8 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     const salt = cx.pairSalt(me.pub, pubB, cx.unb64(out.nA), cx.unb64(out.nB)).toString('hex');
     const port = Number(msg.port) > 0 && Number(msg.port) < 65536 ? Number(msg.port) : out.port;
     const addresses = [...new Set([out.target, ...(Array.isArray(msg.addresses) ? msg.addresses.filter((a) => net.isIP(a)) : [])])].slice(0, 8);
-    store.setPeer(root, msg.name, { pub: out.pubB, keyid: out.keyid, salt, addresses, port });
+    const person = [msg.person, out.person].find(store.validSegment); const dev = [msg.device, out.device].find(store.validSegment);
+    store.setPeer(root, msg.name, { pub: out.pubB, keyid: out.keyid, salt, addresses, port, ...(person ? { person } : {}), ...(dev ? { device: dev } : {}) });
     store.removeEntry(root, 'outgoing', out.id);
     return { ok: true };
   }, { pairing: true });
@@ -170,14 +177,20 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     return { ok: true };
   }, { pairing: true });
 
+  // A peer asks who this device is: person, device and the sessions registered here.
+  onSealed('who', (ctx) => device.self(ctx.root));
+
   onSealed('disconnect', (ctx) => { store.removePeer(ctx.root, ctx.name); return { ok: true }; });
 
   onSealed('message', (ctx) => {
     const m = ctx.msg;
     if (typeof m.text !== 'string' || !m.text || !HEX(16).test(m.id)) throw Object.assign(new Error('bad message'), { status: 400 });
     if (Buffer.byteLength(m.text) > MAX_TEXT) throw Object.assign(new Error('message over 64 KB'), { status: 413 });
-    if (store.readMessages(ctx.root, ctx.name).some((x) => x.id === m.id)) return { ok: true }; // already logged: at-least-once delivery
-    store.appendMessage(ctx.root, ctx.name, { id: m.id, dir: 'in', text: m.text, reply_to: typeof m.reply_to === 'string' && m.reply_to.length <= 64 ? m.reply_to : undefined });
+    // `to` names a session registered here: that workspace's own inbox; no `to` (a v1 sender) or an unknown one: the device's shared inbox
+    const to = store.validSegment(m.to) ? m.to : undefined;
+    const dest = device.inboxRoot(ctx.root, to);
+    if (store.readMessages(dest, ctx.name).some((x) => x.id === m.id)) return { ok: true }; // already logged: at-least-once delivery
+    store.appendMessage(dest, ctx.name, { id: m.id, dir: 'in', text: m.text, to, reply_to: typeof m.reply_to === 'string' && m.reply_to.length <= 64 ? m.reply_to : undefined });
     return { ok: true };
   });
 
