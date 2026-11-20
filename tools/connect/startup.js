@@ -32,17 +32,20 @@ function prepare(root) {
   return { info, warnings };
 }
 
-// Ask what listens on 127.0.0.1:port. -> the key id it answered with, 'other' (something that is not Connect, or
-// that did not answer properly), or null (no connection could be made).
+// Ask what listens on 127.0.0.1:port. -> the key id it answered with, 'v1' (an old Connect listener: it has no /id and
+// answers 404 {"error":"not found"}, the way its dispatch does for any unknown route), 'other' (something that is not
+// Connect, or that did not answer properly), or null (no connection could be made).
 async function probe(port) {
   try {
     const r = await http.request({ address: '127.0.0.1', port, path: '/id', timeout: 2000, connectTimeout: 1500 });
-    return r.status === 200 && r.json && typeof r.json.keyid === 'string' ? r.json.keyid : 'other';
+    if (r.status === 200 && r.json && typeof r.json.keyid === 'string') return r.json.keyid;
+    return r.status === 404 && r.json && r.json.error === 'not found' && Object.keys(r.json).length === 1 ? 'v1' : 'other';
   } catch (e) { return e && e.connect ? null : 'other'; }
 }
 
-// startListener with a port choice for keepListening. When the port is taken: our own person-device (same key id) or
-// nothing that answers -> the original error, so keepListening waits and retries; anything else -> the next free port
+// startListener with a port choice for keepListening. When the port is taken: our own person-device (same key id), an
+// old v1 Connect or nothing that answers -> the original error, so keepListening waits and retries (an old session
+// that closes frees the port for us); anything else -> the next free port
 // upward, saved in the device config (startListener does that), and onMoved(from, to) is told.
 function chooser(deviceRoot, keyid, onMoved) {
   const listener = require('./listener');
@@ -51,7 +54,7 @@ function chooser(deviceRoot, keyid, onMoved) {
       if (!e || e.code !== 'EADDRINUSE') throw e;
       const port = opts.port !== undefined ? opts.port : config.loadConfig(root).port;
       const holder = await probe(port);
-      if (holder === null || holder === keyid) throw e;
+      if (holder === null || holder === 'v1' || holder === keyid) throw e;
       for (let p = port + 1; p <= Math.min(port + 200, 65535); p++) {
         try { const s = await listener.startListener(root, { ...opts, port: p }); onMoved(port, s.port); return s; }
         catch (e2) { if (!e2 || e2.code !== 'EADDRINUSE') throw e2; }

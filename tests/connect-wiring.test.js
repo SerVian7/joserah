@@ -673,3 +673,49 @@ test('the identity is made once when several processes ask for it at the same mo
   assert.strictEqual(new Set(ids).size, 1, 'one key id for everybody: ' + ids.join(' '));
   assert.strictEqual(cx.keyid(keyOf(dev).public), ids[0]);
 });
+
+// ---- port choice against an old (v1) Connect listener --------------------------------------------------------
+
+// A server on the same address family the listener uses, answering `answer(res)` to everything.
+async function stubHolder(t, answer) {
+  const srv = require('http').createServer((req, res) => { req.resume(); answer(res); });
+  await new Promise((resolve, reject) => { srv.once('error', reject); srv.listen({ port: 0, host: '::', ipv6Only: false }, resolve); });
+  t.after(() => new Promise((r) => { srv.close(r); srv.closeAllConnections(); }));
+  return srv.address().port;
+}
+// exactly what v1's listener sends for a route it does not know: dispatch() -> send(res, 404, { error: 'not found' })
+const v1Answer = (res) => {
+  const body = Buffer.from(JSON.stringify({ error: 'not found' }));
+  res.writeHead(404, { 'content-type': 'application/json', 'content-length': body.length });
+  res.end(body);
+};
+
+test('probe: an old v1 listener (404 {error:"not found"} for /id) is told apart from a foreign service', T, async (t) => {
+  const startup = require(path.join(C, 'startup.js'));
+  const v1 = await stubHolder(t, v1Answer);
+  const html = await stubHolder(t, (res) => { res.writeHead(404, { 'content-type': 'text/html' }); res.end('<h1>Not Found</h1>'); });
+  const otherJson = await stubHolder(t, (res) => { res.writeHead(404, { 'content-type': 'application/json' }); res.end('{"error":"nope"}'); });
+  assert.strictEqual(await startup.probe(v1), 'v1');
+  assert.strictEqual(await startup.probe(html), 'other');
+  assert.strictEqual(await startup.probe(otherJson), 'other');
+  assert.strictEqual(await startup.probe(await freePort()), null);
+});
+
+test('a v2 session does not move off a port an old v1 session holds: it waits to take over', T, async (t) => {
+  const k = kit(t);
+  const startup = require(path.join(C, 'startup.js'));
+  const port = await stubHolder(t, v1Answer);
+  const dev = devRoot(k.tmp(), 'pat-person');
+  cfg.saveConfig(dev, { name: 'x', port, bind: undefined });
+  const moved = [];
+  const start = startup.chooser(dev, cx.identity(dev).keyid, (from, to) => moved.push([from, to]));
+  await assert.rejects(start(dev, { port }), (e) => e.code === 'EADDRINUSE');
+  assert.deepStrictEqual(moved, [], 'it stayed');
+  assert.strictEqual(cfg.loadConfig(dev).port, port, 'the saved port was not changed');
+  // a foreign service does make it move
+  const html = await stubHolder(t, (res) => { res.writeHead(404, { 'content-type': 'text/html' }); res.end('x'); });
+  const s = await start(dev, { port: html });
+  t.after(() => s.close());
+  assert.strictEqual(moved.length, 1);
+  assert.notStrictEqual(s.port, html);
+});
