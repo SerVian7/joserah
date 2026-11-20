@@ -3,6 +3,16 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.23.0
+
+0.23.0 — Joserah Connect 2: a message reaches a machine even when its firewall is closed, and there is nothing to set up. Owner, 2026-11-20.
+
+- **No setup step any more.** With the plugin updated, the first session sets Connect up by itself. `connect.js setup` stays only as an override for the device name or the port.
+- **Messages and files reach a closed machine.** If the other machine cannot be reached, the item waits in your outbox and that machine collects it over its own outgoing connection (on each tool call and about once a minute). One reachable side is enough; a large file still asks the receiver first.
+- **Path addresses.** `person/device/session` reaches one session, `person/device` the device's shared inbox, `person` all of that person's devices; `who` lists devices and sessions. Old flat names still work.
+- **The firewall is an extra.** If the session has the rights it opens the port; if not, it leaves a `.bat` file in `.joserah/connect` and asks you to run it as administrator. Nothing depends on it.
+- **Old pairings keep working.** Their state is moved in place, with a backup. Update both machines and restart their sessions.
+
 ## 0.22.0
 
 0.22.0 — Joserah Connect: assistants on different machines talk to each other directly. Owner, 2026-11-18.
