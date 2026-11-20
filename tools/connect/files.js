@@ -118,11 +118,11 @@ registerRoutes(({ route, sealed, sender, send }) => {
   sealed('file-offer', (ctx) => {
     const m = ctx.msg;
     if (!HEX(16).test(m.id) || typeof m.name !== 'string' || !Number.isInteger(m.size) || m.size < 0 || !HEX(64).test(m.sha256)) throw fail(400, 'bad offer');
-    const list = store.readList(ctx.root, 'offers');
-    if (list.length >= MAX_OFFERS) throw fail(429, 'too many open offers');
-    if (list.some((o) => o.id === m.id)) throw fail(409, 'duplicate offer');
-    list.push({ id: m.id, peer: ctx.name, name: m.name, size: m.size, sha256: m.sha256, created: new Date(ctx.state.now()).toISOString() });
-    store.writeList(ctx.root, 'offers', list);
+    store.updateList(ctx.root, 'offers', (list) => {
+      if (list.length >= MAX_OFFERS) throw fail(429, 'too many open offers');
+      if (list.some((o) => o.id === m.id)) throw fail(409, 'duplicate offer');
+      list.push({ id: m.id, peer: ctx.name, name: m.name, size: m.size, sha256: m.sha256, created: new Date(ctx.state.now()).toISOString() });
+    });
     notice(ctx.root, ctx.name, 'in', `${ctx.name} wants to send ${safeName(m.name)}, ${fmt(m.size)}`);
     return { ok: true };
   });
@@ -170,7 +170,7 @@ async function sendFile(root, peer, file) {
       const r = await http.sendToPeer(root, peer, null, { path: '/f', body: Buffer.concat(out) });
       return r.status === 200 ? { ok: true, name: hdr.name, size: hdr.size } : { ok: false, error: await errorOf(r) };
     }
-    store.writeList(root, 'sending', [...store.readList(root, 'sending'), { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
+    store.updateList(root, 'sending', (l) => [...l, { ...hdr, peer, path: abs, created: new Date().toISOString() }]);
     const r = await http.sendToPeer(root, peer, { type: 'file-offer', ...hdr });
     if (r.status !== 200) { store.removeEntry(root, 'sending', hdr.id); return { ok: false, error: await errorOf(r) }; }
     return { ok: true, waiting: true, id: hdr.id, name: hdr.name, size: hdr.size };

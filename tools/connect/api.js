@@ -40,7 +40,7 @@ async function connect(root, address, username, port) {
   const j = r1.json || {};
   if (!store.validPeerName(j.name) || typeof j.pub !== 'string' || typeof j.nonce !== 'string' || cx.unb64(j.pub).length !== 32 || cx.unb64(j.nonce).length !== 32) return fail('the other machine sent something unusable');
   const pubB = cx.unb64(j.pub); const nB = cx.unb64(j.nonce);
-  store.writeList(root, 'outgoing', [...store.readList(root, 'outgoing'), { id, username, target: t.host, port: t.port, pubB: j.pub, keyid: cx.keyid(pubB), nA: cx.b64(nA), nB: j.nonce, name: j.name, created: new Date().toISOString() }]);
+  store.updateList(root, 'outgoing', (l) => [...l, { id, username, target: t.host, port: t.port, pubB: j.pub, keyid: cx.keyid(pubB), nA: cx.b64(nA), nB: j.nonce, name: j.name, created: new Date().toISOString() }]);
   let r2;
   try { r2 = await call('/pair/reveal', { id, pub: me.pubB64, nonce: cx.b64(nA), addresses: net.ownAddresses(), port: cfg.port }); } catch { r2 = null; }
   if (!r2 || r2.status !== 202) {
@@ -65,7 +65,9 @@ async function answer(root, id, approve, now) {
   const salt = cx.pairSalt(cx.unb64(e.pub), me.pub, cx.unb64(e.nA), cx.unb64(e.nB));
   const body = approve ? { type: 'accept', name: cfg.name, addresses: net.ownAddresses(), port: cfg.port } : { type: 'refuse', name: cfg.name };
   if (approve && (store.readPeers(root)[e.username] || store.peerByKeyid(root, e.keyid))) return fail('already connected');
-  store.removeEntry(root, 'pending', id);
+  let claimed = false; // two answers at once: only one gets to take the request
+  store.updateList(root, 'pending', (l) => (l.some((x) => x.id === id && !x.open) ? (claimed = true, l.filter((x) => x.id !== id)) : store.KEEP), now);
+  if (!claimed) return fail('no such pairing request (it may have expired)');
   if (approve) store.setPeer(root, e.username, { pub: e.pub, keyid: e.keyid, salt: salt.toString('hex'), addresses: e.addresses, port: e.port });
   let warning;
   try {
@@ -97,14 +99,14 @@ async function send(root, peer, text, replyTo) {
 
 // Unread messages from every peer log; marks them read (a second call returns only newer ones).
 const inbox = safeSync((root) => {
-  const marks = store.readMarks(root);
   const out = [];
-  for (const peer of store.messagePeers(root)) {
-    const ins = store.readMessages(root, peer).filter((m) => m.dir === 'in');
-    for (const m of ins.slice(marks[peer] || 0)) out.push({ peer, id: m.id, text: m.text, at: m.at, reply_to: m.reply_to, kind: m.kind });
-    marks[peer] = ins.length;
-  }
-  store.writeMarks(root, marks);
+  store.updateMarks(root, (marks) => {
+    for (const peer of store.messagePeers(root)) {
+      const ins = store.readMessages(root, peer).filter((m) => m.dir === 'in');
+      for (const m of ins.slice(marks[peer] || 0)) out.push({ peer, id: m.id, text: m.text, at: m.at, reply_to: m.reply_to, kind: m.kind });
+      marks[peer] = ins.length;
+    }
+  });
   return { ok: true, messages: out.sort((a, b) => a.at.localeCompare(b.at)) };
 });
 

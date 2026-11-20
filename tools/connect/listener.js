@@ -2,6 +2,7 @@
 // Joserah Connect listener. Receiving only writes files; nothing here starts, wakes or resumes anything.
 const http = require('http');
 const net = require('net');
+const path = require('path');
 const config = require('./config');
 const store = require('./store');
 const cx = require('./crypto');
@@ -109,12 +110,14 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     if (!store.validPeerName(b.username) || !HEX(16).test(b.id) || !HEX(64).test(b.commit)) return ctx.send(400, { error: 'bad request' });
     if (!ctx.config.name) return ctx.send(503, { error: 'this machine is not set up yet' });
     if (store.readPeers(root)[b.username]) return ctx.send(409, { error: 'already connected under that name' });
-    const list = store.readList(root, 'pending');
-    if (list.length >= MAX_PENDING) return ctx.send(429, { error: 'too many pending requests' });
-    if (list.some((e) => e.id === b.id)) return ctx.send(409, { error: 'duplicate request' });
     const nB = crypto.randomBytes(32);
-    list.push({ id: b.id, username: b.username, commit: b.commit, nB: cx.b64(nB), address: remote, created: new Date(now).toISOString(), open: true });
-    store.writeList(root, 'pending', list);
+    let refused = null;
+    store.updateList(root, 'pending', (list) => {
+      if (list.length >= MAX_PENDING) { refused = [429, 'too many pending requests']; return store.KEEP; }
+      if (list.some((e) => e.id === b.id)) { refused = [409, 'duplicate request']; return store.KEEP; }
+      list.push({ id: b.id, username: b.username, commit: b.commit, nB: cx.b64(nB), address: remote, created: new Date(now).toISOString(), open: true });
+    });
+    if (refused) return ctx.send(refused[0], { error: refused[1] });
     ctx.send(200, { name: ctx.config.name, pub: cx.identity(root).pubB64, nonce: cx.b64(nB) });
   });
 
@@ -122,26 +125,28 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
   add('POST', '/pair/reveal', async (ctx) => {
     const { root, remote } = ctx;
     const b = await ctx.json();
-    const list = store.readList(root, 'pending');
-    const e = list.find((x) => x.id === b.id && x.open);
-    if (!e) return ctx.send(404, { error: 'no such request' });
-    const drop = () => store.writeList(root, 'pending', list.filter((x) => x !== e));
-    if (!isB64(b.pub, 32) || !isB64(b.nonce, 32)) { drop(); return ctx.send(400, { error: 'bad request' }); }
-    const pubA = cx.unb64(b.pub); const nA = cx.unb64(b.nonce);
-    const want = Buffer.from(cx.commit(pubA, nA)); const have = Buffer.from(e.commit);
-    if (want.length !== have.length || !crypto.timingSafeEqual(want, have)) { drop(); return ctx.send(400, { error: 'reveal does not match the commitment' }); }
-    const port = Number(b.port);
-    if (!(port > 0 && port < 65536) || !Array.isArray(b.addresses)) { drop(); return ctx.send(400, { error: 'bad request' }); }
-    const me = cx.identity(root);
-    const nB = cx.unb64(e.nB);
-    const addresses = [...new Set([remote, ...b.addresses.filter((a) => net.isIP(a))])].slice(0, 8);
-    Object.assign(e, {
-      open: false, pub: b.pub, keyid: cx.keyid(pubA), nA: b.nonce, addresses, port,
-      code: cx.sasCode(pubA, me.pub, nA, nB), created: new Date(ctx.state.now()).toISOString(),
+    let answer = [404, { error: 'no such request' }];
+    store.updateList(root, 'pending', (list) => {
+      const e = list.find((x) => x.id === b.id && x.open);
+      if (!e) return store.KEEP;
+      const drop = (status, error) => { answer = [status, { error }]; return list.filter((x) => x !== e); };
+      if (!isB64(b.pub, 32) || !isB64(b.nonce, 32)) return drop(400, 'bad request');
+      const pubA = cx.unb64(b.pub); const nA = cx.unb64(b.nonce);
+      const want = Buffer.from(cx.commit(pubA, nA)); const have = Buffer.from(e.commit);
+      if (want.length !== have.length || !crypto.timingSafeEqual(want, have)) return drop(400, 'reveal does not match the commitment');
+      const port = Number(b.port);
+      if (!(port > 0 && port < 65536) || !Array.isArray(b.addresses)) return drop(400, 'bad request');
+      const me = cx.identity(root);
+      const nB = cx.unb64(e.nB);
+      const addresses = [...new Set([remote, ...b.addresses.filter((a) => net.isIP(a))])].slice(0, 8);
+      Object.assign(e, {
+        open: false, pub: b.pub, keyid: cx.keyid(pubA), nA: b.nonce, addresses, port,
+        code: cx.sasCode(pubA, me.pub, nA, nB), created: new Date(ctx.state.now()).toISOString(),
+      });
+      delete e.commit; delete e.address;
+      answer = [202, { pending: e.id }];
     });
-    delete e.commit; delete e.address;
-    store.writeList(root, 'pending', list);
-    ctx.send(202, { pending: e.id });
+    ctx.send(answer[0], answer[1]);
   });
 
   // Sealed answers to our own pair request (the sender is not a peer yet).
@@ -223,7 +228,7 @@ async function startListener(root, opts = {}) {
   } catch (e) { await Promise.all(servers.map((s) => new Promise((r) => s.close(r)))); throw e; }
   servers.port = servers[0].address().port;
   servers.close = () => Promise.all(servers.map((s) => new Promise((r) => { s.close(r); if (s.closeAllConnections) s.closeAllConnections(); })));
-  if (cfg.port !== servers.port) config.saveConfig(root, { ...cfg, port: servers.port });
+  if (cfg.port !== servers.port) store.updateJson(path.join(store.connectDir(root), 'config.json'), {}, (c) => ({ ...cfg, ...c, port: servers.port }));
   return servers;
 }
 

@@ -113,17 +113,18 @@ async function main() {
   }
 
   if (cfg && api) {
-    try {
-      server = await require('./listener').startListener(root, { port: cfg.port || 4790, bind: cfg.bind || undefined });
-    } catch (e) {
-      // Port in use means another session already listens: carry on with tools only.
-      process.stderr.write(`[connect] not listening: ${e && e.code ? e.code : 'error'}\n`);
-    }
+    // Port in use means another session already listens: tools work meanwhile, and this process takes over when it frees.
+    server = require('./keeper').keepListening(root, {
+      port: cfg.port || 4790, bind: cfg.bind || undefined,
+      onError: (e, { first }) => { if (first) process.stderr.write(`[connect] not listening: ${e && e.code ? e.code : 'error'}\n`); },
+      onListening: (_s, { afterRetry }) => { if (afterRetry) process.stderr.write('[connect] listening now (took over the port)\n'); },
+    });
+    await server.ready;
   }
 
   const { done } = createServer(handlers, { input: process.stdin, output: process.stdout });
   await done;
-  for (const x of [].concat(server || [])) x.close();
+  if (server) await server.stop();
   process.exit(0);
 }
 
