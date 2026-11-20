@@ -107,23 +107,32 @@ function fetchOut(root, out, opts = {}) {
   return pull(root, (obj) => http.postSealed(root, { addresses: [out.target], port: out.port }, s.keys, obj), opts);
 }
 
-// Every peer and every open outgoing target. Never throws. { ok, got, attempted, reached }: ok is false only when
-// something was tried and nothing could be reached.
+// Every peer and every open outgoing target, all at the same time (one unreachable peer must not hold a live one back).
+// A target that is already being fetched (an earlier call, still waiting for a dead address) is not asked twice: its
+// running fetch is shared. Never throws. { ok, got, attempted, reached }: ok is false only when something was tried and
+// nothing could be reached.
 const inflight = new Map();
-function fetchAll(root, opts = {}) {
-  if (inflight.has(root)) return inflight.get(root);
-  const p = (async () => {
-    const runs = [
-      ...Object.keys(store.readPeers(root)).map((name) => () => fetchFrom(root, name, opts)),
-      ...store.readList(root, 'outgoing').filter((o) => o.keyid).map((o) => () => fetchOut(root, o, opts)),
-    ];
-    let reached = 0; let got = 0;
-    for (const run of runs) { try { got += (await run()).got; reached++; } catch { /* unreachable: try again next time */ } }
-    return { ok: !runs.length || reached > 0, got, attempted: runs.length, reached };
-  })().finally(() => inflight.delete(root));
-  inflight.set(root, p);
-  return p;
+function launch(root, opts) {
+  const targets = [
+    ...Object.keys(store.readPeers(root)).map((name) => ['peer:' + name, () => fetchFrom(root, name, opts)]),
+    ...store.readList(root, 'outgoing').filter((o) => o.keyid).map((o) => ['out:' + o.id, () => fetchOut(root, o, opts)]),
+  ];
+  const fresh = [];
+  const runs = targets.map(([key, run]) => {
+    const id = root + '|' + key;
+    if (inflight.has(id)) return inflight.get(id);
+    const p = Promise.resolve().then(run).finally(() => inflight.delete(id));
+    inflight.set(id, p);
+    fresh.push(p.catch(() => {}));
+    return p;
+  });
+  const result = Promise.allSettled(runs).then((all) => {
+    const done = all.filter((r) => r.status === 'fulfilled');
+    return { ok: !runs.length || done.length > 0, got: done.reduce((n, r) => n + r.value.got, 0), attempted: runs.length, reached: done.length };
+  });
+  return { result, fresh: Promise.allSettled(fresh) }; // fresh: only what this call started
 }
+const fetchAll = (root, opts = {}) => launch(root, opts).result;
 
 // Poll every intervalMs; on a failed round double the wait up to maxMs, after a success go back to intervalMs.
 // opts.run and opts.onTick(result, nextDelay) are for tests. Returns { stop() }.
@@ -142,12 +151,17 @@ function startPolling(root, { intervalMs = 60000, maxMs = 600000, run = fetchAll
   return { stop() { stopped = true; clearTimeout(timer); } };
 }
 
-// To be called on every tool call: a fetchAll, at most once per ~10 s per root. Resolves null when skipped.
+// To be called on every tool call: a fetchAll, at most once per ~10 s per root unless { force: true } (the read tools).
+// Resolves null when skipped. The promise has `.fresh`: it settles when what this call started has (a fetch another call
+// started and a dead address still holds is not waited for twice). (A number as the 2nd argument is the clock, for tests.)
 const lastKick = new Map();
-function kick(root, now = Date.now()) {
-  if (now - (lastKick.get(root) || 0) < KICK_MS) return Promise.resolve(null);
+function kick(root, opts = {}) {
+  const o = typeof opts === 'number' ? { now: opts } : opts;
+  const now = o.now || Date.now();
+  if (!o.force && now - (lastKick.get(root) || 0) < KICK_MS) return Promise.resolve(null);
   lastKick.set(root, now);
-  return fetchAll(root).catch(() => null);
+  const r = launch(root, {});
+  return Object.assign(r.result.catch(() => null), { fresh: r.fresh });
 }
 
 module.exports = { queue, deliver, fetchFrom, fetchOut, fetchAll, startPolling, kick };

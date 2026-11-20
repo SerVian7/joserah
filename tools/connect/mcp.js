@@ -87,7 +87,11 @@ function createServer(handlers, { input, output }) {
 }
 
 const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
-const KICK_WAIT_MS = 800; // a tool call never waits longer than this for a fetch from the peers
+// A tool call never waits longer than this for a fetch from the peers. The read tools (what arrived is what they show)
+// ask for a fetch every time, however recent the last one, and may wait a little longer; the others at most every 10 s.
+const KICK_WAIT_MS = 800;
+const READ_WAIT_MS = 2000;
+const READ_TOOLS = new Set(['inbox', 'files', 'who', 'peers']);
 
 async function main() {
   const { findWorkspace } = require('../../hooks/lib/workspace');
@@ -122,7 +126,9 @@ async function main() {
         const [mod, fname] = impl[name] || [api, name];
         const fn = mod[fname];
         handlers[name] = async (...a) => {
-          await Promise.race([outbox.kick(deviceRoot).catch(() => null), sleep(KICK_WAIT_MS)]);
+          const read = READ_TOOLS.has(name);
+          const k = outbox.kick(deviceRoot, { force: read });
+          await Promise.race([k.fresh || k, sleep(read ? READ_WAIT_MS : KICK_WAIT_MS)]);
           if (name in WS_AT) { a = a.slice(); while (a.length < WS_AT[name]) a.push(undefined); a[WS_AT[name]] = root; }
           const result = await fn(deviceRoot, ...a);
           if (notes.length && result && typeof result === 'object') result.note = [result.note, ...notes.splice(0)].filter(Boolean).join(' ');

@@ -719,3 +719,38 @@ test('a v2 session does not move off a port an old v1 session holds: it waits to
   assert.strictEqual(moved.length, 1);
   assert.notStrictEqual(s.port, html);
 });
+
+// ---- read tools collect what waits for this machine at once -----------------------------------------------------
+
+test('inbox and files collect on the very call, right after another tool call, with a dead peer in the list', T, async (t) => {
+  const k = kit(t);
+  const A = await device_(t, k, { person: 'Alpha Person', sessions: ['A One'], name: 'dev-a', smallFileMax: 50 });
+  const homeB = k.tmp();
+  const b = await k.mcp(k.owner('Beta Person', 'B One'), { home: homeB });
+  const devB = devRoot(homeB, 'beta-person');
+  cfg.saveConfig(devB, { ...cfg.loadConfig(devB), smallFileMax: 50 });
+  const c = await b.call('connect', { ip: A.at });
+  assert.strictEqual(c.ok, true, c.error);
+  const ap = await api.approve(A.dev, api.pending(A.dev).pending[0].id);
+  assert.strictEqual(ap.ok, true, ap.error);
+  const aName = await waitFor(async () => Object.keys(store.readPeers(devB))[0]);
+  // A cannot reach B (closed inbound); B's list also holds a dead peer, first in line
+  const closed = await freePort();
+  store.updatePeers(A.dev, (p) => { for (const r of Object.values(p)) { r.addresses = [LOCAL]; r.port = closed; } });
+  store.updatePeers(devB, (p) => ({ ghost: { ...p[aName], keyid: 'abcd1234abcd1234', addresses: ['10.255.255.1', LOCAL], port: closed }, ...p }));
+  const bAddress = api.peers(A.dev).peers[0].address;
+  await b.call('pending'); // another tool call a moment ago: the 10 s throttle is now running
+  const big = path.join(k.tmp(), 'big.bin'); fs.writeFileSync(big, crypto.randomBytes(300));
+  const text = 'queued ' + hex(4);
+  const s = await api.send(A.dev, bAddress, text);
+  assert.strictEqual(s.queued, true, 'A queued it: ' + JSON.stringify(s));
+  const f = await files.sendFile(A.dev, bAddress, big);
+  assert.strictEqual(f.queued, true, 'A queued the offer: ' + JSON.stringify(f));
+  const t0 = Date.now();
+  const got = await b.call('inbox');
+  const took = Date.now() - t0;
+  assert.ok(got.messages.some((m) => m.text === text), 'the message is in inbox() on that very call: ' + JSON.stringify(got.messages.map((m) => m.text)));
+  assert.ok(took < 4500, 'a dead peer holds a read tool call at most for its bound: ' + took + ' ms');
+  const fl = await b.call('files');
+  assert.ok(fl.offers.some((o) => o.name === 'big.bin'), 'the offer is in files() on that very call');
+});

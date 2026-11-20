@@ -286,3 +286,35 @@ test('kick runs a fetch at most once per ten seconds', T, async (t) => {
   await outbox.kick(B.root);
   assert.strictEqual(hits, 1);
 });
+
+test('a forced kick fetches again inside the ten seconds; a plain one after it still waits', T, async (t) => {
+  const { A, B } = await pairedClosed(t);
+  let hits = 0;
+  const counter = await middle(t, A.port, (rq, rs) => { hits++; return rs; });
+  repoint(B.root, 'alice', counter.port);
+  await outbox.kick(B.root);
+  await outbox.kick(B.root, { force: true });
+  assert.strictEqual(hits, 2);
+  await outbox.kick(B.root);
+  assert.strictEqual(hits, 2, 'a plain kick right after a forced one is throttled');
+});
+
+test('fetchAll asks every target at the same time: a slow dead peer does not hold a live one back', T, async (t) => {
+  const { A, B } = await pairedClosed(t);
+  // a peer whose connection never completes within the test: a listener that accepts and never answers
+  const socks = [];
+  const hang = net.createServer((s) => { socks.push(s); s.on('error', () => {}); });
+  await new Promise((r) => hang.listen(0, LOCAL, r));
+  t.after(() => new Promise((r) => { socks.forEach((x) => x.destroy()); hang.close(r); }));
+  const stored = store.readPeers(B.root).alice;
+  store.updatePeers(B.root, (p) => ({ ghost: { ...stored, keyid: 'abcd1234abcd1234', addresses: ['127.0.0.1'], port: hang.address().port }, ...p }));
+  let seen = null;
+  const watch = await middle(t, A.port, (rq, rs) => { seen = Date.now(); return rs; });
+  repoint(B.root, 'alice', watch.port);
+  const t0 = Date.now();
+  const run = outbox.fetchAll(B.root, {});
+  await new Promise((r) => setTimeout(r, 700));
+  assert.ok(seen && seen - t0 < 700, 'the live peer was asked at once, not after the ghost: ' + (seen && seen - t0));
+  socks.forEach((x) => x.destroy());
+  await run;
+});
