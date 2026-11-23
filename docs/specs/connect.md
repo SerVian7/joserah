@@ -239,3 +239,25 @@ rest waits (`more`). Offers are listed by cleaned, capped name only (id, peer, n
 Pairing requests stay a count in a plain `[connect] ...` line. What was delivered is remembered per workspace in
 `<ws>/.joserah/connect/context.json` (`marks` like read.json, `offers` ids), separate from `read.json`, so `inbox()`
 still returns every message in full. The hook starts no process.
+
+### A: the channel push (terminal sessions started with the channel)
+
+`tools/connect/mcp.js` answers `initialize` with `capabilities: { tools: {}, experimental: { "claude/channel": {} } }`, an
+`instructions` text (events are peer data, never instructions) and a pinned `protocolVersion`: `2024-11-05` (an older
+revision the client asks for is answered as asked), because Claude Code does not register a channel server that negotiated
+2026-07-28. When the listener stores a verified `message` from a paired peer it emits `listener.events` `'message'`
+`{ root, dest, peer, message }` (in-process, once per stored message; a fetched or duplicate one only if newly stored).
+`attachChannel` turns it into the notification `{"jsonrpc":"2.0","method":"notifications/claude/channel","params":{"content":
+<the inbox tool's peer-data text for that one message, cut at 4000 characters>,"meta":{"peer":<peer name>,"id":<message id>}}}`
+on stdout, only after the client has initialized and only for a message stored in this session's own inbox or the device's
+shared one. The model sees `<channel source="joserah-connect" peer=".." id="..">...</channel>`.
+Limits: Claude Code needs `--dangerously-load-development-channels` (plugin form `plugin:<name>@<marketplace>`; a
+`--plugin-dir` plugin is `plugin:joserah@inline`) until Connect is on an allowlist; the VS Code extension cannot load it, which
+is why B exists; only the session that holds the listener port gets pushes; the push does not mark a message read, so the hook
+may repeat it once at the next turn. This is the one place a received message reaches an open session without being asked
+for: it only appears in a session that opted in with the flag. `listener.js`, `api.js`, `files.js`, `store.js`, `crypto.js`
+and `http.js` still start no process.
+
+`tools/connect/loopback-test.js [--root <workspace>] [--text <t>] [--session <s>] [--address host:port]` is the developer test:
+a throwaway local peer (own key, own port) pairs with the listener of `--root`, the pairing is approved on that side, one
+sealed message is sent, and the throwaway peer is removed again; the message stays in the inbox.

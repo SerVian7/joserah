@@ -8,6 +8,11 @@ const store = require('./store');
 const cx = require('./crypto');
 const device = require('./device');
 const crypto = require('crypto');
+const { EventEmitter } = require('events');
+
+// 'message' { root, dest, peer, message }: a verified message from a paired peer was just stored in the inbox `dest`.
+// In-process only (the MCP layer turns it into a channel notification); nothing here starts or wakes anything.
+const events = new EventEmitter();
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_PAIR_PER_IP = 5;
@@ -190,7 +195,8 @@ registerRoutes(({ route: add, sealed: onSealed }) => {
     const to = store.validSegment(m.to) ? m.to : undefined;
     const dest = device.inboxRoot(ctx.root, to);
     if (store.readMessages(dest, ctx.name).some((x) => x.id === m.id)) return { ok: true }; // already logged: at-least-once delivery
-    store.appendMessage(dest, ctx.name, { id: m.id, dir: 'in', text: m.text, to, reply_to: typeof m.reply_to === 'string' && m.reply_to.length <= 64 ? m.reply_to : undefined });
+    const line = store.appendMessage(dest, ctx.name, { id: m.id, dir: 'in', text: m.text, to, reply_to: typeof m.reply_to === 'string' && m.reply_to.length <= 64 ? m.reply_to : undefined });
+    try { events.emit('message', { root: ctx.root, dest, peer: ctx.name, message: line }); } catch { /* a listener of the event must never fail a delivery */ }
     return { ok: true };
   });
 
@@ -285,4 +291,4 @@ async function startListener(root, opts = {}) {
   return servers;
 }
 
-module.exports = { startListener, registerRoutes, handleSealed, sender, readBody, send };
+module.exports = { events, startListener, registerRoutes, handleSealed, sender, readBody, send };

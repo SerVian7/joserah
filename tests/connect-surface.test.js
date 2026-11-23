@@ -35,8 +35,8 @@ test('initialize, ping and tools/list return the 14 tools', async () => {
   ]);
   assert.strictEqual(r.length, 3, 'a notification gets no answer');
   assert.strictEqual(r[0].result.serverInfo.name, 'joserah-connect');
-  assert.deepStrictEqual(r[0].result.capabilities, { tools: {} });
-  assert.strictEqual(r[0].result.protocolVersion, '2025-03-26');
+  assert.deepStrictEqual(r[0].result.capabilities, { tools: {}, experimental: { 'claude/channel': {} } });
+  assert.strictEqual(r[0].result.protocolVersion, '2024-11-05', 'pinned: a channel server must not negotiate 2026-07-28');
   assert.deepStrictEqual(r[1].result, {});
   assert.deepStrictEqual(r[2].result.tools.map((x) => x.name).sort(), [...TOOLS].sort());
   for (const x of r[2].result.tools) assert.strictEqual(x.inputSchema.type, 'object');

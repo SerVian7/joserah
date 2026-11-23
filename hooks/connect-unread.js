@@ -68,13 +68,10 @@ fresh.sort((a, b) => (a.m.at < b.m.at ? -1 : a.m.at > b.m.at ? 1 : a.order - b.o
 const messages = []; const taken = {}; let used = 0;
 for (const x of fresh) {
   const text = String(x.m.text);
-  const cut = text.length > MAX_TEXT;
   const cost = Math.min(text.length, MAX_TEXT);
   if (messages.length && used + cost > MAX_TOTAL) break;
   used += cost;
-  const out = peerdata.item(x.peer, x.m, x.shared);
-  if (cut) Object.assign(out, { text: text.slice(0, MAX_TEXT) + ' [... cut; the whole message: inbox()]', truncated: true });
-  messages.push(out);
+  messages.push(peerdata.clip(peerdata.item(x.peer, x.m, x.shared), MAX_TEXT));
   taken[x.key] = (taken[x.key] || 0) + 1;
 }
 const waiting = fresh.length - messages.length;
