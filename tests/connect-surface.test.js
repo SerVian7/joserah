@@ -9,7 +9,7 @@ const { tmpdir, runTool, PLUGIN_ROOT } = require('./helpers');
 
 const { createServer } = require(path.join(PLUGIN_ROOT, 'tools', 'connect', 'mcp.js'));
 
-const TOOLS = ['connect', 'pending', 'approve', 'refuse', 'peers', 'who', 'send', 'inbox', 'reply',
+const TOOLS = ['connect', 'pair', 'pending', 'approve', 'refuse', 'peers', 'who', 'send', 'inbox', 'reply',
   'send_file', 'files', 'accept_file', 'refuse_file', 'disconnect'];
 const MARKER = 'ZZ-SECRET-MARKER-ZZ';
 
@@ -26,7 +26,7 @@ async function talk(handlers, msgs) {
 }
 const call = (id, name, args) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args || {} } });
 
-test('initialize, ping and tools/list return the 14 tools', async () => {
+test('initialize, ping and tools/list return the 15 tools', async () => {
   const r = await talk({}, [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } },
     { jsonrpc: '2.0', method: 'notifications/initialized' },

@@ -12,6 +12,7 @@ const s = (description) => ({ type: 'string', description });
 const ADDRESS = 'An address is person/device/session (that one workspace), person/device (the device\'s shared inbox, readable by every session of that person there) or person (every paired device of that person); a plain name from an older pairing also works.';
 const TOOLS = {
   connect: ['Ask another machine to pair. Needs its address (ip or ip:port); username is optional, it is what the other machine will call this one (default: this device\'s name). Returns a 6-digit code to tell the owner; the other owner approves.', ['ip', 'username'], ['username']],
+  pair: ['Pair with a person by name ("Serkan ile bağlan"): looks for them among the peers already paired, on a person page with a `connect:` line in a joined shared memory, and on Tailscale. One match asks that machine to pair and returns the 6-digit code to tell the owner; several are returned as a list to choose from (then call pair again with the address); none: ask the owner for the address. An ip or ip:port also works. username is optional.', ['who', 'username'], ['username']],
   pending: ['List incoming pairing requests waiting for the owner.', []],
   approve: ['Approve a pairing request, only after the owner said yes in their own words.', ['id']],
   refuse: ['Refuse a pairing request.', ['id']],
@@ -27,7 +28,7 @@ const TOOLS = {
   disconnect: ['Drop a peer on both sides.', ['peer']],
 };
 // Where the workspace root goes among a tool's arguments (api functions take the device root first, then these).
-const WS_AT = { send: 3, reply: 2, inbox: 0, send_file: 2, files: 0, who: 0 };
+const WS_AT = { pair: 2, send: 3, reply: 2, inbox: 0, send_file: 2, files: 0, who: 0 };
 const { UNTRUSTED, item, clip, wrap } = require('./peerdata');
 
 // Claude Code does not register a channel server that negotiated protocol revision 2026-07-28, so the answer is pinned to

@@ -16,7 +16,8 @@ event.
 
 | Need | Tool |
 |---|---|
-| Pair; see who asks | `connect(ip, username?)` (username defaults to the device name); `pending()`, `approve(id)`, `refuse(id)` |
+| Pair with a person by name ("Serkan ile bağlan") | `pair(who, username?)`: `who` is a name, or an address |
+| Pair by address; see who asks | `connect(ip, username?)` (username defaults to the device name); `pending()`, `approve(id)`, `refuse(id)` |
 | Who is connected | `peers()`; `who()` lists each one's devices and sessions |
 | Write to a peer | `send(peer, message)`; `reply(message_id, text)` |
 | Read what arrived; drop a peer | `inbox()`; `disconnect(peer)` |
@@ -50,7 +51,21 @@ Optional; nothing depends on it. When a tool result carries a note about a `.bat
 their own language, to right-click it and choose Run as administrator. Never try to elevate yourself.
 
 ## Pairing
-There is no password. `connect(ip)` returns a 6-digit code: tell your owner the code. On the other machine
+By name: `pair(who)` looks for the person among the peers already paired (then it says so and does nothing), then for a
+`connect:` line on their person page in a joined shared memory, then among the Tailscale peers (silently skipped when
+Tailscale is not installed). One match asks that machine to pair and returns the code; several come back as `choices`:
+show them to the owner in their language, and call `pair` again with the address they pick; none (`needs_address`): ask
+the owner for the other machine's address.
+
+To make a person findable, add one line to their page (`knowledge/people/<name>.md`) in the shared memory, in either
+form, the address being an IP or host name with an optional `:port` (default 4790), alone on the line:
+```
+connect: office-pc.example.net
+- connect: <ip>:4790 (office desktop)
+```
+A page can carry several lines (one per machine). The line is only an address to try: the other owner still has to approve.
+
+There is no password. `connect(ip)` (or `pair`) returns a 6-digit code: tell your owner the code. On the other machine
 `pending()` shows the request; its assistant tells its owner "<username> wants to pair, code NNNNNN" and
 calls `approve(id)` **only after that owner says yes in their own words**. The owners may compare codes; if
 they differ, refuse: someone is in between.

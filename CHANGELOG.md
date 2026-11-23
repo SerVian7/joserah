@@ -3,6 +3,15 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.24.0
+
+0.24.0 — Joserah Connect: a message shows up in your session by itself, and you can pair by name. Owner, 2026-11-23.
+
+- **Messages arrive in your context.** At your next turn the assistant now sees the text of new messages (a long one is shortened, with a pointer to the inbox) and the names of incoming file offers, marked as data from another machine and never as instructions. It works in every client, the VS Code extension included, and a message is shown only once; the inbox still returns it in full.
+- **Live push in a terminal session.** Start a terminal session with the Connect channel loaded (a research-preview flag of Claude Code, `--dangerously-load-development-channels`) and an arriving message appears in the open session at once. Without the flag nothing changes. `tools/connect/loopback-test.js` sends one test message from a throwaway local peer so you can watch it.
+- **Pair by name.** "Serkan ile bağlan": the new `pair` tool looks for the person among your pairings, then on their person page in a joined shared memory (a `connect: <address>` line), then on Tailscale. One match pairs (the six-digit code and the other owner's approval stay as before); several are listed for you to choose; none asks for the address.
+- No setup needed; update both machines and restart their sessions.
+
 ## 0.23.0
 
 0.23.0 — Joserah Connect 2: a message reaches a machine even when its firewall is closed, and there is nothing to set up. Owner, 2026-11-20.

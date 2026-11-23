@@ -293,3 +293,152 @@ test('A end to end: the MCP process pushes the loopback message to its stdout as
   assert.ok(n.params.content.includes(MARKER + ' e2e'));
   } finally { await stop(); }
 });
+
+// ---- C: pairing by name ---------------------------------------------------------------------------------
+
+const names = require(path.join(C, 'names.js'));
+
+function wsWithShared(t, pages) {
+  const ws = path.join(tmpdir(t), 'ws');
+  fs.mkdirSync(path.join(ws, '.joserah'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.joserah', 'config.json'), JSON.stringify({ shared: [{ name: 'acme', path: '.joserah/shared/acme' }, { name: 'gone', path: '.joserah/shared/gone' }] }));
+  const dir = path.join(ws, '.joserah', 'shared', 'acme', 'knowledge', 'people');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [f, text] of Object.entries(pages)) fs.writeFileSync(path.join(dir, f), text);
+  return ws;
+}
+const TS = {
+  Self: { HostName: 'me-pc', TailscaleIPs: ['100.64.0.1'] },
+  User: { 11: { LoginName: 'serkan@example.com', DisplayName: 'Serkan Atay' }, 12: { LoginName: 'ayse@example.com', DisplayName: 'Ayse Demir' } },
+  Peer: {
+    a: { HostName: 'office-pc', DNSName: 'office-pc.tail1.ts.net.', TailscaleIPs: ['100.64.0.2', 'fd7a::2'], UserID: 11, Online: true },
+    b: { HostName: 'laptop', DNSName: 'laptop.tail1.ts.net.', TailscaleIPs: ['100.64.0.3'], UserID: 11, Online: false },
+    c: { HostName: 'ayse-laptop', DNSName: 'ayse-laptop.tail1.ts.net.', TailscaleIPs: ['100.64.0.4'], UserID: 12, Online: true },
+  },
+};
+
+test('C matchName: every word of the query is a word of the value, Turkish letters folded', () => {
+  assert.strictEqual(names.matchName('Serkan', 'serkan-adem-atay'), true);
+  assert.strictEqual(names.matchName('Serkan Atay', 'serkan-adem-atay'), true);
+  assert.strictEqual(names.matchName('Şerkan', 'serkan'), true);
+  assert.strictEqual(names.matchName('Serk', 'serkan'), false, 'a word must be whole');
+  assert.strictEqual(names.matchName('Ayse', 'serkan-adem-atay'), false);
+  assert.strictEqual(names.matchName('', 'serkan'), false);
+});
+
+test('C 1) paired peers match on person, device or key', () => {
+  const peers = { 'bob-pc': { person: 'bob-builder', device: 'bob-pc', keyid: 'k1' }, old: { keyid: 'k2' } };
+  assert.deepStrictEqual(names.fromPeers('Bob', peers).map((m) => m.address), ['bob-builder/bob-pc']);
+  assert.deepStrictEqual(names.fromPeers('old', peers).map((m) => m.address), ['old']);
+  assert.deepStrictEqual(names.fromPeers('zed', peers), []);
+});
+
+test('C 2) a connect: line on a person page of a joined shared memory', (t) => {
+  const ws = wsWithShared(t, {
+    'serkan-atay.md': '# Serkan Atay\n\nRole: developer\n- connect: 100.64.0.2:4790\n',
+    'ayse-demir.md': '---\nname: Ayse Demir\n---\nconnect: 192.0.2.7\nConnect: not an address!!\n',
+    'bob.md': '# Bob\nno line here\n',
+    'serkan-other.md': '# Serkan Other\nconnect: laptop.example.net:4800 (the laptop)\n',
+  });
+  assert.deepStrictEqual(names.fromShared(ws, 'Ayse').map((m) => m.address), ['192.0.2.7']);
+  const s = names.fromShared(ws, 'Serkan');
+  assert.deepStrictEqual(s.map((m) => m.address).sort(), ['100.64.0.2:4790', 'laptop.example.net:4800']);
+  assert.ok(s.every((m) => m.source === 'shared memory acme' && m.label));
+  assert.deepStrictEqual(names.fromShared(ws, 'Bob'), []);
+  assert.deepStrictEqual(names.fromShared(ws, 'nobody'), []);
+  assert.deepStrictEqual(names.fromShared(tmpdir(t), 'x'), [], 'no workspace config: nothing, no error');
+});
+
+test('C 3) tailscale peers by host name, DNS name, or the user\'s name', () => {
+  const run = (q) => names.fromTailscale(q, TS).map((m) => m.address);
+  assert.deepStrictEqual(run('Serkan').sort(), ['100.64.0.2', '100.64.0.3']);
+  assert.deepStrictEqual(run('Ayse Demir'), ['100.64.0.4']);
+  assert.deepStrictEqual(run('office-pc'), ['100.64.0.2']);
+  assert.deepStrictEqual(run('me-pc'), [], 'this machine itself is not a candidate');
+  assert.deepStrictEqual(run('nobody'), []);
+  const hit = names.fromTailscale('laptop', TS).find((m) => m.address === '100.64.0.3');
+  assert.match(hit.label, /offline/);
+});
+
+test('C 3) no tailscale on this machine is no error', () => {
+  assert.strictEqual(names.tailscaleStatus({ bin: 'joserah-no-such-binary-xyz' }), null);
+  assert.deepStrictEqual(names.fromTailscale('Serkan', null), []);
+});
+
+async function twoMachines(t, extra) {
+  const mk = async (name) => {
+    const root = tmpdir(t);
+    fs.mkdirSync(path.join(root, '.joserah'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.joserah', 'config.json'), JSON.stringify(extra && name === 'alice' ? extra : {}));
+    cfg.saveConfig(root, { name, port: 0, bind: [LOCAL] });
+    const servers = await listener.startListener(root, { bind: [LOCAL], port: 0 });
+    t.after(() => servers.close());
+    return { root, at: LOCAL + ':' + servers.port };
+  };
+  return { A: await mk('alice'), B: await mk('bob') };
+}
+
+test('C pair by name: one match in a shared memory pairs (the code is still returned)', T, async (t) => {
+  const { A, B } = await twoMachines(t, { shared: [{ name: 'acme', path: '.joserah/shared/acme' }] });
+  const dir = path.join(A.root, '.joserah', 'shared', 'acme', 'knowledge', 'people');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'bob-builder.md'), '# Bob Builder\nconnect: ' + B.at + '\n');
+  const r = await api.pair(A.root, 'Bob Builder', 'alice', A.root, { tailscale: null });
+  assert.strictEqual(r.ok, true, r.error);
+  assert.match(r.code, /^\d{6}$/);
+  assert.strictEqual(r.resolved.source, 'shared memory acme');
+  assert.strictEqual(r.resolved.address, B.at);
+  assert.strictEqual(api.pending(B.root).pending.length, 1, 'the other owner still has to approve');
+});
+
+test('C pair by name: several matches come back as a list and nothing is paired', T, async (t) => {
+  const { A, B } = await twoMachines(t);
+  const ts = { Self: {}, User: { 1: { LoginName: 'bob@example.com', DisplayName: 'Bob Builder' } },
+    Peer: { x: { HostName: 'bob-a', TailscaleIPs: [LOCAL], UserID: 1 }, y: { HostName: 'bob-b', TailscaleIPs: ['127.0.0.2'], UserID: 1 } } };
+  const r = await api.pair(A.root, 'Bob', 'alice', A.root, { tailscale: ts });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.choices.length, 2);
+  assert.ok(r.choices.every((c) => c.address && c.source === 'tailscale' && c.label));
+  assert.strictEqual(api.pending(B.root).pending.length, 0);
+});
+
+test('C pair by name: an already paired person is reported, not paired again; paired peers come first', T, async (t) => {
+  const { A, B } = await twoMachines(t);
+  const p = await api.connect(A.root, B.at, 'alice');
+  assert.strictEqual((await api.approve(B.root, p.id)).ok, true);
+  const ts = { Self: {}, User: {}, Peer: { x: { HostName: 'bob', TailscaleIPs: ['127.0.0.9'] } } };
+  const r = await api.pair(A.root, 'bob', 'alice', A.root, { tailscale: ts });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.already, true);
+  assert.deepStrictEqual(r.peers.map((x) => x.name), ['bob']);
+  assert.strictEqual(r.choices, undefined);
+});
+
+test('C pair by name: no match asks for the address; an address given instead of a name goes straight to connect', T, async (t) => {
+  const { A, B } = await twoMachines(t);
+  const none = await api.pair(A.root, 'Nobody Here', 'alice', A.root, { tailscale: null });
+  assert.strictEqual(none.ok, false);
+  assert.strictEqual(none.needs_address, true);
+  assert.match(none.error, /address/);
+  const direct = await api.pair(A.root, B.at, 'alice', A.root, { tailscale: null });
+  assert.strictEqual(direct.ok, true, direct.error);
+  assert.match(direct.code, /^\d{6}$/);
+  assert.strictEqual(direct.resolved, undefined);
+});
+
+test('C the pair tool is listed, takes a name and an optional username, and gets the workspace', () => {
+  const tools = mcp.TOOLS;
+  assert.ok(tools.pair, 'pair tool');
+  assert.deepStrictEqual(tools.pair[1], ['who', 'username']);
+  assert.deepStrictEqual(tools.pair[2], ['username']);
+  assert.match(tools.pair[0], /name/i);
+});
+
+test('C skill and spec document the connect: line and pairing by name', () => {
+  const skill = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'joserah-connect', 'SKILL.md'), 'utf8');
+  assert.match(skill, /pair\(/);
+  assert.match(skill, /connect: <address>|`connect:`/);
+  const spec = fs.readFileSync(path.join(PLUGIN_ROOT, 'docs', 'specs', 'connect.md'), 'utf8');
+  assert.match(spec, /^connect: /m, 'the spec shows the line');
+  assert.match(spec, /### C: pairing by name/);
+});

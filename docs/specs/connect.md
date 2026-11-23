@@ -261,3 +261,27 @@ and `http.js` still start no process.
 `tools/connect/loopback-test.js [--root <workspace>] [--text <t>] [--session <s>] [--address host:port]` is the developer test:
 a throwaway local peer (own key, own port) pairs with the listener of `--root`, the pairing is approved on that side, one
 sealed message is sent, and the throwaway peer is removed again; the message stays in the inbox.
+
+### C: pairing by name
+
+The `pair` tool (`api.pair(root, who, username, ws)`, `tools/connect/names.js`) takes a person's name or an address. An
+address (an IP, `host:port`, a dotted host name) goes straight to `connect`. A name is matched word for word, accents
+folded (`Serkan` and `Serkan Atay` match `serkan-adem-atay`; `Serk` does not), against these sources in order; the first
+source with a match decides:
+
+1. peers already paired (person, device or key): answers `{ ok, already:true, peers }`, pairs nothing;
+2. a `connect:` line on a person page, `<workspace>/.joserah/shared/<memory>/knowledge/people/*.md`, of every memory named in
+   the workspace's `config.json` `shared`; the page matches by file name, first `# ` heading or frontmatter `name:`/`title:`.
+   The line, alone on its line (a bullet and a trailing `(note)` or `- note` are allowed), the address being an IP or host
+   name with an optional `:port`:
+```
+connect: 100.64.0.2
+- connect: office-pc.example.net:4790 (office desktop)
+```
+3. `tailscale status --json` (only when `tailscale` runs; any failure is silent): a peer whose HostName, DNS name or user
+   DisplayName / LoginName matches; this machine itself is not a candidate; the first IPv4 is the address (port 4790).
+
+One match calls `connect` (the 6-digit code is returned as before and the other owner still approves; the answer adds
+`resolved: { source, label, address }`); several are returned as `{ ok, choices:[{ source, label, address }] }` and nothing is
+paired; none gives `{ ok:false, needs_address:true }`. What a page or a peer list says is only an address to try, checked
+for its shape; `names.js` pairs and sends nothing.

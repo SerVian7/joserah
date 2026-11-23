@@ -12,6 +12,7 @@ const outbox = require('./outbox');
 const device = require('./device');
 const addressing = require('./address');
 const peerdata = require('./peerdata');
+const names = require('./names');
 
 const MAX_TEXT = 64 * 1024;
 const fail = (error, status) => ({ ok: false, error, ...(status ? { status } : {}) });
@@ -56,6 +57,26 @@ async function connect(root, address, username, port) {
     return r2 ? fail(pairError[r2.status] || 'the other machine answered ' + r2.status, r2.status) : fail('lost contact with ' + t.host);
   }
   return { ok: true, id, peer: j.name, keyid: cx.keyid(pubB), code: cx.sasCode(me.pub, pubB, nA, nB), message: 'asked; the owner there must approve; the code to compare is shown' };
+}
+
+// pair(root, who, username, ws, opts): `who` is a person's name or an address. An address goes straight to connect. A name is
+// looked up in order: 1) peers already paired, 2) a `connect:` line on that person's page in a joined shared memory of
+// workspace `ws`, 3) Tailscale peers (opts.tailscale replaces the real `tailscale status`, for tests). The first source
+// with a match decides: one match pairs (connect: the 6-digit code is still returned for the owners to compare), several
+// come back as `choices` for the owner to pick from, none asks for the address.
+async function pair(root, who, username, ws, opts = {}) {
+  const q = String(who === undefined || who === null ? '' : who).trim();
+  if (!q) return fail('say whom to pair with: a name or an address');
+  if (names.looksLikeAddress(q)) return connect(root, q, username);
+  const known = names.fromPeers(q, store.readPeers(root));
+  if (known.length) return { ok: true, already: true, peers: known.map(({ name, address }) => ({ name, address })), note: 'already paired; nothing to do' };
+  let found = names.fromShared(ws || root, q);
+  if (!found.length) found = names.fromTailscale(q, opts.tailscale !== undefined ? opts.tailscale : names.tailscaleStatus());
+  if (!found.length) return { ok: false, needs_address: true, error: 'no one called "' + q.slice(0, 60) + '" is paired, on a person page of a joined shared memory, or on Tailscale: ask the owner for the address of the other machine (ip or ip:port) and call pair with it' };
+  if (found.length > 1) return { ok: true, choices: found.slice(0, 10).map(({ source, label, address }) => ({ source, label, address })), note: 'several machines match: ask the owner which one, then call pair with that address' };
+  const [hit] = found;
+  const r = await connect(root, hit.address, username);
+  return { ...r, resolved: { source: hit.source, label: hit.label, address: hit.address } };
 }
 
 const pending = safeSync((root, now) => ({
@@ -211,4 +232,4 @@ const unreadSummary = safeSync((root, ws) => {
   return { ok: true, messages, offers, pending: pend, total: sum(messages) + sum(offers) + pend };
 });
 
-module.exports = { connect: safe(connect), pending, approve, refuse, peers, send: safe(send), inbox, reply, who, disconnect: safe(disconnect), unreadSummary };
+module.exports = { connect: safe(connect), pair: safe(pair), pending, approve, refuse, peers, send: safe(send), inbox, reply, who, disconnect: safe(disconnect), unreadSummary };
