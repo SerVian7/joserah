@@ -596,7 +596,7 @@ function runHook(cwd, home) {
 const lines = (arr) => arr.map((o) => JSON.stringify(o)).join('\n') + '\n';
 const inMsg = (id, text) => ({ id, dir: 'in', text, at: new Date().toISOString() });
 
-test('hook: counts the session and the device inbox, offers and pairing requests; never text or names', T, (t) => {
+test('hook: delivers the session and the device inbox, offers by name, counts pairing requests', T, (t) => {
   const k = kit(t);
   const home = k.tmp();
   const ws = k.owner('Pat Person', 'W One');
@@ -604,18 +604,20 @@ test('hook: counts the session and the device inbox, offers and pairing requests
   put(path.join(ws, '.joserah', 'connect', 'messages', 'peerone.jsonl'), lines([inMsg('1', MARKER), inMsg('2', MARKER)]));
   put(path.join(dev, 'messages', 'peerone.jsonl'), lines([inMsg('3', MARKER), inMsg('4', MARKER), inMsg('5', MARKER)]));
   put(path.join(ws, '.joserah', 'connect', 'read.json'), { 'shared:peerone': 1 });
-  put(path.join(dev, 'offers.json'), [{ id: 'o1', peer: 'peerone', name: MARKER + '.bin', size: 5, sha256: 'x', created: new Date().toISOString() }]);
+  put(path.join(dev, 'offers.json'), [{ id: 'o1', peer: 'peerone', name: 'a.bin', size: 5, sha256: 'x', created: new Date().toISOString() }]);
   put(path.join(dev, 'pending.json'), [{ id: 'p1', username: 'zed', keyid: 'k', code: '123456', created: new Date().toISOString() }]);
   const r = runHook(ws, home);
   assert.strictEqual(r.status, 0, r.stderr);
-  const out = r.stdout.trim();
-  assert.strictEqual(out.split('\n').length, 1);
-  assert.match(out, /^\[connect\] /);
-  assert.match(out, /4 unread from peerone/, '2 of the session + 2 shared not yet read');
-  assert.match(out, /1 file offer from peerone/);
-  assert.match(out, /1 pairing request/);
-  assert.ok(!out.includes(MARKER), 'no text or file names');
-  assert.ok(!out.includes('zed'));
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  const head = ctx.split('\n')[0];
+  assert.ok(head.startsWith('[connect] '));
+  assert.match(head, /4 new messages from peerone/, '2 of the session + 2 shared not yet read');
+  assert.match(head, /1 file offer from peerone/);
+  assert.match(head, /1 pairing request/);
+  assert.strictEqual((ctx.match(new RegExp(MARKER, 'g')) || []).length, 4);
+  assert.ok(ctx.includes('a.bin'));
+  assert.ok(!ctx.includes('zed'), 'a pairing request is only counted');
+  assert.ok(runHook(ws, home).stdout.startsWith('[connect] 1 pairing request waiting'),'the second turn: only the pairing request is left');
 });
 
 test('hook: a guest workspace never reads the home', T, (t) => {
@@ -625,7 +627,7 @@ test('hook: a guest workspace never reads the home', T, (t) => {
   put(path.join(devRoot(home, 'pat-person'), 'messages', 'peerone.jsonl'), lines([inMsg('1', MARKER)]));
   put(path.join(ws, '.joserah', 'connect', 'messages', 'peertwo.jsonl'), lines([inMsg('2', MARKER)]));
   const out = runHook(ws, home).stdout;
-  assert.match(out, /1 unread from peertwo/);
+  assert.match(out, /1 new message from peertwo/);
   assert.ok(!/peerone/.test(out));
 });
 

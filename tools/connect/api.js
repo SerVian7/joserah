@@ -11,6 +11,7 @@ const net = require('./http');
 const outbox = require('./outbox');
 const device = require('./device');
 const addressing = require('./address');
+const peerdata = require('./peerdata');
 
 const MAX_TEXT = 64 * 1024;
 const fail = (error, status) => ({ ok: false, error, ...(status ? { status } : {}) });
@@ -144,7 +145,7 @@ const inbox = safeSync((root, ws) => {
     for (const [dir, prefix, shared] of inboxes(root, ws)) {
       for (const peer of store.messagePeers(dir)) {
         const ins = store.readMessages(dir, peer).filter((m) => m.dir === 'in');
-        for (const m of ins.slice(marks[prefix + peer] || 0)) out.push({ peer, id: m.id, text: m.text, at: m.at, reply_to: m.reply_to, kind: m.kind, to: m.to || null, shared });
+        for (const m of ins.slice(marks[prefix + peer] || 0)) out.push(peerdata.item(peer, m, shared));
         marks[prefix + peer] = ins.length;
       }
     }
