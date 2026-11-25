@@ -5,9 +5,9 @@ type: status
 
 # Joserah — status
 
-Last change: 1de8b97 · 2026-10-13 · server Tracker bridge on job files; crew.js keeps role definitions when the crew is off
+Last change: e313ae4 · 2026-11-23 12:15 +03 · connect: pair by name; release 0.24.0 (part C)
 
-- Released: 0.20.0 on main, 818 tests (`node --test tests/*.test.js`), prompt v30.
+- Released: 0.24.0 on main, 993 tests (`node --test tests/*.test.js`): 990 pass, 3 doctor tests fail in any checkout not linked from ~/.claude/skills (same on 0.23.0), prompt v31.
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
 - Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
