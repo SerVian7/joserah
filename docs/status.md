@@ -5,9 +5,10 @@ type: status
 
 # Joserah — status
 
-Last change: e313ae4 · 2026-11-23 12:15 +03 · connect: pair by name; release 0.24.0 (part C)
+Last change: a3abc3a · 2026-11-26 05:01 +03 · release 0.25.0: the sweep reads only what changed and keeps records with their names
 
 - Released: 0.24.0 on main, 993 tests (`node --test tests/*.test.js`): 990 pass, 3 doctor tests fail in any checkout not linked from ~/.claude/skills (same on 0.23.0), prompt v31.
+- Ready, not merged: 0.25.0 on branch `feat/swe-records` (from main 0.24.0), 1020 tests: 1017 pass, the same 3 doctor tests fail (also on 1f9d808, main). The sweep reads a content ledger (`tools/sweep-scope.js`) and makes records ([CHANGELOG.md](../CHANGELOG.md)).
 - Installed: this machine via the skills-dir junction; ctrl and Yusuf are updated by the owner (pull, `/joserah:update`, `/reload-plugins`).
 - What changed, per release: [CHANGELOG.md](../CHANGELOG.md).
 - Open: getSecret's terminal-prompt branch is untested (no TTY in the suite); memory `claims.js` lacks the workspace tool's calculation-vs-measurement and conflict checks.
@@ -46,6 +47,15 @@ Six runs, same model and prompts, crew off vs on; details and caveats: [measurem
   date: 2026-10-05 10:03:27Z–10:05:09Z · by: Builder · source: ~/.claude/projects/<j3-on folder>/71e18f8b-a70d-4a84-8a15-ac8b8d2faeae.jsonl and its subagents/
 
 ## Decisions
+
+- [decision] The sweep's scope is a list by content, not a date: `tools/sweep-scope.js` against `.joserah/desk/sweep-ledger.json`; the first run is seeded from the last sweep's own commit -> in force from 0.25.0
+  date: 2026-11-26
+  by: owner
+  source: "Sweep her seferinde uzun sürüp tüm tokeni yemesin" (2026-11-26); CHANGELOG.md 0.25.0
+- [decision] The sweep makes and keeps records (aliases, about, optional free kind), no fixed categories, splits a record when a named part has grown -> in force from 0.25.0
+  date: 2026-11-26
+  by: owner
+  source: "Hayvan falan gibi ayırma, sweep gerekli her şeyi bir varlık entitiy olarak ayırabilir"; CHANGELOG.md 0.25.0
 
 - [decision] Joserah local server -> thin Hono/TypeScript server inside the plugin, beside the terminal plugin, driving the user's own Claude Code; Docker self-contained (no host folders) or native; access local/tailnet/internet by setting; OpenRouter later
   date: 2026-10-05
