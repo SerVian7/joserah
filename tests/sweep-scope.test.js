@@ -248,3 +248,13 @@ test('a seeded ledger that was never stamped lists the same files again, and wha
   stamp(dir);
   assert.deepStrictEqual(list(dir), [`${E}/b.md`, `${E}/n.md`], 'stamped at what the seeded list saw: what came after is listed again, never lost');
 });
+
+test('stamp --wrote after the ledger is already settled adds what a late pass wrote, and nothing else', (t) => {
+  const dir = seeded(t, false, { [`${E}/a.md`]: 'a\n', [`${E}/b.md`]: 'b\n' });
+  put(dir, `${E}/a.md`, 'a, a later pass\n');      // written by the sweep after its stamp
+  put(dir, `${E}/new.md`, 'new record\n');
+  put(dir, `${E}/b.md`, 'b, by someone else\n');   // not named: stays listed
+  stamp(dir, '--wrote', `${E}/a.md`, `${E}/new.md`);
+  assert.deepStrictEqual(list(dir), [`${E}/b.md`]);
+  assert.strictEqual(runTool('sweep-scope.js', [ws(t), 'stamp']).status, 2, 'no ledger at all is still refused');
+});

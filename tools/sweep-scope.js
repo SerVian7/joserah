@@ -180,8 +180,9 @@ function list(root, flags) {
 
 function stamp(root, wrote) {
   const led = readLedger(root);
-  if (!led || !led.pending) die('nothing to stamp: run `list` first');
-  const files = { ...led.pending.files };
+  if (!led || (!led.pending && !led.stamped)) die('nothing to stamp: run `list` first');
+  // a settled ledger takes a late pass's --wrote files on top of what it holds
+  const files = { ...(led.pending ? led.pending.files : led.files) };
   for (const w of wrote) {
     const rel = path.relative(root, path.resolve(root, w)).split(path.sep).join('/');
     if (!inList(rel)) continue;
