@@ -364,7 +364,7 @@ test('sweep: the records pass has no list of kinds, one head, names searched onc
   assert.ok(text.includes('## 2a. The records pass'));
   const s = text.slice(text.indexOf('## 2a. The records pass'), text.indexOf('## 3.'));
   for (const w of ['`aliases:', '`about:', '`kind:', 'never from a list', 'listed for the owner', 'never merged',
-    'link line', 'byte for byte', 'is left', 'One search', 'two records are never merged', 'the line that says what it is counts as that fact', 'as if they were on the list', 'every record the pass has open', '.joserah/knowledge/wiki/entities/', '.joserah/knowledge/people/']) {
+    'link line', 'byte for byte', 'is left', 'One search', 'two records are never merged', 'the line that says what it is counts as that fact', 'as if this page were on the list', 'every record the pass has open', '.joserah/knowledge/wiki/entities/', '.joserah/knowledge/people/']) {
     assert.ok(s.includes(w), `records pass says: ${w}`);
   }
   assert.ok(!/`animal`|`place`|`device`/.test(s), 'no kind is written out as a value to choose from');

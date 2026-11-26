@@ -233,3 +233,18 @@ test('seed from the last sweep, no git: file times', (t) => {
   assert.deepStrictEqual(list(dir, '--seed-last-sweep', '2026-06-01T00:00:00Z'), [`${E}/new.md`]);
   assert.strictEqual(runTool('sweep-scope.js', [ws(t), 'list', '--seed-last-sweep', 'nonsense']).status, 2);
 });
+
+test('a seeded ledger that was never stamped lists the same files again, and what changed since; stamp then settles it', (t) => {
+  const dir = ws(t, { repo: true });
+  put(dir, `${E}/a.md`, 'a\n'); put(dir, `${E}/b.md`, 'b\n');
+  const c1 = commit(dir, 'sweep');
+  put(dir, `${E}/a.md`, 'a2\n');
+  assert.deepStrictEqual(list(dir, '--seed-commit', c1), [`${E}/a.md`]);
+  assert.deepStrictEqual(list(dir), [`${E}/a.md`], 'a bare list in the middle of a sweep is not "everything"');
+  put(dir, `${E}/b.md`, 'b2\n');          // another session, meanwhile
+  put(dir, `${E}/n.md`, 'n\n');
+  assert.deepStrictEqual(list(dir), [`${E}/a.md`, `${E}/b.md`, `${E}/n.md`]);
+  put(dir, `${E}/b.md`, 'b3' + String.fromCharCode(10));          // after the last list, before the stamp
+  stamp(dir);
+  assert.deepStrictEqual(list(dir), [`${E}/b.md`, `${E}/n.md`], 'stamped at what the seeded list saw: what came after is listed again, never lost');
+});

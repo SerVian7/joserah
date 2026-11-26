@@ -80,6 +80,8 @@ function writeLedger(root, led) {
   const f = abs(root, LEDGER_REL);
   const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1)));
   const body = { version: 1, files: sorted(led.files) };
+  if (led.stamped) body.stamped = true;
+  if (led.seeded) body.seeded = [...led.seeded].sort();
   if (led.pending) body.pending = { files: sorted(led.pending.files) };
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f + '.tmp', JSON.stringify(body, null, 1) + '\n');
@@ -150,8 +152,14 @@ function list(root, flags) {
   const cur = current(root);
   const led = readLedger(root);
   let changed;
-  if (led) {
+  if (led && led.stamped) {
     changed = [...cur].filter(([p, h]) => led.files[p] !== h).map(([p]) => p);
+  } else if (led) {
+    // seeded and not yet stamped: a sweep is under way, so the list is the seeded one again,
+    // plus whatever differs from what the seeded list saw (pending stays as it was)
+    const was = led.pending ? led.pending.files : {};
+    const seeded = new Set(led.seeded || []);
+    changed = [...cur].filter(([p, h]) => seeded.has(p) || was[p] !== h).map(([p]) => p);
   } else {
     let seed;
     if (flags['seed-commit'] !== undefined) seed = seedFromCommit(root, flags['seed-commit']);
@@ -162,9 +170,8 @@ function list(root, flags) {
   }
   // The second run right after a stamp reads and writes nothing: the ledger is
   // touched only when there is a list to remember, or no ledger to seed from.
-  if (changed.length || !led) {
-    writeLedger(root, { files: led ? led.files : {}, pending: { files: Object.fromEntries(cur) } });
-  }
+  if (!led) writeLedger(root, { files: {}, seeded: changed, pending: { files: Object.fromEntries(cur) } });
+  else if (led.stamped && changed.length) writeLedger(root, { ...led, pending: { files: Object.fromEntries(cur) } });
   changed.sort();
   if (changed.length) console.log(changed.join('\n'));
 }
@@ -180,7 +187,7 @@ function stamp(root, wrote) {
     if (!inList(rel)) continue;
     try { files[rel] = hashOf(abs(root, rel)); } catch { delete files[rel]; }
   }
-  writeLedger(root, { files });
+  writeLedger(root, { files, stamped: true });
 }
 
 // ------------------------------------------------------------------- main

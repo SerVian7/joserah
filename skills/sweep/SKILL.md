@@ -106,12 +106,12 @@ byte. A name is written only where a line of the notes says it; none comes from 
 for a page with no head, its first heading (the search tool, not a page opened per record; skip the
 folders' `README.md` and `index.md`). That is the list every name below is matched against.
 **Once, on the run that was seeded:** open the head and first lines of every people and entity page,
-because no record but one carries its names yet; fill `aliases` and `about` only where the page itself
-says them (a line such as "Goes by **Sam**." is the line "Sam" stands on). Pages that do not
-say are left as they are. The pages read this way are also read for steps 1, 2 and 6 below, as if they
-were on the list: a named thing in their lines that has no record gets one (a place or an organisation
-mentioned on a person's page is the usual case), and a record among them with a part that has grown is
-split.
+because no record but one carries its names yet, and for each page do three things, all of them:
+(a) fill `aliases` and `about` only where the page itself says them (a line such as "Goes by **Sam**."
+is the line "Sam" stands on); pages that do not say are left as they are; (b) every named thing its
+lines mention that has no record — a place, an organisation, a product, a person; a person's page that
+says whose café or company it is makes that café or company a candidate — is taken through step 1 below
+as if this page were on the list; (c) if the page has a part with a name of its own, step 6.
 
 Then, over the listed notes, the records that moved and, on the seeded run, the pages read for heads:
 
