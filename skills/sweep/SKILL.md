@@ -92,7 +92,9 @@ project, anything else. There is **no list of kinds**: nothing is sorted into on
 says depends on one. Anything that needs a record of its own gets one, and a record is split further as
 what is known about a part of it grows. Two folders hold records, because they are the two the core's
 names index reads (a record anywhere else is not found by name): people in `.joserah/knowledge/people/`,
-anything else in `.joserah/knowledge/wiki/entities/`, a new file named in English kebab-case.
+anything else in `.joserah/knowledge/wiki/entities/`, a new file named in English kebab-case. The tidy
+pass's merging of duplicate entries (§2) is for lines inside one page: **two records are never merged**,
+whatever the tidy pass finds.
 
 **The head** is the page's frontmatter (the workspace's conventions, "Record heads"): `title` the name;
 `type` as the page has it (`person`, `entity`); `aliases: [a, b]` every other name it goes by —
@@ -107,9 +109,12 @@ folders' `README.md` and `index.md`). That is the list every name below is match
 **Once, on the run that was seeded:** open the head and first lines of every people and entity page,
 because no record but one carries its names yet; fill `aliases` and `about` only where the page itself
 says them (a line such as "Goes by **Sam**." is the line "Sam" stands on). Pages that do not
-say are left as they are.
+say are left as they are. The pages read this way are also read for steps 1, 2 and 6 below, as if they
+were on the list: a named thing in their lines that has no record gets one (a place or an organisation
+mentioned on a person's page is the usual case), and a record among them with a part that has grown is
+split.
 
-Then, over the listed notes and the records that moved:
+Then, over the listed notes, the records that moved and, on the seeded run, the pages read for heads:
 
 1. **A name with no record.** A thing with a name of its own and at least one fact of its own in the
    owner's notes: where the notes themselves say what it is, write its record — the head, that sentence
@@ -130,7 +135,9 @@ Then, over the listed notes and the records that moved:
    style; the part's names leave the parent's `aliases` and stand on the new record's `aliases` only, so
    a name finds one record. A part with no name of its own, or with fewer lines, **is left**; so is any
    part whose lines are not clearly about it alone. Nothing is forced. Each split is reported with the
-   lines it stands on. A split is never undone, and never merged back, by the sweep.
+   lines it stands on. A split is never undone, and never merged back, by the sweep. Look for it in every
+record the pass has open, new or moved or not: read its sections, and count the lines of each part that
+has a name.
 
 For each subject that moved, its names are searched once across the whole workspace before a line of
 its record is judged or struck: a search returns lines, not files, so the rule that every subject is
@@ -223,7 +230,8 @@ Three numbers, the cost and one list, in their language, in a few lines:
 - claims added, and how many were spot-checked against their sources;
 - pages restored because a fact they removed turned out to be nowhere else;
 - **records written**, each with the line it stands on; **names added** to a record, each with its
-  line; **splits**, each with the lines it moved and where they stand now;
+  line; **splits**, each with the lines it moved and where they stand now — every one listed, never
+  examples;
 - **what the run cost** — the agents used and at what effort. The credit figure itself comes from
   the owner's own client, not from here: report what was spent on, say where the number is, and
   never invent one.
