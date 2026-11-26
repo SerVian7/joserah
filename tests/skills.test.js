@@ -375,3 +375,9 @@ test('sweep: the report lists what was added, with the line it stands on, and on
   const s = text.slice(text.indexOf('## 6.'));
   for (const w of ['records written', 'the line it stands on', 'splits', 'the cost']) assert.ok(s.includes(w), w);
 });
+
+test('sweep: the ledger is stamped from the workers\' lists, never from file times; the report carries every record and split itself', () => {
+  const text = sweepText();
+  assert.ok(text.includes('never a search for recently changed files or file times'));
+  assert.ok(text.includes('a pointer to a worker\'s report is not the report'));
+});

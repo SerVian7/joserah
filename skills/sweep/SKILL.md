@@ -202,8 +202,9 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/check-claims.js" <workspace-root>
 node "${CLAUDE_PLUGIN_ROOT}/tools/doctor.js" <workspace-root>
 ```
 
-Then settle the ledger, with every file the sweep wrote or created (the workers' lists), so those
-never come back and what anyone else changed meanwhile does:
+Then settle the ledger, with every file the sweep wrote or created — the paths the workers' reports
+ended with, never a search for recently changed files or file times, which would swallow what
+anyone else changed meanwhile — so those never come back and what others changed does:
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/tools/sweep-scope.js" <workspace-root> stamp --wrote <path> <path> ...
@@ -231,7 +232,8 @@ Three numbers, the cost and one list, in their language, in a few lines:
 - pages restored because a fact they removed turned out to be nowhere else;
 - **records written**, each with the line it stands on; **names added** to a record, each with its
   line; **splits**, each with the lines it moved and where they stand now — every one listed, never
-  examples;
+  examples, and written into this report itself: a pointer to a worker's report is not the report, and
+  a worker's report is kept until this one is written;
 - **what the run cost** — the agents used and at what effort. The credit figure itself comes from
   the owner's own client, not from here: report what was spent on, say where the number is, and
   never invent one.
