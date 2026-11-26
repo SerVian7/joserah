@@ -337,3 +337,41 @@ test('orchestrate sends screen work to simple-tier workers under a medium-tier m
   assert.ok(text.includes('against the screenshot itself'));
   assert.ok(text.includes('The main session never chains screen actions itself'));
 });
+
+// 0.25.0 (owner, 2026-11-26, decisions 60/60a): the sweep reads only what changed, by content, and
+// makes and keeps the records. The text is what the model follows, so its load-bearing rules are pinned.
+const sweepText = () => fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', 'sweep', 'SKILL.md'), 'utf8').replace(/\s+/g, ' ');
+
+test('sweep: the scope is the list sweep-scope.js prints, seeded once, never backup-scope\'s count', () => {
+  const text = sweepText();
+  assert.ok(text.includes('tools/sweep-scope.js" <workspace-root> list'));
+  assert.ok(text.includes('--seed-commit') && text.includes('--seed-since'));
+  assert.ok(text.includes('.joserah/desk/sweep-ledger.json'));
+  assert.ok(!text.includes('backup-scope.js'), 'the count tool is the backup skill\'s, not the sweep\'s scope');
+  assert.ok(/crew logs, artifacts and job files are never in it/i.test(text));
+});
+
+test('sweep: the ledger is stamped after the three checks and before lastSweep, with what the sweep wrote', () => {
+  const text = sweepText();
+  const checks = text.indexOf('tools/doctor.js" <workspace-root>');
+  const ledger = text.indexOf('sweep-scope.js" <workspace-root> stamp --wrote');
+  const last = text.indexOf('config-stamp.js');
+  assert.ok(checks > 0 && ledger > checks && last > ledger, 'order: checks, ledger stamp, lastSweep stamp');
+});
+
+test('sweep: the records pass has no list of kinds, one head, names searched once, nothing merged or forced', () => {
+  const text = sweepText();
+  assert.ok(text.includes('## 2a. The records pass'));
+  const s = text.slice(text.indexOf('## 2a. The records pass'), text.indexOf('## 3.'));
+  for (const w of ['`aliases:', '`about:', '`kind:', 'never from a list', 'listed for the owner', 'never merged',
+    'link line', 'byte for byte', 'is left', 'One search', '.joserah/knowledge/wiki/entities/', '.joserah/knowledge/people/']) {
+    assert.ok(s.includes(w), `records pass says: ${w}`);
+  }
+  assert.ok(!/`animal`|`place`|`device`/.test(s), 'no kind is written out as a value to choose from');
+});
+
+test('sweep: the report lists what was added, with the line it stands on, and one list for the owner', () => {
+  const text = sweepText();
+  const s = text.slice(text.indexOf('## 6.'));
+  for (const w of ['records written', 'the line it stands on', 'splits', 'the cost']) assert.ok(s.includes(w), w);
+});
