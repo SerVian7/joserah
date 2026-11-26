@@ -3,6 +3,14 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.25.0
+
+0.25.0 — the sweep reads only what changed and keeps a record for every named thing in your notes. Owner, 2026-11-26.
+
+- **It reads only what changed, by content.** The new `tools/sweep-scope.js` lists the notes and records (knowledge, personal, the journal, the inbox, tasks) whose words differ from a small ledger the sweep keeps in `.joserah/desk/sweep-ledger.json`. Crew logs, artifacts and job files are never read. The first sweep after this update is seeded from the last one, so it reads what changed since, not the whole memory. A sweep is still offered and never started on its own.
+- **Records with all their names.** Anything with a name of its own and a fact of its own in your notes gets a record, with its other names in `aliases:` and a sentence in `about:`; names the notes already say are added to the records that exist. No list of kinds. A record whose named part has grown facts of its own is split, the lines moved unchanged and a link left behind. What the notes do not explain, and records that look like one thing, come back as one list for you; nothing is written or merged for them.
+- Run `/joserah:update`; nothing else to set up.
+
 ## 0.24.0
 
 0.24.0 — Joserah Connect: a message shows up in your session by itself, and you can pair by name. Owner, 2026-11-23.
