@@ -42,12 +42,11 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/sweep-scope.js" <workspace-root> list
   ledger is not evidence that nothing was ever done: **a missing stamp is not evidence either.** This
   work predates the skill: a workspace may have been tidied by hand, or had its numbers harvested by
   a one-off job, and nothing stamped anything. Read `lastSweep` from `.joserah/config.json`, then:
-  - **`lastSweep` present, workspace is a git repository** → find the sweep's own commit: the first
-    commit made after the stamp (`git log --since=<lastSweep-ISO> --reverse --format="%h %cI" -n 1`).
-    If it was made within ten minutes of the stamp it is the sweep's own: seed from it with
-    `list --seed-commit <hash>` and the first list is what changed since. If there is none, or it is
-    later, seed from the date: `list --seed-since <lastSweep-ISO>`.
-  - **`lastSweep` present, no repository** → `list --seed-since <lastSweep-ISO>` (file times).
+  - **`lastSweep` present** → `list --seed-last-sweep <lastSweep-ISO>`. In a git repository the tool
+    takes the sweep's own commit (made within ten minutes after the stamp) as the mark, so the first
+    list is what changed since; with none, or with no repository, it counts as the date does (commits
+    after the stamp plus what is uncommitted now; file times outside a repository). `--seed-commit
+    <rev>` seeds from a commit the owner names.
   - **`lastSweep` absent or null** → possibly the first sweep, and possibly not. Before quoting a
     page count, look:
     - **The pages themselves.** A page already carrying claim lines with `source:` under them has
@@ -117,10 +116,11 @@ split.
 Then, over the listed notes, the records that moved and, on the seeded run, the pages read for heads:
 
 1. **A name with no record.** A thing with a name of its own and at least one fact of its own in the
-   owner's notes: where the notes themselves say what it is, write its record — the head, that sentence
+   owner's notes (the line that says what it is counts as that fact): where the notes themselves say
+   what it is, write its record — the head, that sentence
    and what the lines say, nothing more, and `source:` the file and line it stands on. Where they do not
    say, the name goes on the one list for the owner ("Bunlar kim, ne?") and nothing is written. A single
-   unclear mention is never a record. A confident wrong record is worse than a missing one.
+   mention that says what it is, and whose or where, is enough; a single unclear mention is never a record. A confident wrong record is worse than a missing one.
 2. **A new name for something that has a record** — a line says they are the same thing: add it to
    `aliases` and note the line. A short form that more than one record could take is put on none of them
    (three machines can be called by one short name): it goes on the list for the owner.

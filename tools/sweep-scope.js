@@ -4,7 +4,7 @@
  * backup-scope.js --changed-since prints a count from a date and no list; this
  * prints the list, by content, so a sweep reads what changed and nothing else.
  *
- *   node sweep-scope.js <workspace> list [--seed-commit <rev> | --seed-since <ISO-8601>]
+ *   node sweep-scope.js <workspace> list [--seed-commit <rev> | --seed-last-sweep <ISO-8601> | --seed-since <ISO-8601>]
  *   node sweep-scope.js <workspace> stamp [--wrote <path> ...]
  *
  * `list` prints the notes and records (markdown under knowledge, personal, the
@@ -18,7 +18,9 @@
  *
  * The ledger is .joserah/desk/sweep-ledger.json. With no ledger the first
  * `list` needs a seed: --seed-commit lists the in-scope files that differ from
- * that commit (working tree and untracked included); --seed-since uses the
+ * that commit (working tree and untracked included); --seed-last-sweep <the last
+ * sweep's stamp> takes the sweep's own commit as that commit when there is one, else
+ * falls to the date rule; --seed-since uses the
  * rule backup-scope.js has today (committed after the instant plus uncommitted
  * now; file times outside a repository). A ledger, once there, ignores seeds.
  *
@@ -128,6 +130,20 @@ function seedFromDate(root, iso, cur) {
   return paths;
 }
 
+// The last sweep's own commit lands seconds after its own stamp (measured: 9 s), so a
+// commit made within ten minutes after the stamp is the mark; failing that, the date rule.
+function seedFromLastSweep(root, iso, cur) {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) die(`"${iso}" is not a date this tool can read (use an ISO-8601 instant)`);
+  if (isOwnRepoRoot(root)) {
+    const until = new Date(t + 10 * 60 * 1000).toISOString();
+    const r = gitOut(root, ['log', `--since=${iso}`, `--until=${until}`, '--format=%H']);
+    const own = r.status === 0 ? r.stdout.split('\n').filter(Boolean) : [];
+    if (own.length) return seedFromCommit(root, own[own.length - 1]); // the oldest in the window
+  }
+  return seedFromDate(root, iso, cur);
+}
+
 // ------------------------------------------------------------------- list
 
 function list(root, flags) {
@@ -139,8 +155,9 @@ function list(root, flags) {
   } else {
     let seed;
     if (flags['seed-commit'] !== undefined) seed = seedFromCommit(root, flags['seed-commit']);
+    else if (flags['seed-last-sweep'] !== undefined) seed = seedFromLastSweep(root, flags['seed-last-sweep'], cur);
     else if (flags['seed-since'] !== undefined) seed = seedFromDate(root, flags['seed-since'], cur);
-    else die('no ledger yet: seed the first run with --seed-commit <rev> or --seed-since <ISO-8601>');
+    else die('no ledger yet: seed the first run with --seed-commit <rev>, --seed-last-sweep <ISO-8601> or --seed-since <ISO-8601>');
     changed = [...cur.keys()].filter((p) => seed.has(p));
   }
   // The second run right after a stamp reads and writes nothing: the ledger is
@@ -169,7 +186,7 @@ function stamp(root, wrote) {
 // ------------------------------------------------------------------- main
 
 const USAGE = `usage:
-  node sweep-scope.js <workspace> list [--seed-commit <rev> | --seed-since <ISO-8601>]
+  node sweep-scope.js <workspace> list [--seed-commit <rev> | --seed-last-sweep <ISO-8601> | --seed-since <ISO-8601>]
   node sweep-scope.js <workspace> stamp [--wrote <path> ...]`;
 
 const argv = process.argv.slice(2);

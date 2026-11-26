@@ -199,3 +199,37 @@ test('the ledger lives under .joserah/desk and names every file once', (t) => {
   assert.deepStrictEqual(Object.keys(led.files).sort(), [`${E}/a.md`, `${E}/b.md`]);
   assert.ok(!('pending' in led), 'a stamped ledger holds no pending list');
 });
+
+test('seed from the last sweep: its own commit (made within ten minutes after the stamp) is the mark; otherwise the date rule', (t) => {
+  const dir = ws(t, { repo: true });
+  put(dir, `${E}/a.md`, 'a\n');
+  commit(dir, 'before', '2026-06-01T09:00:00Z');
+  put(dir, `${E}/b.md`, 'b, written by the sweep\n');
+  put(dir, `${E}/a.md`, 'a, tidied by the sweep\n');
+  commit(dir, 'workspace backup: sweep', '2026-06-01T10:00:09Z');      // 9 s after the stamp
+  put(dir, `${E}/c.md`, 'c\n');
+  commit(dir, 'later', '2026-06-05T00:00:00Z');
+  put(dir, `${E}/d.md`, 'd\n');                                          // uncommitted
+  // the stamp 10:00:00.971Z: the sweep's own commit is the seed, so only c and d are new
+  assert.deepStrictEqual(list(dir, '--seed-last-sweep', '2026-06-01T10:00:00.971Z'), [`${E}/c.md`, `${E}/d.md`]);
+});
+
+test('seed from the last sweep: no commit within ten minutes means the date rule (everything committed after the stamp)', (t) => {
+  const dir = ws(t, { repo: true });
+  put(dir, `${E}/a.md`, 'a\n');
+  commit(dir, 'before', '2026-06-01T09:00:00Z');
+  put(dir, `${E}/b.md`, 'b\n');
+  commit(dir, 'an hour later', '2026-06-01T11:00:00Z');
+  put(dir, `${E}/d.md`, 'd\n');
+  assert.deepStrictEqual(list(dir, '--seed-last-sweep', '2026-06-01T10:00:00Z'), [`${E}/b.md`, `${E}/d.md`]);
+});
+
+test('seed from the last sweep, no git: file times', (t) => {
+  const dir = ws(t);
+  put(dir, `${E}/old.md`, 'old\n');
+  put(dir, `${E}/new.md`, 'new\n');
+  const old = new Date('2026-01-01T00:00:00Z');
+  fs.utimesSync(path.join(dir, ...`${E}/old.md`.split('/')), old, old);
+  assert.deepStrictEqual(list(dir, '--seed-last-sweep', '2026-06-01T00:00:00Z'), [`${E}/new.md`]);
+  assert.strictEqual(runTool('sweep-scope.js', [ws(t), 'list', '--seed-last-sweep', 'nonsense']).status, 2);
+});
