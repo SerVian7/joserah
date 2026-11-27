@@ -3,6 +3,14 @@
 What changed for someone who already has a workspace, newest first. Run `/joserah:update` after
 any of them.
 
+## 0.25.1
+
+0.25.1 — telling your assistant something is no longer taken as an order to start work. Owner, 2026-11-27.
+
+- **A remark, an opinion or feedback is talked through and recorded, not handed to the crew.** With the crew on, the main session now treats what you tell it, comment on or give feedback about as conversation: it answers, and records a correction or a decision as usual. Work goes to Lead only when you ask for work to be done. The session-start crew line and the orchestrate skill say the same.
+- **Prompt version 32.** The standing instructions changed (one clause in the orchestrate row); `/joserah:update` brings your workspace to it.
+- Known, unrelated: three `doctor` tests fail on `main` before and after this change.
+
 ## 0.25.0
 
 0.25.0 — the sweep reads only what changed and keeps a record for every named thing in your notes. Owner, 2026-11-26.
