@@ -187,3 +187,16 @@ test('no crew template, skill, hook or prompt names the retired tools/tracker.js
     for (const f of walk(path.join(PLUGIN_ROOT, dir))) assert.ok(!/tools\/tracker\.js/.test(fs.readFileSync(f, 'utf8')), `${f} still names tools/tracker.js`);
   }
 });
+
+// Talk is not a work order: what the owner tells, comments on or gives feedback
+// about is talked through and recorded by the main session; work goes to Lead
+// only when the owner asks for it. Every place that states the dispatch rule
+// carries the sentence, and none still says every other job goes to Lead.
+test('the dispatch rule says talk about a topic is not a work order', () => {
+  const rule = /not a work order/;
+  for (const f of ['templates/AGENTS.md', 'skills/orchestrate/SKILL.md', 'docs/specs/2026-10-05-crew-design.md', 'hooks/session-start.js']) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, f), 'utf8');
+    assert.match(text, rule, `${f} lacks the rule`);
+    assert.ok(!/every other job goes to Lead/.test(text), `${f} still says every other job goes to Lead`);
+  }
+});
