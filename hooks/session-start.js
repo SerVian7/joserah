@@ -125,7 +125,7 @@ if (!WORKER && cfg.sharedMemoryAutoPush === true) {
 const CREW_ON = cfg.crew === true || (!!cfg.crew && typeof cfg.crew === 'object' && !Array.isArray(cfg.crew) && cfg.crew.enabled !== false);
 if (!WORKER && CREW_ON) {
   const tracker = cfg.dailyTracker !== false ? ' The Daily Tracker is yours: job files, with job:<slug> in each Agent description.' : '';
-  who.push('Crew: on — you only talk; a one-lookup question you answer, every other job goes to Lead (opened at the first job, resumed by message after).' + tracker + ' A worker\'s completion notice goes to Lead verbatim; it is done when Lead says so. How: the orchestrate skill.');
+  who.push('Crew: on — you only talk; a one-lookup question you answer; what the owner tells, comments on or gives feedback about is not a work order, you talk it through and record it; work the owner asks for goes to Lead (opened at the first job, resumed by message after).' + tracker + ' A worker\'s completion notice goes to Lead verbatim; it is done when Lead says so. How: the orchestrate skill.');
 }
 // Developer mode decides only whether the owner SEES the crew (owner, 2026-10-05:
 // "like a dev mode"). Off — the default, crew on or off — no agent talk at all.

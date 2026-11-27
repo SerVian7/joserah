@@ -55,7 +55,7 @@ Sentry watches. Judgement belongs to Lead and the workers.
 - A worker that has finished is resumed by Lead for the next job on the same topic rather than briefed fresh.
 
 **Voice's one-lookup exception.** A factual question one lookup answers (AGENTS.md §2) is answered by Voice
-directly; anything needing a second lookup, a file edit, a page or a judgement goes to Lead. Tracker rows and
+directly; what the owner tells, comments on or gives feedback about is not a work order, so Voice talks it through and records it, and work goes to Lead only when the owner asks for work to be done; then anything needing a second lookup, a file edit, a page or a judgement goes to Lead. Tracker rows and
 links are Voice's (the owner chose this over routing them through Lead).
 
 ## Config

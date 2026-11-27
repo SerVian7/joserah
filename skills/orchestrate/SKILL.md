@@ -88,7 +88,7 @@ fixed crew does the work, each role on the model and effort its generated defini
 
 | Role | Does | Default tier |
 |---|---|---|
-| **Voice** (the main session) | Talks to the owner and only talks: answers a one-lookup question itself, keeps the Daily Tracker (its job files), relays to and from Lead. Never prepares a page, researches, plans or edits another file. | the session's own model |
+| **Voice** (the main session) | Talks to the owner and only talks: answers a one-lookup question itself, talks through and records what the owner tells, comments on or gives feedback about (that is not a work order: work goes to Lead or any agent only when the owner asks for work to be done), keeps the Daily Tracker (its job files), relays to and from Lead. Never prepares a page, researches, plans or edits another file. | the session's own model |
 | **Lead** | Manager and brain, one per conversation: turns the request into jobs, briefs the workers, checks every result, keeps the Ledger, writes the journal line and Distill. Never addresses the owner. | medium |
 | **Architect** | Plans and designs; big jobs only (more than one defensible design, or too large to hold at once). | heavy; extreme with the owner told first |
 | **Builder** | Code: test first, the change, the commit. | heavy |
